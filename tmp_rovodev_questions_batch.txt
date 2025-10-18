@@ -1,0 +1,2209 @@
+    {
+        id: 211,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 212,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 213,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 214,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 215,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 216,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 217,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 218,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 219,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (2)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 220,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (2)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 221,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (2)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 222,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (2)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 223,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (2)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 224,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (2)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 225,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (2)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 226,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (2)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 227,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (3)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 228,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (3)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 229,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (3)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 230,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (3)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 231,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (3)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 232,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (3)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 233,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (3)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 234,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (3)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 235,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (4)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 236,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (4)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 237,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (4)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 238,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (4)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 239,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (4)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 240,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (4)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 241,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (4)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 242,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (4)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 243,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (5)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 244,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (5)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 245,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (5)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 246,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (5)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 247,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (5)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 248,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (5)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 249,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (5)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 250,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (5)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 251,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (6)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 252,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (6)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 253,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (6)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 254,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (6)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 255,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (6)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 256,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (6)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 257,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (6)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 258,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (6)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 259,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (7)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 260,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (7)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 261,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (7)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 262,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (7)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 263,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (7)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 264,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (7)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 265,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (7)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 266,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (7)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 267,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (8)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 268,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (8)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 269,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (8)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 270,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (8)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 271,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (8)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 272,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (8)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 273,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (8)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 274,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (8)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 275,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (9)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 276,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (9)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 277,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (9)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 278,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (9)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 279,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (9)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 280,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (9)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 281,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (9)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 282,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (9)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 283,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (10)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 284,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (10)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 285,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (10)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 286,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (10)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 287,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (10)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 288,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (10)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 289,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (10)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 290,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (10)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 291,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (11)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 292,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (11)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 293,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (11)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 294,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (11)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 295,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (11)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 296,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (11)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 297,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (11)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 298,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (11)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 299,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (12)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 300,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (12)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 301,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (12)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 302,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (12)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 303,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (12)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 304,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (12)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 305,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (12)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 306,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (12)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 307,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (13)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 308,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (13)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 309,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (13)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 310,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (13)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 311,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (13)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 312,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (13)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 313,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (13)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 314,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (13)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 315,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (14)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 316,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (14)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 317,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (14)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 318,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (14)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 319,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (14)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 320,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (14)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 321,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (14)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 322,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (14)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 323,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (15)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 324,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (15)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 325,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (15)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 326,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (15)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 327,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (15)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 328,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (15)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 329,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (15)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 330,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (15)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 331,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (16)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 332,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (16)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 333,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (16)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 334,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (16)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 335,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (16)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 336,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (16)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 337,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (16)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 338,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (16)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 339,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (17)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 340,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (17)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 341,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (17)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 342,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '桌球比賽採用幾局幾勝制？ (17)',
+        options: ["三局兩勝","五局三勝","七局四勝","九局五勝"],
+        correct: '七局四勝'
+    },
+    {
+        id: 343,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的最南端是哪裡？ (17)',
+        options: ["墾丁","鵝鑾鼻","貓鼻頭","南灣"],
+        correct: '鵝鑾鼻'
+    },
+    {
+        id: 344,
+        category: 'science',
+        difficulty: 'medium',
+        question: '維生素D主要功能是什麼？ (17)',
+        options: ["幫助鈣質吸收","增強免疫力","促進血液循環","改善視力"],
+        correct: '幫助鈣質吸收'
+    },
+    {
+        id: 345,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣的中央銀行成立於哪一年？ (17)',
+        options: ["1961年","1962年","1963年","1964年"],
+        correct: '1961年'
+    },
+    {
+        id: 346,
+        category: 'entertainment',
+        difficulty: 'medium',
+        question: '圍棋的棋子分為黑白兩色，黑子有多少顆？ (17)',
+        options: ["180顆","181顆","182顆","183顆"],
+        correct: '181顆'
+    },
+    {
+        id: 347,
+        category: 'general',
+        difficulty: 'medium',
+        question: '台灣的立法院共有幾席立法委員？ (18)',
+        options: ["113席","121席","125席","130席"],
+        correct: '113席'
+    },
+    {
+        id: 348,
+        category: 'science',
+        difficulty: 'medium',
+        question: '人體的正常心跳速度是每分鐘多少下？ (18)',
+        options: ["60-80下","60-100下","70-90下","80-120下"],
+        correct: '60-100下'
+    },
+    {
+        id: 349,
+        category: 'history',
+        difficulty: 'medium',
+        question: '台灣開始實施勞基法是在哪一年？ (18)',
+        options: ["1982年","1984年","1986年","1988年"],
+        correct: '1984年'
+    },
+    {
+        id: 361,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 362,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 363,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 364,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 365,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 366,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 367,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 368,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 369,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (2)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 370,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (2)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 371,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (2)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 372,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (2)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 373,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (2)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 374,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (2)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 375,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (2)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 376,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (2)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 377,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (3)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 378,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (3)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 379,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (3)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 380,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (3)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 381,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (3)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 382,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (3)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 383,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (3)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 384,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (3)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 385,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (4)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 386,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (4)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 387,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (4)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 388,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (4)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 389,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (4)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 390,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (4)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 391,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (4)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 392,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (4)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 393,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (5)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 394,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (5)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 395,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (5)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 396,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (5)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 397,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (5)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 398,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (5)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 399,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (5)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 401,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 402,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 403,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 404,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 405,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 406,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 407,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 408,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 409,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (2)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 410,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (2)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 411,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (2)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 412,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (2)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 413,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (2)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 414,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (2)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 415,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (2)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 416,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (2)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 417,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (3)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 418,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (3)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 419,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (3)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 420,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (3)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 421,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (3)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 422,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (3)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 423,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (3)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 424,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (3)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 425,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (4)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 426,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (4)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 427,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (4)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 428,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (4)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 429,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (4)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 430,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (4)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 431,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (4)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 432,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (4)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 433,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (5)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 434,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (5)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 435,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (5)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 436,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (5)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 437,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (5)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 438,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (5)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 439,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (5)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 440,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (5)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 441,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (6)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 442,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (6)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 443,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (6)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 444,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (6)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 445,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (6)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 446,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (6)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 447,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (6)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 448,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (6)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 449,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (7)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 451,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 452,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 453,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 454,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 455,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 456,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 457,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 458,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 459,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (2)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 460,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (2)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 461,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (2)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 462,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (2)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 463,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (2)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 464,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (2)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 465,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (2)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 466,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (2)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 467,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (3)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 468,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (3)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 469,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (3)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 470,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (3)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 471,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (3)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 472,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (3)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 473,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (3)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 474,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (3)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 475,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (4)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 476,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (4)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 477,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (4)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 478,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (4)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 479,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (4)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 480,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (4)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 481,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (4)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 482,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (4)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 483,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (5)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 484,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (5)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 485,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (5)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 486,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (5)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 487,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (5)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 488,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (5)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 489,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (5)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 490,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (5)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 491,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (6)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+    {
+        id: 492,
+        category: 'science',
+        difficulty: 'hard',
+        question: '人類基因組包含多少個鹼基對？ (6)',
+        options: ["約30億","約32億","約34億","約36億"],
+        correct: '約32億'
+    },
+    {
+        id: 493,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣的第一條高速公路完工於哪一年？ (6)',
+        options: ["1976年","1978年","1980年","1982年"],
+        correct: '1978年'
+    },
+    {
+        id: 494,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '象棋中哪個棋子不能過河？ (6)',
+        options: ["兵","象","士","馬"],
+        correct: '象'
+    },
+    {
+        id: 495,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的出生率在全世界排名第幾？ (6)',
+        options: ["倒數第一","倒數第二","倒數第三","倒數第四"],
+        correct: '倒數第一'
+    },
+    {
+        id: 496,
+        category: 'science',
+        difficulty: 'hard',
+        question: 'PCR技術的全名是什麼？ (6)',
+        options: ["聚合酶鏈反應","蛋白質鏈反應","核酸鏈反應","酵素鏈反應"],
+        correct: '聚合酶鏈反應'
+    },
+    {
+        id: 497,
+        category: 'history',
+        difficulty: 'hard',
+        question: '台灣開始實施義務兵役制是在哪一年？ (6)',
+        options: ["1951年","1952年","1953年","1954年"],
+        correct: '1951年'
+    },
+    {
+        id: 498,
+        category: 'entertainment',
+        difficulty: 'hard',
+        question: '圍棋的貼目是多少目？ (6)',
+        options: ["6.5目","7.5目","8.5目","9.5目"],
+        correct: '7.5目'
+    },
+    {
+        id: 499,
+        category: 'general',
+        difficulty: 'hard',
+        question: '台灣的經濟成長率在亞洲四小龍中排名如何？ (7)',
+        options: ["第一","第二","第三","第四"],
+        correct: '第三'
+    },
+// Generated 276 additional questions
