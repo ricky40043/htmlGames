@@ -1,0 +1,209 @@
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import type { Room, Player, Question, GameState, ScoreInfo } from '@/types'
+
+export const useGameStore = defineStore('game', () => {
+  // 狀態
+  const currentRoom = ref<Room | null>(null)
+  const currentPlayer = ref<Player | null>(null)
+  const questions = ref<Question[]>([])
+  const currentQuestionIndex = ref(0)
+  const gameState = ref<GameState>('waiting')
+  const scores = ref<ScoreInfo[]>([])
+  const timeLeft = ref(0)
+  const currentHost = ref<string | null>(null)
+  const isHost = ref(false)
+
+  // 計算屬性
+  const currentQuestion = computed(() => {
+    if (questions.value.length > 0 && currentQuestionIndex.value < questions.value.length) {
+      return questions.value[currentQuestionIndex.value]
+    }
+    return null
+  })
+
+  const totalQuestions = computed(() => questions.value.length)
+
+  const gameProgress = computed(() => {
+    if (totalQuestions.value === 0) return 0
+    return Math.round((currentQuestionIndex.value / totalQuestions.value) * 100)
+  })
+
+  const playerCount = computed(() => {
+    return currentRoom.value?.players ? Object.keys(currentRoom.value.players).length : 0
+  })
+
+  const sortedScores = computed(() => {
+    return [...scores.value].sort((a, b) => b.score - a.score)
+  })
+
+  const myScore = computed(() => {
+    if (!currentPlayer.value) return 0
+    const myScoreInfo = scores.value.find(s => s.playerId === currentPlayer.value?.id)
+    return myScoreInfo?.score || 0
+  })
+
+  const myRank = computed(() => {
+    if (!currentPlayer.value) return 0
+    const sorted = sortedScores.value
+    const index = sorted.findIndex(s => s.playerId === currentPlayer.value?.id)
+    return index >= 0 ? index + 1 : 0
+  })
+
+  // 動作
+  const setRoom = (room: Room) => {
+    currentRoom.value = room
+  }
+
+  const setPlayer = (player: Player) => {
+    currentPlayer.value = player
+    isHost.value = player.isHost
+  }
+
+  const addPlayer = (player: Player) => {
+    if (currentRoom.value) {
+      currentRoom.value.players[player.id] = player
+    }
+  }
+
+  const removePlayer = (playerId: string) => {
+    if (currentRoom.value && currentRoom.value.players[playerId]) {
+      delete currentRoom.value.players[playerId]
+    }
+  }
+
+  const setQuestions = (newQuestions: Question[]) => {
+    questions.value = newQuestions
+    currentQuestionIndex.value = 0
+  }
+
+  const setCurrentQuestion = (question: Question) => {
+    // 如果題目列表為空，初始化
+    if (questions.value.length === 0) {
+      questions.value = [question]
+      currentQuestionIndex.value = 0
+    } else {
+      // 確保題目列表有足夠的長度
+      while (questions.value.length <= currentQuestionIndex.value) {
+        questions.value.push({} as Question)
+      }
+      // 更新當前題目
+      questions.value[currentQuestionIndex.value] = question
+    }
+    
+    console.log(`✅ 設置題目 ${currentQuestionIndex.value + 1}:`, question.questionText)
+  }
+
+  const setCurrentQuestionIndex = (index: number) => {
+    currentQuestionIndex.value = index
+  }
+
+  const nextQuestion = () => {
+    if (currentQuestionIndex.value < questions.value.length - 1) {
+      currentQuestionIndex.value++
+      return true
+    }
+    return false
+  }
+
+  const setGameState = (state: GameState) => {
+    gameState.value = state
+  }
+
+  const updateScores = (newScores: ScoreInfo[]) => {
+    scores.value = newScores
+  }
+
+  const updateTimeLeft = (time: number) => {
+    timeLeft.value = time
+  }
+
+  const setCurrentHost = (hostId: string) => {
+    currentHost.value = hostId
+  }
+
+  const resetGame = () => {
+    currentRoom.value = null
+    currentPlayer.value = null
+    questions.value = []
+    currentQuestionIndex.value = 0
+    gameState.value = 'waiting'
+    scores.value = []
+    timeLeft.value = 0
+    currentHost.value = null
+    isHost.value = false
+  }
+
+  const updatePlayerScore = (playerId: string, newScore: number) => {
+    const scoreIndex = scores.value.findIndex(s => s.playerId === playerId)
+    if (scoreIndex >= 0) {
+      scores.value[scoreIndex].score = newScore
+    } else {
+      // 找到玩家名稱
+      const player = currentRoom.value?.players[playerId]
+      if (player) {
+        scores.value.push({
+          playerId,
+          playerName: player.name,
+          score: newScore,
+          rank: 0,
+          scoreGained: 0
+        })
+      }
+    }
+  }
+
+  const isMyTurn = computed(() => {
+    return currentHost.value === currentPlayer.value?.id
+  })
+
+  const getPlayerById = (playerId: string): Player | null => {
+    return currentRoom.value?.players[playerId] || null
+  }
+
+  const getCurrentHostPlayer = computed(() => {
+    if (!currentHost.value || !currentRoom.value) return null
+    return currentRoom.value.players[currentHost.value] || null
+  })
+
+  return {
+    // 狀態
+    currentRoom,
+    currentPlayer,
+    questions,
+    currentQuestionIndex,
+    gameState,
+    scores,
+    timeLeft,
+    currentHost,
+    isHost,
+
+    // 計算屬性
+    currentQuestion,
+    totalQuestions,
+    gameProgress,
+    playerCount,
+    sortedScores,
+    myScore,
+    myRank,
+    isMyTurn,
+    getCurrentHostPlayer,
+
+    // 動作
+    setRoom,
+    setPlayer,
+    addPlayer,
+    removePlayer,
+    setQuestions,
+    setCurrentQuestion,
+    setCurrentQuestionIndex,
+    nextQuestion,
+    setGameState,
+    updateScores,
+    updateTimeLeft,
+    setCurrentHost,
+    resetGame,
+    updatePlayerScore,
+    getPlayerById
+  }
+})

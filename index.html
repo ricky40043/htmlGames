@@ -3,7 +3,11 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>🎮 小遊戲選單</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#111" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>🎮 小遊戲大集合</title>
   <style>
     body { background: #111; color: #fff; font-family: sans-serif; text-align: center; padding-top: 60px; }
     h1 { font-size: 2.5rem; margin-bottom: 30px; }
@@ -23,6 +27,19 @@
       background-color: #00f0ff;
       color: #111;
     }
+    
+    /* 移动设备优化 */
+    * {
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+    
+    @media (max-width: 768px) {
+      body { padding-top: 40px; }
+      h1 { font-size: 2rem; }
+      a { font-size: 1.2rem; padding: 12px 24px; }
+      ul { max-width: 90%; }
+    }
   </style>
 </head>
 <body>
@@ -36,5 +53,8 @@
     <li><a href="./CascadeProjects/2048/index.html">🎮 2048</a></li>
     <!-- 未來可以新增更多 -->
   </ul>
+  
+  <!-- 兼容性检查脚本 -->
+  <script src="tmp_rovodev_compatibility_fixes.js"></script>
 </body>
 </html>

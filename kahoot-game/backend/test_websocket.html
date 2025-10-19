@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧪 WebSocket 測試頁面</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 15px;
+            border-left: 5px solid #4CAF50;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        
+        .connected { background: rgba(76, 175, 80, 0.3); }
+        .disconnected { background: rgba(244, 67, 54, 0.3); }
+        .message { background: rgba(33, 150, 243, 0.3); }
+        
+        button {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            font-size: 14px;
+        }
+        
+        input::placeholder, textarea::placeholder {
+            color: rgba(255,255,255,0.7);
+        }
+        
+        .logs {
+            height: 300px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Kahoot 遊戲 WebSocket 測試</h1>
+        
+        <div class="section">
+            <h3>📡 連線狀態</h3>
+            <div id="connectionStatus" class="status disconnected">
+                🔴 未連線
+            </div>
+            
+            <input type="text" id="wsUrl" value="ws://localhost:8080/ws" placeholder="WebSocket URL">
+            <button id="connectBtn" onclick="connect()">連線</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>斷線</button>
+        </div>
+        
+        <div class="grid">
+            <div class="section">
+                <h3>🏠 房間操作</h3>
+                
+                <h4>創建房間</h4>
+                <input type="text" id="hostName" value="測試主持人" placeholder="主持人名稱">
+                <input type="number" id="totalQuestions" value="5" placeholder="總題數">
+                <input type="number" id="questionTime" value="30" placeholder="答題時間(秒)">
+                <button onclick="createRoom()">創建房間</button>
+                
+                <h4>加入房間</h4>
+                <input type="text" id="roomId" placeholder="房間ID (6位代碼)">
+                <input type="text" id="playerName" value="測試玩家" placeholder="玩家暱稱">
+                <button onclick="joinRoom()">加入房間</button>
+                
+                <h4>其他操作</h4>
+                <button onclick="startGame()">開始遊戲</button>
+                <button onclick="leaveRoom()">離開房間</button>
+                <button onclick="sendPing()">發送 Ping</button>
+            </div>
+            
+            <div class="section">
+                <h3>📝 自定義訊息</h3>
+                <textarea id="customMessage" rows="8" placeholder='範例 JSON:
+{
+  "type": "JOIN_ROOM",
+  "data": {
+    "roomId": "ABC123",
+    "playerName": "玩家1"
+  }
+}'></textarea>
+                <button onclick="sendCustomMessage()">發送自定義訊息</button>
+                
+                <h4>快速測試</h4>
+                <button onclick="runQuickTest()">🚀 快速測試流程</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>📋 訊息日誌</h3>
+            <button onclick="clearLogs()">清除日誌</button>
+            <div id="logs" class="logs"></div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentRoomId = null;
+        
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<span style="color: #888">[${timestamp}]</span> ${message}`;
+            logs.appendChild(logEntry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+        
+        function connect() {
+            const url = document.getElementById('wsUrl').value;
+            
+            try {
+                ws = new WebSocket(url);
+                
+                ws.onopen = function() {
+                    document.getElementById('connectionStatus').className = 'status connected';
+                    document.getElementById('connectionStatus').innerHTML = '🟢 已連線';
+                    document.getElementById('connectBtn').disabled = true;
+                    document.getElementById('disconnectBtn').disabled = false;
+                    log('✅ WebSocket 連線成功', 'success');
+                };
+                
+                ws.onmessage = function(event) {
+                    const message = JSON.parse(event.data);
+                    log(`📨 收到訊息: ${JSON.stringify(message, null, 2)}`, 'message');
+                    
+                    // 處理特定訊息
+                    if (message.type === 'ROOM_CREATED') {
+                        currentRoomId = message.data.roomId;
+                        document.getElementById('roomId').value = currentRoomId;
+                        log(`🏠 房間創建成功，ID: ${currentRoomId}`, 'success');
+                    }
+                };
+                
+                ws.onclose = function() {
+                    document.getElementById('connectionStatus').className = 'status disconnected';
+                    document.getElementById('connectionStatus').innerHTML = '🔴 已斷線';
+                    document.getElementById('connectBtn').disabled = false;
+                    document.getElementById('disconnectBtn').disabled = true;
+                    log('❌ WebSocket 連線關閉', 'error');
+                };
+                
+                ws.onerror = function(error) {
+                    log(`🚨 WebSocket 錯誤: ${error}`, 'error');
+                };
+                
+            } catch (error) {
+                log(`❌ 連線失敗: ${error}`, 'error');
+            }
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+        
+        function sendMessage(message) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+                log(`📤 發送訊息: ${JSON.stringify(message, null, 2)}`, 'info');
+            } else {
+                log('❌ WebSocket 未連線', 'error');
+            }
+        }
+        
+        function createRoom() {
+            const message = {
+                type: 'CREATE_ROOM',
+                data: {
+                    hostName: document.getElementById('hostName').value,
+                    totalQuestions: parseInt(document.getElementById('totalQuestions').value),
+                    questionTimeLimit: parseInt(document.getElementById('questionTime').value)
+                }
+            };
+            sendMessage(message);
+        }
+        
+        function joinRoom() {
+            const message = {
+                type: 'JOIN_ROOM',
+                data: {
+                    roomId: document.getElementById('roomId').value,
+                    playerName: document.getElementById('playerName').value
+                }
+            };
+            sendMessage(message);
+        }
+        
+        function startGame() {
+            const message = {
+                type: 'START_GAME',
+                data: {
+                    roomId: currentRoomId || document.getElementById('roomId').value
+                }
+            };
+            sendMessage(message);
+        }
+        
+        function leaveRoom() {
+            const message = {
+                type: 'LEAVE_ROOM',
+                data: {}
+            };
+            sendMessage(message);
+        }
+        
+        function sendPing() {
+            const message = {
+                type: 'PING',
+                data: {}
+            };
+            sendMessage(message);
+        }
+        
+        function sendCustomMessage() {
+            try {
+                const message = JSON.parse(document.getElementById('customMessage').value);
+                sendMessage(message);
+            } catch (error) {
+                log(`❌ JSON 格式錯誤: ${error}`, 'error');
+            }
+        }
+        
+        function runQuickTest() {
+            log('🚀 開始快速測試流程...', 'info');
+            
+            setTimeout(() => {
+                log('1. 創建房間...', 'info');
+                createRoom();
+            }, 1000);
+            
+            setTimeout(() => {
+                log('2. 發送 Ping...', 'info');
+                sendPing();
+            }, 3000);
+            
+            setTimeout(() => {
+                log('3. 嘗試加入自己的房間...', 'info');
+                document.getElementById('playerName').value = '測試玩家2';
+                joinRoom();
+            }, 5000);
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+        
+        // 頁面載入時顯示說明
+        window.onload = function() {
+            log('🎮 WebSocket 測試頁面已載入', 'info');
+            log('📝 請先點擊"連線"按鈕建立 WebSocket 連線', 'info');
+            log('🏠 然後可以測試創建房間、加入房間等功能', 'info');
+            log('🚀 或直接點擊"快速測試流程"進行自動測試', 'info');
+        };
+    </script>
+</body>
+</html>

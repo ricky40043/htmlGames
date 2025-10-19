@@ -1,0 +1,1769 @@
+2025-10-19T10:12:21.656Z [INFO] [WEBSOCKET] 收到訊息: CONNECTED
+Data: {
+  "type": "CONNECTED",
+  "data": {
+    "clientId": "9bd521b4-de7b-47ce-95a6-cc52a8150956",
+    "message": "歡迎來到 Kahoot 遊戲！"
+  }
+}
+
+2025-10-19T10:12:25.443Z [INFO] [WEBSOCKET] 收到訊息: ROOM_CREATED
+Data: {
+  "type": "ROOM_CREATED",
+  "data": {
+    "hostName": "ＡＡ",
+    "joinCode": "PJTF26",
+    "questionTimeLimit": 30,
+    "roomId": "PJTF26",
+    "roomUrl": "http://localhost:5173/join/PJTF26",
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:12:25.522Z [INFO] [QR_CODE] 開始生成 QR Code
+Data: {
+  "data": "http://localhost:5173/join/PJTF26",
+  "size": 192,
+  "hasContainer": true,
+  "errorCorrectionLevel": "M",
+  "margin": 1,
+  "color": {
+    "dark": "#1f2937",
+    "light": "#ffffff"
+  }
+}
+
+2025-10-19T10:12:25.529Z [DEBUG] [QR_CODE] 開始調用 QRCode.toCanvas
+
+2025-10-19T10:12:25.538Z [INFO] [QR_CODE] QR Code 生成成功
+Data: {
+  "canvasWidth": 192,
+  "canvasHeight": 192,
+  "dataLength": 33
+}
+
+2025-10-19T10:12:33.940Z [INFO] [WEBSOCKET] 收到訊息: PLAYER_JOINED
+Data: {
+  "type": "PLAYER_JOINED",
+  "data": {
+    "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "playerName": "ＡＡＡ",
+    "players": [
+      {
+        "id": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "name": "ＡＡＡ",
+        "roomId": "PJTF26",
+        "score": 0,
+        "isHost": false,
+        "isConnected": true,
+        "lastActivity": "2025-10-19T18:12:33.939517+08:00"
+      }
+    ],
+    "totalPlayers": 1
+  }
+}
+
+2025-10-19T10:12:37.589Z [INFO] [WEBSOCKET] 收到訊息: PLAYER_JOINED
+Data: {
+  "type": "PLAYER_JOINED",
+  "data": {
+    "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+    "playerName": "ＢＢＢ",
+    "players": [
+      {
+        "id": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "name": "ＡＡＡ",
+        "roomId": "PJTF26",
+        "score": 0,
+        "isHost": false,
+        "isConnected": true,
+        "lastActivity": "2025-10-19T18:12:33.939517+08:00"
+      },
+      {
+        "id": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "name": "ＢＢＢ",
+        "roomId": "PJTF26",
+        "score": 0,
+        "isHost": false,
+        "isConnected": true,
+        "lastActivity": "2025-10-19T18:12:37.588726+08:00"
+      }
+    ],
+    "totalPlayers": 2
+  }
+}
+
+2025-10-19T10:12:41.344Z [INFO] [WEBSOCKET] 收到訊息: GAME_STARTED
+Data: {
+  "type": "GAME_STARTED",
+  "data": {
+    "firstHost": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "roomId": "PJTF26",
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:12:41.347Z [INFO] [WEBSOCKET] 收到訊息: NEW_QUESTION
+Data: {
+  "type": "NEW_QUESTION",
+  "data": {
+    "currentQuestion": 1,
+    "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "optionA": "音樂派",
+    "optionB": "Podcast派",
+    "question": "世界上只有兩種人",
+    "questionId": 44,
+    "questionIndex": 0,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:12:41.348Z [INFO] [NEW_QUESTION] 收到新題目數據
+Data: {
+  "questionId": 44,
+  "questionText": "世界上只有兩種人",
+  "question": "世界上只有兩種人",
+  "optionA": "音樂派",
+  "optionB": "Podcast派",
+  "currentQuestion": 1,
+  "questionIndex": 0,
+  "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+  "timeLimit": 30,
+  "allData": {
+    "currentQuestion": 1,
+    "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "optionA": "音樂派",
+    "optionB": "Podcast派",
+    "question": "世界上只有兩種人",
+    "questionId": 44,
+    "questionIndex": 0,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:12:41.349Z [INFO] [NEW_QUESTION] 設置題目索引為: 0
+Data: {
+  "beforeIndex": 0,
+  "afterIndex": 0,
+  "questionsLength": 10
+}
+
+2025-10-19T10:12:41.351Z [INFO] [NEW_QUESTION] 驗證題目設置
+Data: {
+  "hasCurrentQuestion": true,
+  "currentQuestionText": "世界上只有兩種人",
+  "currentQuestionIndex": 0,
+  "questionsArrayLength": 10
+}
+
+2025-10-19T10:12:41.352Z [INFO] [NEW_QUESTION] 設置第 1 題完成
+Data: {
+  "questionText": "世界上只有兩種人",
+  "questionIndex": 0,
+  "hostPlayerName": "ＡＡＡ",
+  "gameState": "playing",
+  "finalCheck": true
+}
+
+2025-10-19T10:12:41.354Z [INFO] [WEBSOCKET] 收到訊息: TIMER_UPDATE
+Data: {
+  "type": "TIMER_UPDATE",
+  "data": {
+    "questionIndex": 1,
+    "timeLeft": 30
+  }
+}
+
+2025-10-19T10:12:41.355Z [DEBUG] [TIMER_UPDATE] 計時器: 30秒
+Data: {
+  "timeLeft": 30,
+  "questionIndex": 1,
+  "timestamp": 1760868761355,
+  "recentEventCount": 1
+}
+
+2025-10-19T10:12:42.346Z [INFO] [WEBSOCKET] 收到訊息: TIMER_UPDATE
+Data: {
+  "type": "TIMER_UPDATE",
+  "data": {
+    "questionIndex": 1,
+    "timeLeft": 29
+  }
+}
+
+2025-10-19T10:12:42.348Z [DEBUG] [TIMER_UPDATE] 計時器: 29秒
+Data: {
+  "timeLeft": 29,
+  "questionIndex": 1,
+  "timestamp": 1760868762348,
+  "recentEventCount": 2
+}
+
+2025-10-19T10:12:43.347Z [INFO] [WEBSOCKET] 收到訊息: TIMER_UPDATE
+Data: {
+  "type": "TIMER_UPDATE",
+  "data": {
+    "questionIndex": 1,
+    "timeLeft": 28
+  }
+}
+
+2025-10-19T10:12:43.348Z [DEBUG] [TIMER_UPDATE] 計時器: 28秒
+Data: {
+  "timeLeft": 28,
+  "questionIndex": 1,
+  "timestamp": 1760868763348,
+  "recentEventCount": 3
+}
+
+2025-10-19T10:12:44.348Z [INFO] [WEBSOCKET] 收到訊息: TIMER_UPDATE
+Data: {
+  "type": "TIMER_UPDATE",
+  "data": {
+    "questionIndex": 1,
+    "timeLeft": 27
+  }
+}
+
+2025-10-19T10:12:44.353Z [DEBUG] [TIMER_UPDATE] 計時器: 27秒
+Data: {
+  "timeLeft": 27,
+  "questionIndex": 1,
+  "timestamp": 1760868764353,
+  "recentEventCount": 2
+}
+
+2025-10-19T10:12:45.348Z [INFO] [WEBSOCKET] 收到訊息: TIMER_UPDATE
+Data: {
+  "type": "TIMER_UPDATE",
+  "data": {
+    "questionIndex": 1,
+    "timeLeft": 26
+  }
+}
+
+2025-10-19T10:12:45.350Z [DEBUG] [TIMER_UPDATE] 計時器: 26秒
+Data: {
+  "timeLeft": 26,
+  "questionIndex": 1,
+  "timestamp": 1760868765350,
+  "recentEventCount": 2
+}
+
+2025-10-19T10:12:46.349Z [INFO] [WEBSOCKET] 收到訊息: TIMER_UPDATE
+Data: {
+  "type": "TIMER_UPDATE",
+  "data": {
+    "questionIndex": 1,
+    "timeLeft": 25
+  }
+}
+
+2025-10-19T10:12:46.355Z [DEBUG] [TIMER_UPDATE] 計時器: 25秒
+Data: {
+  "timeLeft": 25,
+  "questionIndex": 1,
+  "timestamp": 1760868766355,
+  "recentEventCount": 2
+}
+
+2025-10-19T10:12:46.522Z [INFO] [WEBSOCKET] 收到訊息: SCORES_UPDATE
+Data: {
+  "type": "SCORES_UPDATE",
+  "data": {
+    "currentQuestion": 1,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 150,
+        "rank": 1,
+        "scoreGained": 150
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 50,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:12:46.527Z [INFO] [SCORES_UPDATE] 分數更新
+Data: {
+  "totalPlayersInRoom": 2,
+  "recordedScores": 2,
+  "scores": [
+    {
+      "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+      "playerName": "ＢＢＢ",
+      "score": 150,
+      "rank": 1,
+      "scoreGained": 150
+    },
+    {
+      "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+      "playerName": "ＡＡＡ",
+      "score": 50,
+      "rank": 2,
+      "scoreGained": 50
+    }
+  ],
+  "hostAnswer": "A",
+  "allData": {
+    "currentQuestion": 1,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 150,
+        "rank": 1,
+        "scoreGained": 150
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 50,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:12:46.529Z [INFO] [SCORES_UPDATE] 所有玩家答案都已記錄
+Data: {
+  "totalRecorded": 2
+}
+
+2025-10-19T10:12:47.349Z [INFO] [WEBSOCKET] 收到訊息: TIMER_UPDATE
+Data: {
+  "type": "TIMER_UPDATE",
+  "data": {
+    "questionIndex": 1,
+    "timeLeft": 24
+  }
+}
+
+2025-10-19T10:12:47.358Z [DEBUG] [TIMER_UPDATE] 計時器: 24秒
+Data: {
+  "timeLeft": 24,
+  "questionIndex": 1,
+  "timestamp": 1760868767358,
+  "recentEventCount": 2
+}
+
+2025-10-19T10:12:48.350Z [INFO] [WEBSOCKET] 收到訊息: TIMER_UPDATE
+Data: {
+  "type": "TIMER_UPDATE",
+  "data": {
+    "questionIndex": 1,
+    "timeLeft": 23
+  }
+}
+
+2025-10-19T10:12:48.357Z [DEBUG] [TIMER_UPDATE] 計時器: 23秒
+Data: {
+  "timeLeft": 23,
+  "questionIndex": 1,
+  "timestamp": 1760868768357,
+  "recentEventCount": 2
+}
+
+2025-10-19T10:12:49.350Z [INFO] [WEBSOCKET] 收到訊息: TIMER_UPDATE
+Data: {
+  "type": "TIMER_UPDATE",
+  "data": {
+    "questionIndex": 1,
+    "timeLeft": 22
+  }
+}
+
+2025-10-19T10:12:49.357Z [DEBUG] [TIMER_UPDATE] 計時器: 22秒
+Data: {
+  "timeLeft": 22,
+  "questionIndex": 1,
+  "timestamp": 1760868769357,
+  "recentEventCount": 3
+}
+
+2025-10-19T10:12:50.350Z [INFO] [WEBSOCKET] 收到訊息: TIMER_UPDATE
+Data: {
+  "type": "TIMER_UPDATE",
+  "data": {
+    "questionIndex": 1,
+    "timeLeft": 21
+  }
+}
+
+2025-10-19T10:12:50.357Z [DEBUG] [TIMER_UPDATE] 計時器: 21秒
+Data: {
+  "timeLeft": 21,
+  "questionIndex": 1,
+  "timestamp": 1760868770357,
+  "recentEventCount": 2
+}
+
+2025-10-19T10:12:51.351Z [INFO] [WEBSOCKET] 收到訊息: TIMER_UPDATE
+Data: {
+  "type": "TIMER_UPDATE",
+  "data": {
+    "questionIndex": 1,
+    "timeLeft": 20
+  }
+}
+
+2025-10-19T10:12:51.359Z [DEBUG] [TIMER_UPDATE] 計時器: 20秒
+Data: {
+  "timeLeft": 20,
+  "questionIndex": 1,
+  "timestamp": 1760868771359,
+  "recentEventCount": 2
+}
+
+2025-10-19T10:12:51.524Z [INFO] [WEBSOCKET] 收到訊息: NEW_QUESTION
+Data: {
+  "type": "NEW_QUESTION",
+  "data": {
+    "currentQuestion": 2,
+    "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+    "optionA": "珍奶一定要去冰",
+    "optionB": "珍奶正常冰才對",
+    "question": "世界上只有兩種人",
+    "questionId": 6,
+    "questionIndex": 1,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:12:51.533Z [INFO] [NEW_QUESTION] 收到新題目數據
+Data: {
+  "questionId": 6,
+  "questionText": "世界上只有兩種人",
+  "question": "世界上只有兩種人",
+  "optionA": "珍奶一定要去冰",
+  "optionB": "珍奶正常冰才對",
+  "currentQuestion": 2,
+  "questionIndex": 1,
+  "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+  "timeLimit": 30,
+  "allData": {
+    "currentQuestion": 2,
+    "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+    "optionA": "珍奶一定要去冰",
+    "optionB": "珍奶正常冰才對",
+    "question": "世界上只有兩種人",
+    "questionId": 6,
+    "questionIndex": 1,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:12:51.535Z [INFO] [NEW_QUESTION] 設置題目索引為: 1
+Data: {
+  "beforeIndex": 0,
+  "afterIndex": 1,
+  "questionsLength": 10
+}
+
+2025-10-19T10:12:51.538Z [INFO] [NEW_QUESTION] 驗證題目設置
+Data: {
+  "hasCurrentQuestion": true,
+  "currentQuestionText": "世界上只有兩種人",
+  "currentQuestionIndex": 1,
+  "questionsArrayLength": 10
+}
+
+2025-10-19T10:12:51.541Z [INFO] [NEW_QUESTION] 設置第 2 題完成
+Data: {
+  "questionText": "世界上只有兩種人",
+  "questionIndex": 1,
+  "hostPlayerName": "ＢＢＢ",
+  "gameState": "playing",
+  "finalCheck": true
+}
+
+2025-10-19T10:12:55.189Z [INFO] [WEBSOCKET] 收到訊息: SCORES_UPDATE
+Data: {
+  "type": "SCORES_UPDATE",
+  "data": {
+    "currentQuestion": 2,
+    "hostAnswer": "B",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 200,
+        "rank": 1,
+        "scoreGained": 50
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 50,
+        "rank": 2,
+        "scoreGained": 0
+      }
+    ]
+  }
+}
+
+2025-10-19T10:12:55.197Z [INFO] [SCORES_UPDATE] 分數更新
+Data: {
+  "totalPlayersInRoom": 2,
+  "recordedScores": 2,
+  "scores": [
+    {
+      "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+      "playerName": "ＢＢＢ",
+      "score": 200,
+      "rank": 1,
+      "scoreGained": 50
+    },
+    {
+      "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+      "playerName": "ＡＡＡ",
+      "score": 50,
+      "rank": 2,
+      "scoreGained": 0
+    }
+  ],
+  "hostAnswer": "B",
+  "allData": {
+    "currentQuestion": 2,
+    "hostAnswer": "B",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 200,
+        "rank": 1,
+        "scoreGained": 50
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 50,
+        "rank": 2,
+        "scoreGained": 0
+      }
+    ]
+  }
+}
+
+2025-10-19T10:12:55.201Z [INFO] [SCORES_UPDATE] 所有玩家答案都已記錄
+Data: {
+  "totalRecorded": 2
+}
+
+2025-10-19T10:13:00.190Z [INFO] [WEBSOCKET] 收到訊息: NEW_QUESTION
+Data: {
+  "type": "NEW_QUESTION",
+  "data": {
+    "currentQuestion": 3,
+    "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "optionA": "線上購物派",
+    "optionB": "實體店面派",
+    "question": "世界上只有兩種人",
+    "questionId": 36,
+    "questionIndex": 2,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:00.196Z [INFO] [NEW_QUESTION] 收到新題目數據
+Data: {
+  "questionId": 36,
+  "questionText": "世界上只有兩種人",
+  "question": "世界上只有兩種人",
+  "optionA": "線上購物派",
+  "optionB": "實體店面派",
+  "currentQuestion": 3,
+  "questionIndex": 2,
+  "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+  "timeLimit": 30,
+  "allData": {
+    "currentQuestion": 3,
+    "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "optionA": "線上購物派",
+    "optionB": "實體店面派",
+    "question": "世界上只有兩種人",
+    "questionId": 36,
+    "questionIndex": 2,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:00.201Z [INFO] [NEW_QUESTION] 設置題目索引為: 2
+Data: {
+  "beforeIndex": 1,
+  "afterIndex": 2,
+  "questionsLength": 10
+}
+
+2025-10-19T10:13:00.206Z [INFO] [NEW_QUESTION] 驗證題目設置
+Data: {
+  "hasCurrentQuestion": true,
+  "currentQuestionText": "世界上只有兩種人",
+  "currentQuestionIndex": 2,
+  "questionsArrayLength": 10
+}
+
+2025-10-19T10:13:00.210Z [INFO] [NEW_QUESTION] 設置第 3 題完成
+Data: {
+  "questionText": "世界上只有兩種人",
+  "questionIndex": 2,
+  "hostPlayerName": "ＡＡＡ",
+  "gameState": "playing",
+  "finalCheck": true
+}
+
+2025-10-19T10:13:07.087Z [INFO] [WEBSOCKET] 收到訊息: SCORES_UPDATE
+Data: {
+  "type": "SCORES_UPDATE",
+  "data": {
+    "currentQuestion": 3,
+    "hostAnswer": "B",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 200,
+        "rank": 1,
+        "scoreGained": 0
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 100,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:07.095Z [INFO] [SCORES_UPDATE] 分數更新
+Data: {
+  "totalPlayersInRoom": 2,
+  "recordedScores": 2,
+  "scores": [
+    {
+      "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+      "playerName": "ＢＢＢ",
+      "score": 200,
+      "rank": 1,
+      "scoreGained": 0
+    },
+    {
+      "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+      "playerName": "ＡＡＡ",
+      "score": 100,
+      "rank": 2,
+      "scoreGained": 50
+    }
+  ],
+  "hostAnswer": "B",
+  "allData": {
+    "currentQuestion": 3,
+    "hostAnswer": "B",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 200,
+        "rank": 1,
+        "scoreGained": 0
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 100,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:07.100Z [INFO] [SCORES_UPDATE] 所有玩家答案都已記錄
+Data: {
+  "totalRecorded": 2
+}
+
+2025-10-19T10:13:12.088Z [INFO] [WEBSOCKET] 收到訊息: NEW_QUESTION
+Data: {
+  "type": "NEW_QUESTION",
+  "data": {
+    "currentQuestion": 4,
+    "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+    "optionA": "Mac用戶",
+    "optionB": "PC用戶",
+    "question": "世界上只有兩種人",
+    "questionId": 32,
+    "questionIndex": 3,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:12.097Z [INFO] [NEW_QUESTION] 收到新題目數據
+Data: {
+  "questionId": 32,
+  "questionText": "世界上只有兩種人",
+  "question": "世界上只有兩種人",
+  "optionA": "Mac用戶",
+  "optionB": "PC用戶",
+  "currentQuestion": 4,
+  "questionIndex": 3,
+  "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+  "timeLimit": 30,
+  "allData": {
+    "currentQuestion": 4,
+    "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+    "optionA": "Mac用戶",
+    "optionB": "PC用戶",
+    "question": "世界上只有兩種人",
+    "questionId": 32,
+    "questionIndex": 3,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:12.101Z [INFO] [NEW_QUESTION] 設置題目索引為: 3
+Data: {
+  "beforeIndex": 2,
+  "afterIndex": 3,
+  "questionsLength": 10
+}
+
+2025-10-19T10:13:12.107Z [INFO] [NEW_QUESTION] 驗證題目設置
+Data: {
+  "hasCurrentQuestion": true,
+  "currentQuestionText": "世界上只有兩種人",
+  "currentQuestionIndex": 3,
+  "questionsArrayLength": 10
+}
+
+2025-10-19T10:13:12.111Z [INFO] [NEW_QUESTION] 設置第 4 題完成
+Data: {
+  "questionText": "世界上只有兩種人",
+  "questionIndex": 3,
+  "hostPlayerName": "ＢＢＢ",
+  "gameState": "playing",
+  "finalCheck": true
+}
+
+2025-10-19T10:13:15.154Z [INFO] [WEBSOCKET] 收到訊息: SCORES_UPDATE
+Data: {
+  "type": "SCORES_UPDATE",
+  "data": {
+    "currentQuestion": 4,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 260,
+        "rank": 1,
+        "scoreGained": 160
+      },
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 250,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:15.161Z [INFO] [SCORES_UPDATE] 分數更新
+Data: {
+  "totalPlayersInRoom": 2,
+  "recordedScores": 2,
+  "scores": [
+    {
+      "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+      "playerName": "ＡＡＡ",
+      "score": 260,
+      "rank": 1,
+      "scoreGained": 160
+    },
+    {
+      "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+      "playerName": "ＢＢＢ",
+      "score": 250,
+      "rank": 2,
+      "scoreGained": 50
+    }
+  ],
+  "hostAnswer": "A",
+  "allData": {
+    "currentQuestion": 4,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 260,
+        "rank": 1,
+        "scoreGained": 160
+      },
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 250,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:15.166Z [INFO] [SCORES_UPDATE] 所有玩家答案都已記錄
+Data: {
+  "totalRecorded": 2
+}
+
+2025-10-19T10:13:20.154Z [INFO] [WEBSOCKET] 收到訊息: NEW_QUESTION
+Data: {
+  "type": "NEW_QUESTION",
+  "data": {
+    "currentQuestion": 5,
+    "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "optionA": "內向安靜型",
+    "optionB": "外向活潑型",
+    "question": "世界上只有兩種人",
+    "questionId": 23,
+    "questionIndex": 4,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:20.159Z [INFO] [NEW_QUESTION] 收到新題目數據
+Data: {
+  "questionId": 23,
+  "questionText": "世界上只有兩種人",
+  "question": "世界上只有兩種人",
+  "optionA": "內向安靜型",
+  "optionB": "外向活潑型",
+  "currentQuestion": 5,
+  "questionIndex": 4,
+  "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+  "timeLimit": 30,
+  "allData": {
+    "currentQuestion": 5,
+    "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "optionA": "內向安靜型",
+    "optionB": "外向活潑型",
+    "question": "世界上只有兩種人",
+    "questionId": 23,
+    "questionIndex": 4,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:20.164Z [INFO] [NEW_QUESTION] 設置題目索引為: 4
+Data: {
+  "beforeIndex": 3,
+  "afterIndex": 4,
+  "questionsLength": 10
+}
+
+2025-10-19T10:13:20.170Z [INFO] [NEW_QUESTION] 驗證題目設置
+Data: {
+  "hasCurrentQuestion": true,
+  "currentQuestionText": "世界上只有兩種人",
+  "currentQuestionIndex": 4,
+  "questionsArrayLength": 10
+}
+
+2025-10-19T10:13:20.175Z [INFO] [NEW_QUESTION] 設置第 5 題完成
+Data: {
+  "questionText": "世界上只有兩種人",
+  "questionIndex": 4,
+  "hostPlayerName": "ＡＡＡ",
+  "gameState": "playing",
+  "finalCheck": true
+}
+
+2025-10-19T10:13:23.386Z [INFO] [WEBSOCKET] 收到訊息: SCORES_UPDATE
+Data: {
+  "type": "SCORES_UPDATE",
+  "data": {
+    "currentQuestion": 5,
+    "hostAnswer": "B",
+    "scores": [
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 310,
+        "rank": 1,
+        "scoreGained": 50
+      },
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 250,
+        "rank": 2,
+        "scoreGained": 0
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:23.393Z [INFO] [SCORES_UPDATE] 分數更新
+Data: {
+  "totalPlayersInRoom": 2,
+  "recordedScores": 2,
+  "scores": [
+    {
+      "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+      "playerName": "ＡＡＡ",
+      "score": 310,
+      "rank": 1,
+      "scoreGained": 50
+    },
+    {
+      "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+      "playerName": "ＢＢＢ",
+      "score": 250,
+      "rank": 2,
+      "scoreGained": 0
+    }
+  ],
+  "hostAnswer": "B",
+  "allData": {
+    "currentQuestion": 5,
+    "hostAnswer": "B",
+    "scores": [
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 310,
+        "rank": 1,
+        "scoreGained": 50
+      },
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 250,
+        "rank": 2,
+        "scoreGained": 0
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:23.398Z [INFO] [SCORES_UPDATE] 所有玩家答案都已記錄
+Data: {
+  "totalRecorded": 2
+}
+
+2025-10-19T10:13:28.387Z [INFO] [WEBSOCKET] 收到訊息: NEW_QUESTION
+Data: {
+  "type": "NEW_QUESTION",
+  "data": {
+    "currentQuestion": 6,
+    "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+    "optionA": "社群媒體重度用戶",
+    "optionB": "社群媒體輕度用戶",
+    "question": "世界上只有兩種人",
+    "questionId": 34,
+    "questionIndex": 5,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:28.396Z [INFO] [NEW_QUESTION] 收到新題目數據
+Data: {
+  "questionId": 34,
+  "questionText": "世界上只有兩種人",
+  "question": "世界上只有兩種人",
+  "optionA": "社群媒體重度用戶",
+  "optionB": "社群媒體輕度用戶",
+  "currentQuestion": 6,
+  "questionIndex": 5,
+  "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+  "timeLimit": 30,
+  "allData": {
+    "currentQuestion": 6,
+    "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+    "optionA": "社群媒體重度用戶",
+    "optionB": "社群媒體輕度用戶",
+    "question": "世界上只有兩種人",
+    "questionId": 34,
+    "questionIndex": 5,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:28.402Z [INFO] [NEW_QUESTION] 設置題目索引為: 5
+Data: {
+  "beforeIndex": 4,
+  "afterIndex": 5,
+  "questionsLength": 10
+}
+
+2025-10-19T10:13:28.408Z [INFO] [NEW_QUESTION] 驗證題目設置
+Data: {
+  "hasCurrentQuestion": true,
+  "currentQuestionText": "世界上只有兩種人",
+  "currentQuestionIndex": 5,
+  "questionsArrayLength": 10
+}
+
+2025-10-19T10:13:28.413Z [INFO] [NEW_QUESTION] 設置第 6 題完成
+Data: {
+  "questionText": "世界上只有兩種人",
+  "questionIndex": 5,
+  "hostPlayerName": "ＢＢＢ",
+  "gameState": "playing",
+  "finalCheck": true
+}
+
+2025-10-19T10:13:31.686Z [INFO] [WEBSOCKET] 收到訊息: SCORES_UPDATE
+Data: {
+  "type": "SCORES_UPDATE",
+  "data": {
+    "currentQuestion": 6,
+    "hostAnswer": "B",
+    "scores": [
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 310,
+        "rank": 1,
+        "scoreGained": 0
+      },
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 300,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:31.695Z [INFO] [SCORES_UPDATE] 分數更新
+Data: {
+  "totalPlayersInRoom": 2,
+  "recordedScores": 2,
+  "scores": [
+    {
+      "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+      "playerName": "ＡＡＡ",
+      "score": 310,
+      "rank": 1,
+      "scoreGained": 0
+    },
+    {
+      "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+      "playerName": "ＢＢＢ",
+      "score": 300,
+      "rank": 2,
+      "scoreGained": 50
+    }
+  ],
+  "hostAnswer": "B",
+  "allData": {
+    "currentQuestion": 6,
+    "hostAnswer": "B",
+    "scores": [
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 310,
+        "rank": 1,
+        "scoreGained": 0
+      },
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 300,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:31.698Z [INFO] [SCORES_UPDATE] 所有玩家答案都已記錄
+Data: {
+  "totalRecorded": 2
+}
+
+2025-10-19T10:13:36.688Z [INFO] [WEBSOCKET] 收到訊息: NEW_QUESTION
+Data: {
+  "type": "NEW_QUESTION",
+  "data": {
+    "currentQuestion": 7,
+    "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "optionA": "麵食主義者",
+    "optionB": "米食主義者",
+    "question": "世界上只有兩種人",
+    "questionId": 4,
+    "questionIndex": 6,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:36.695Z [INFO] [NEW_QUESTION] 收到新題目數據
+Data: {
+  "questionId": 4,
+  "questionText": "世界上只有兩種人",
+  "question": "世界上只有兩種人",
+  "optionA": "麵食主義者",
+  "optionB": "米食主義者",
+  "currentQuestion": 7,
+  "questionIndex": 6,
+  "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+  "timeLimit": 30,
+  "allData": {
+    "currentQuestion": 7,
+    "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "optionA": "麵食主義者",
+    "optionB": "米食主義者",
+    "question": "世界上只有兩種人",
+    "questionId": 4,
+    "questionIndex": 6,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:36.701Z [INFO] [NEW_QUESTION] 設置題目索引為: 6
+Data: {
+  "beforeIndex": 5,
+  "afterIndex": 6,
+  "questionsLength": 10
+}
+
+2025-10-19T10:13:36.707Z [INFO] [NEW_QUESTION] 驗證題目設置
+Data: {
+  "hasCurrentQuestion": true,
+  "currentQuestionText": "世界上只有兩種人",
+  "currentQuestionIndex": 6,
+  "questionsArrayLength": 10
+}
+
+2025-10-19T10:13:36.713Z [INFO] [NEW_QUESTION] 設置第 7 題完成
+Data: {
+  "questionText": "世界上只有兩種人",
+  "questionIndex": 6,
+  "hostPlayerName": "ＡＡＡ",
+  "gameState": "playing",
+  "finalCheck": true
+}
+
+2025-10-19T10:13:39.322Z [INFO] [WEBSOCKET] 收到訊息: SCORES_UPDATE
+Data: {
+  "type": "SCORES_UPDATE",
+  "data": {
+    "currentQuestion": 7,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 460,
+        "rank": 1,
+        "scoreGained": 160
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 360,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:39.328Z [INFO] [SCORES_UPDATE] 分數更新
+Data: {
+  "totalPlayersInRoom": 2,
+  "recordedScores": 2,
+  "scores": [
+    {
+      "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+      "playerName": "ＢＢＢ",
+      "score": 460,
+      "rank": 1,
+      "scoreGained": 160
+    },
+    {
+      "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+      "playerName": "ＡＡＡ",
+      "score": 360,
+      "rank": 2,
+      "scoreGained": 50
+    }
+  ],
+  "hostAnswer": "A",
+  "allData": {
+    "currentQuestion": 7,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 460,
+        "rank": 1,
+        "scoreGained": 160
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 360,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:39.334Z [INFO] [SCORES_UPDATE] 所有玩家答案都已記錄
+Data: {
+  "totalRecorded": 2
+}
+
+2025-10-19T10:13:44.324Z [INFO] [WEBSOCKET] 收到訊息: NEW_QUESTION
+Data: {
+  "type": "NEW_QUESTION",
+  "data": {
+    "currentQuestion": 8,
+    "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+    "optionA": "自動更新派",
+    "optionB": "手動更新派",
+    "question": "世界上只有兩種人",
+    "questionId": 39,
+    "questionIndex": 7,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:44.334Z [INFO] [NEW_QUESTION] 收到新題目數據
+Data: {
+  "questionId": 39,
+  "questionText": "世界上只有兩種人",
+  "question": "世界上只有兩種人",
+  "optionA": "自動更新派",
+  "optionB": "手動更新派",
+  "currentQuestion": 8,
+  "questionIndex": 7,
+  "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+  "timeLimit": 30,
+  "allData": {
+    "currentQuestion": 8,
+    "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+    "optionA": "自動更新派",
+    "optionB": "手動更新派",
+    "question": "世界上只有兩種人",
+    "questionId": 39,
+    "questionIndex": 7,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:44.340Z [INFO] [NEW_QUESTION] 設置題目索引為: 7
+Data: {
+  "beforeIndex": 6,
+  "afterIndex": 7,
+  "questionsLength": 10
+}
+
+2025-10-19T10:13:44.346Z [INFO] [NEW_QUESTION] 驗證題目設置
+Data: {
+  "hasCurrentQuestion": true,
+  "currentQuestionText": "世界上只有兩種人",
+  "currentQuestionIndex": 7,
+  "questionsArrayLength": 10
+}
+
+2025-10-19T10:13:44.352Z [INFO] [NEW_QUESTION] 設置第 8 題完成
+Data: {
+  "questionText": "世界上只有兩種人",
+  "questionIndex": 7,
+  "hostPlayerName": "ＢＢＢ",
+  "gameState": "playing",
+  "finalCheck": true
+}
+
+2025-10-19T10:13:47.720Z [INFO] [WEBSOCKET] 收到訊息: SCORES_UPDATE
+Data: {
+  "type": "SCORES_UPDATE",
+  "data": {
+    "currentQuestion": 8,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 510,
+        "rank": 1,
+        "scoreGained": 50
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 360,
+        "rank": 2,
+        "scoreGained": 0
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:47.729Z [INFO] [SCORES_UPDATE] 分數更新
+Data: {
+  "totalPlayersInRoom": 2,
+  "recordedScores": 2,
+  "scores": [
+    {
+      "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+      "playerName": "ＢＢＢ",
+      "score": 510,
+      "rank": 1,
+      "scoreGained": 50
+    },
+    {
+      "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+      "playerName": "ＡＡＡ",
+      "score": 360,
+      "rank": 2,
+      "scoreGained": 0
+    }
+  ],
+  "hostAnswer": "A",
+  "allData": {
+    "currentQuestion": 8,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 510,
+        "rank": 1,
+        "scoreGained": 50
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 360,
+        "rank": 2,
+        "scoreGained": 0
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:47.733Z [INFO] [SCORES_UPDATE] 所有玩家答案都已記錄
+Data: {
+  "totalRecorded": 2
+}
+
+2025-10-19T10:13:52.721Z [INFO] [WEBSOCKET] 收到訊息: NEW_QUESTION
+Data: {
+  "type": "NEW_QUESTION",
+  "data": {
+    "currentQuestion": 9,
+    "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "optionA": "冷氣要開到很冷",
+    "optionB": "冷氣適中就好",
+    "question": "世界上只有兩種人",
+    "questionId": 18,
+    "questionIndex": 8,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:52.732Z [INFO] [NEW_QUESTION] 收到新題目數據
+Data: {
+  "questionId": 18,
+  "questionText": "世界上只有兩種人",
+  "question": "世界上只有兩種人",
+  "optionA": "冷氣要開到很冷",
+  "optionB": "冷氣適中就好",
+  "currentQuestion": 9,
+  "questionIndex": 8,
+  "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+  "timeLimit": 30,
+  "allData": {
+    "currentQuestion": 9,
+    "hostPlayer": "7264e7ef-22dc-407b-9394-834996afc5e0",
+    "optionA": "冷氣要開到很冷",
+    "optionB": "冷氣適中就好",
+    "question": "世界上只有兩種人",
+    "questionId": 18,
+    "questionIndex": 8,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:13:52.737Z [INFO] [NEW_QUESTION] 設置題目索引為: 8
+Data: {
+  "beforeIndex": 7,
+  "afterIndex": 8,
+  "questionsLength": 10
+}
+
+2025-10-19T10:13:52.744Z [INFO] [NEW_QUESTION] 驗證題目設置
+Data: {
+  "hasCurrentQuestion": true,
+  "currentQuestionText": "世界上只有兩種人",
+  "currentQuestionIndex": 8,
+  "questionsArrayLength": 10
+}
+
+2025-10-19T10:13:52.749Z [INFO] [NEW_QUESTION] 設置第 9 題完成
+Data: {
+  "questionText": "世界上只有兩種人",
+  "questionIndex": 8,
+  "hostPlayerName": "ＡＡＡ",
+  "gameState": "playing",
+  "finalCheck": true
+}
+
+2025-10-19T10:13:55.900Z [INFO] [WEBSOCKET] 收到訊息: SCORES_UPDATE
+Data: {
+  "type": "SCORES_UPDATE",
+  "data": {
+    "currentQuestion": 9,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 510,
+        "rank": 1,
+        "scoreGained": 0
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 410,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:55.906Z [INFO] [SCORES_UPDATE] 分數更新
+Data: {
+  "totalPlayersInRoom": 2,
+  "recordedScores": 2,
+  "scores": [
+    {
+      "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+      "playerName": "ＢＢＢ",
+      "score": 510,
+      "rank": 1,
+      "scoreGained": 0
+    },
+    {
+      "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+      "playerName": "ＡＡＡ",
+      "score": 410,
+      "rank": 2,
+      "scoreGained": 50
+    }
+  ],
+  "hostAnswer": "A",
+  "allData": {
+    "currentQuestion": 9,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 510,
+        "rank": 1,
+        "scoreGained": 0
+      },
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 410,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:13:55.912Z [INFO] [SCORES_UPDATE] 所有玩家答案都已記錄
+Data: {
+  "totalRecorded": 2
+}
+
+2025-10-19T10:14:00.900Z [INFO] [WEBSOCKET] 收到訊息: NEW_QUESTION
+Data: {
+  "type": "NEW_QUESTION",
+  "data": {
+    "currentQuestion": 10,
+    "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+    "optionA": "火鍋蛋餃要咬破",
+    "optionB": "火鍋蛋餃整顆吃",
+    "question": "世界上只有兩種人",
+    "questionId": 7,
+    "questionIndex": 9,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:14:00.904Z [INFO] [NEW_QUESTION] 收到新題目數據
+Data: {
+  "questionId": 7,
+  "questionText": "世界上只有兩種人",
+  "question": "世界上只有兩種人",
+  "optionA": "火鍋蛋餃要咬破",
+  "optionB": "火鍋蛋餃整顆吃",
+  "currentQuestion": 10,
+  "questionIndex": 9,
+  "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+  "timeLimit": 30,
+  "allData": {
+    "currentQuestion": 10,
+    "hostPlayer": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+    "optionA": "火鍋蛋餃要咬破",
+    "optionB": "火鍋蛋餃整顆吃",
+    "question": "世界上只有兩種人",
+    "questionId": 7,
+    "questionIndex": 9,
+    "questionText": "世界上只有兩種人",
+    "timeLimit": 30,
+    "totalQuestions": 10
+  }
+}
+
+2025-10-19T10:14:00.910Z [INFO] [NEW_QUESTION] 設置題目索引為: 9
+Data: {
+  "beforeIndex": 8,
+  "afterIndex": 9,
+  "questionsLength": 10
+}
+
+2025-10-19T10:14:00.916Z [INFO] [NEW_QUESTION] 驗證題目設置
+Data: {
+  "hasCurrentQuestion": true,
+  "currentQuestionText": "世界上只有兩種人",
+  "currentQuestionIndex": 9,
+  "questionsArrayLength": 10
+}
+
+2025-10-19T10:14:00.922Z [INFO] [NEW_QUESTION] 設置第 10 題完成
+Data: {
+  "questionText": "世界上只有兩種人",
+  "questionIndex": 9,
+  "hostPlayerName": "ＢＢＢ",
+  "gameState": "playing",
+  "finalCheck": true
+}
+
+2025-10-19T10:14:03.536Z [INFO] [WEBSOCKET] 收到訊息: SCORES_UPDATE
+Data: {
+  "type": "SCORES_UPDATE",
+  "data": {
+    "currentQuestion": 10,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 570,
+        "rank": 1,
+        "scoreGained": 160
+      },
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 560,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:14:03.545Z [INFO] [SCORES_UPDATE] 分數更新
+Data: {
+  "totalPlayersInRoom": 2,
+  "recordedScores": 2,
+  "scores": [
+    {
+      "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+      "playerName": "ＡＡＡ",
+      "score": 570,
+      "rank": 1,
+      "scoreGained": 160
+    },
+    {
+      "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+      "playerName": "ＢＢＢ",
+      "score": 560,
+      "rank": 2,
+      "scoreGained": 50
+    }
+  ],
+  "hostAnswer": "A",
+  "allData": {
+    "currentQuestion": 10,
+    "hostAnswer": "A",
+    "scores": [
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 570,
+        "rank": 1,
+        "scoreGained": 160
+      },
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 560,
+        "rank": 2,
+        "scoreGained": 50
+      }
+    ]
+  }
+}
+
+2025-10-19T10:14:03.551Z [INFO] [SCORES_UPDATE] 所有玩家答案都已記錄
+Data: {
+  "totalRecorded": 2
+}
+
+2025-10-19T10:14:08.537Z [INFO] [WEBSOCKET] 收到訊息: GAME_FINISHED
+Data: {
+  "type": "GAME_FINISHED",
+  "data": {
+    "finalRanking": [
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 570,
+        "rank": 1,
+        "scoreGained": 0
+      },
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 560,
+        "rank": 2,
+        "scoreGained": 0
+      }
+    ],
+    "message": "遊戲結束！"
+  }
+}
+
+2025-10-19T10:14:08.546Z [INFO] [GAME_FINISHED] 遊戲結束，等待用戶操作清理
+Data: {
+  "finalRanking": [
+    {
+      "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+      "playerName": "ＡＡＡ",
+      "score": 570,
+      "rank": 1,
+      "scoreGained": 0
+    },
+    {
+      "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+      "playerName": "ＢＢＢ",
+      "score": 560,
+      "rank": 2,
+      "scoreGained": 0
+    }
+  ],
+  "allData": {
+    "finalRanking": [
+      {
+        "playerId": "7264e7ef-22dc-407b-9394-834996afc5e0",
+        "playerName": "ＡＡＡ",
+        "score": 570,
+        "rank": 1,
+        "scoreGained": 0
+      },
+      {
+        "playerId": "b19e09ea-f6da-4c4c-aa70-5aa52670b0dd",
+        "playerName": "ＢＢＢ",
+        "score": 560,
+        "rank": 2,
+        "scoreGained": 0
+      }
+    ],
+    "message": "遊戲結束！"
+  }
+}
+
+2025-10-19T10:14:08.551Z [INFO] [GAME_FINISHED] 遊戲結束，等待用戶手動返回首頁或重新開始
+
+2025-10-19T10:14:08.604Z [INFO] [CLEANUP] GameHostView 組件卸載
+Data: {
+  "gameState": "finished",
+  "note": "不自動清理，等待用戶操作"
+}
+
+2025-10-19T10:14:14.850Z [INFO] [CLEANUP] 用戶點擊"再來一局"，開始清理遊戲資源
+
+2025-10-19T10:14:14.855Z [INFO] [CLEANUP] 開始清理遊戲資源
+Data: {
+  "hasSocket": true,
+  "isConnected": true,
+  "currentRoom": "PJTF26",
+  "currentPlayer": "ＡＡ"
+}
+
+2025-10-19T10:14:14.860Z [INFO] [CLEANUP] 遊戲資源清理完成
+Data: {
+  "socketClosed": true,
+  "gameReset": true,
+  "reconnectAttemptsReset": true
+}

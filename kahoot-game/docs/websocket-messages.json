@@ -1,0 +1,193 @@
+{
+  "websocket_messages": {
+    "client_to_server": {
+      "JOIN_ROOM": {
+        "description": "玩家加入房間",
+        "data": {
+          "roomId": "string (6位房間代碼)",
+          "playerName": "string (玩家暱稱)"
+        },
+        "example": {
+          "type": "JOIN_ROOM",
+          "data": {
+            "roomId": "ABC123",
+            "playerName": "小明"
+          }
+        }
+      },
+      "CREATE_ROOM": {
+        "description": "主持人創建房間",
+        "data": {
+          "hostName": "string (主持人暱稱)",
+          "totalQuestions": "number (總題數)",
+          "questionTime": "number (每題時間秒數)"
+        },
+        "example": {
+          "type": "CREATE_ROOM",
+          "data": {
+            "hostName": "老師",
+            "totalQuestions": 10,
+            "questionTime": 30
+          }
+        }
+      },
+      "START_GAME": {
+        "description": "開始遊戲",
+        "data": {
+          "roomId": "string"
+        },
+        "example": {
+          "type": "START_GAME",
+          "data": {
+            "roomId": "ABC123"
+          }
+        }
+      },
+      "SUBMIT_ANSWER": {
+        "description": "提交答案",
+        "data": {
+          "roomId": "string",
+          "questionId": "number",
+          "answer": "string (A/B/C/D)",
+          "timeUsed": "number (用時秒數)"
+        },
+        "example": {
+          "type": "SUBMIT_ANSWER",
+          "data": {
+            "roomId": "ABC123",
+            "questionId": 1,
+            "answer": "A",
+            "timeUsed": 5.2
+          }
+        }
+      },
+      "LEAVE_ROOM": {
+        "description": "離開房間",
+        "data": {
+          "roomId": "string"
+        }
+      }
+    },
+    "server_to_client": {
+      "ROOM_CREATED": {
+        "description": "房間創建成功",
+        "data": {
+          "roomId": "string",
+          "qrCode": "string (QR Code URL)",
+          "roomUrl": "string (房間加入 URL)"
+        }
+      },
+      "PLAYER_JOINED": {
+        "description": "有玩家加入",
+        "data": {
+          "playerId": "string",
+          "playerName": "string",
+          "totalPlayers": "number"
+        }
+      },
+      "GAME_STARTED": {
+        "description": "遊戲開始",
+        "data": {
+          "totalQuestions": "number",
+          "firstHost": "string (第一個主角玩家ID)"
+        }
+      },
+      "NEW_QUESTION": {
+        "description": "新題目",
+        "data": {
+          "questionId": "number",
+          "questionText": "string",
+          "options": ["string", "string", "string", "string"],
+          "hostPlayer": "string (主角玩家ID)",
+          "hostPlayerName": "string",
+          "timeLimit": "number",
+          "currentQuestion": "number",
+          "totalQuestions": "number"
+        }
+      },
+      "ANSWER_RECEIVED": {
+        "description": "收到答案確認",
+        "data": {
+          "playerId": "string",
+          "received": "boolean"
+        }
+      },
+      "QUESTION_FINISHED": {
+        "description": "題目結束，顯示答案",
+        "data": {
+          "correctAnswer": "string",
+          "explanation": "string",
+          "playerAnswers": {
+            "playerId": {
+              "answer": "string",
+              "isCorrect": "boolean",
+              "timeUsed": "number",
+              "scoreGained": "number"
+            }
+          }
+        }
+      },
+      "SCORES_UPDATE": {
+        "description": "分數更新",
+        "data": {
+          "scores": [
+            {
+              "playerId": "string",
+              "playerName": "string",
+              "score": "number",
+              "rank": "number"
+            }
+          ]
+        }
+      },
+      "GAME_FINISHED": {
+        "description": "遊戲結束",
+        "data": {
+          "winner": {
+            "playerId": "string",
+            "playerName": "string",
+            "finalScore": "number"
+          },
+          "finalRanking": [
+            {
+              "rank": "number",
+              "playerId": "string",
+              "playerName": "string",
+              "score": "number",
+              "correctAnswers": "number",
+              "averageTime": "number"
+            }
+          ],
+          "gameStats": {
+            "duration": "string",
+            "totalQuestions": "number",
+            "totalPlayers": "number"
+          }
+        }
+      },
+      "ERROR": {
+        "description": "錯誤訊息",
+        "data": {
+          "code": "string (錯誤代碼)",
+          "message": "string (錯誤訊息)"
+        }
+      }
+    }
+  },
+  "error_codes": {
+    "ROOM_NOT_FOUND": "房間不存在",
+    "ROOM_FULL": "房間已滿",
+    "GAME_ALREADY_STARTED": "遊戲已開始",
+    "INVALID_ANSWER": "無效答案",
+    "PLAYER_NOT_FOUND": "玩家不存在",
+    "PERMISSION_DENIED": "權限不足"
+  },
+  "game_states": {
+    "WAITING": "等待玩家加入",
+    "STARTING": "遊戲即將開始",
+    "QUESTION_DISPLAY": "顯示題目",
+    "ANSWERING": "答題時間",
+    "SHOW_RESULT": "顯示答案結果",
+    "GAME_FINISHED": "遊戲結束"
+  }
+}
