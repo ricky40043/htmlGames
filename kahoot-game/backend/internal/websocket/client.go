@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"kahoot-game/internal/models"
+	"kahoot-game/internal/services"
 
 	"github.com/gorilla/websocket"
 	"github.com/google/uuid"
@@ -75,8 +76,10 @@ func NewClient(conn *websocket.Conn, hub *Hub) *Client {
 // readPump 處理從客戶端讀取訊息
 func (c *Client) readPump() {
 	defer func() {
+		log.Printf("🔄 readPump 結束，發送註銷請求: %s", c.ID)
 		c.hub.unregister <- c
 		c.conn.Close()
+		log.Printf("❌ readPump 清理完成: %s", c.ID)
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -91,6 +94,8 @@ func (c *Client) readPump() {
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("WebSocket 錯誤: %v", err)
+			} else {
+				log.Printf("WebSocket 正常關閉: %s, 錯誤: %v", c.ID, err)
 			}
 			break
 		}
@@ -161,6 +166,7 @@ func (c *Client) writePump() {
 
 // handleMessage 處理客戶端訊息
 func (c *Client) handleMessage(msg *Message) {
+	log.Printf("📨 收到訊息 type=%s from=%s room=%s", msg.Type, c.ID, c.RoomID)
 	switch msg.Type {
 	case "CREATE_ROOM":
 		c.handleCreateRoom(msg.Data)
@@ -365,10 +371,31 @@ func (c *Client) handleStartGame(data interface{}) {
 		return
 	}
 
+	log.Printf("🔍 開始遊戲前檢查: 房間狀態=%s, 玩家數量=%d", room.Status, room.GetPlayerCount())
+
 	// 檢查玩家數量
 	if room.GetPlayerCount() < 2 {
 		c.sendError("INSUFFICIENT_PLAYERS", "至少需要2個玩家才能開始遊戲")
 		return
+	}
+
+	// 如果房間已經結束，重置房間狀態以允許重新開始
+	if room.Status == models.RoomStatusFinished {
+		log.Printf("🔄 房間已結束，重置狀態以重新開始遊戲")
+		room.Status = models.RoomStatusWaiting
+		room.CurrentQuestion = 0
+		room.Answers = make(map[string]*models.Answer)
+		
+		// 重置所有玩家分數
+		for _, player := range room.Players {
+			player.Score = 0
+		}
+		
+		// 更新房間狀態
+		err = c.hub.roomService.UpdateRoom(room)
+		if err != nil {
+			log.Printf("重置房間狀態錯誤: %v", err)
+		}
 	}
 
 	// 開始「2種人」遊戲
@@ -395,8 +422,13 @@ func (c *Client) handleStartGame(data interface{}) {
 		},
 	}
 
+	log.Printf("🎮 準備廣播 GAME_STARTED: 房間ID=%s, 客戶端房間ID=%s", room.ID, c.RoomID)
+	
 	if msgBytes, err := json.Marshal(gameStartMsg); err == nil {
+		log.Printf("🎮 廣播 GAME_STARTED 到房間 %s", c.RoomID)
 		c.hub.BroadcastToRoom(c.RoomID, msgBytes)
+	} else {
+		log.Printf("❌ 廣播 GAME_STARTED 失敗: %v", err)
 	}
 
 	// 發送第一題
@@ -413,9 +445,26 @@ func (c *Client) sendFirstQuestion() {
 		return
 	}
 
+	log.Printf("🔍 檢查房間題目: 房間ID=%s, 題目數量=%d, 總題目設定=%d", c.RoomID, len(room.Questions), room.TotalQuestions)
+	
 	if len(room.Questions) == 0 {
-		log.Printf("房間 %s 沒有題目", c.RoomID)
-		return
+		log.Printf("❌ 房間 %s 沒有題目，嘗試重新載入題目", c.RoomID)
+		
+		// 嘗試重新載入題目
+		room.Questions = services.GetRandomQuestions(room.TotalQuestions)
+		log.Printf("🔄 重新載入後題目數量: %d", len(room.Questions))
+		
+		if len(room.Questions) == 0 {
+			log.Printf("❌ 重新載入題目失敗，無法開始遊戲")
+			c.sendError("NO_QUESTIONS", "無法載入遊戲題目")
+			return
+		}
+		
+		// 更新房間
+		err = c.hub.roomService.UpdateRoom(room)
+		if err != nil {
+			log.Printf("更新房間錯誤: %v", err)
+		}
 	}
 
 	currentQuestion := room.Questions[room.CurrentQuestion-1]

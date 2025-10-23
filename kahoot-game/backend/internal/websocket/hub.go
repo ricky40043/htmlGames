@@ -64,15 +64,21 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.register:
+			log.Printf("🔄 Hub 收到註冊請求: %s", client.ID)
 			h.registerClient(client)
+			log.Printf("✅ Hub 註冊完成: %s", client.ID)
 			
 		case client := <-h.unregister:
+			log.Printf("🔄 Hub 收到註銷請求: %s", client.ID)
 			h.unregisterClient(client)
+			log.Printf("❌ Hub 註銷完成: %s", client.ID)
 			
 		case message := <-h.broadcast:
+			log.Printf("📡 Hub 處理全域廣播")
 			h.broadcastToAll(message)
 			
 		case roomMsg := <-h.roomBroadcast:
+			log.Printf("📡 Hub 處理房間廣播: 房間=%s", roomMsg.RoomID)
 			h.broadcastToRoom(roomMsg.RoomID, roomMsg.Message)
 		}
 	}
@@ -107,21 +113,25 @@ func (h *Hub) unregisterClient(client *Client) {
 	defer h.mutex.Unlock()
 	
 	if _, ok := h.clients[client]; ok {
-		// 從全域客戶端列表移除
+		// 1. 先處理離開邏輯（在關閉通道前）
+		if client.RoomID != "" {
+			h.handlePlayerLeaveInternal(client)
+		}
+		
+		// 2. 從特定房間移除（而不是遍歷所有房間）
+		if client.RoomID != "" {
+			h.removeClientFromRoom(client, client.RoomID)
+		}
+		
+		// 3. 從全域客戶端列表移除
 		delete(h.clients, client)
+		
+		// 4. 最後關閉通道
 		close(client.send)
 		
-		// 從所有房間移除
-		for roomID := range h.rooms {
-			h.removeClientFromRoom(client, roomID)
-		}
-		
-		// 如果客戶端在房間中，處理離開邏輯
-		if client.RoomID != "" {
-			h.handlePlayerLeave(client)
-		}
-		
 		log.Printf("❌ 客戶端已註銷: %s (剩餘: %d)", client.ID, len(h.clients))
+	} else {
+		log.Printf("⚠️ 嘗試註銷不存在的客戶端: %s", client.ID)
 	}
 }
 
@@ -193,11 +203,39 @@ func (h *Hub) broadcastToRoom(roomID string, message []byte) {
 	}
 }
 
-// handlePlayerLeave 處理玩家離開
+// broadcastToRoomExclude 內部廣播給房間（排除指定客戶端）
+func (h *Hub) broadcastToRoomExclude(roomID string, message []byte, excludeClient *Client) {
+	if roomClients, exists := h.rooms[roomID]; exists {
+		for client := range roomClients {
+			// 跳過已離開的客戶端
+			if client == excludeClient {
+				continue
+			}
+			
+			select {
+			case client.send <- message:
+			default:
+				// 如果發送失敗，標記為需要清理（但不在這裡直接刪除，避免併發問題）
+				log.Printf("⚠️ 向客戶端 %s 發送消息失敗", client.ID)
+			}
+		}
+	}
+}
+
+// handlePlayerLeave 處理玩家離開（外部調用）
 func (h *Hub) handlePlayerLeave(client *Client) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+	h.handlePlayerLeaveInternal(client)
+}
+
+// handlePlayerLeaveInternal 處理玩家離開（內部調用，已持有鎖）
+func (h *Hub) handlePlayerLeaveInternal(client *Client) {
 	if client.RoomID == "" || client.PlayerName == "" {
 		return
 	}
+	
+	log.Printf("👋 處理玩家離開: %s 從房間 %s", client.PlayerName, client.RoomID)
 	
 	// 從房間服務中移除玩家
 	err := h.roomService.RemovePlayer(client.RoomID, client.ID)
@@ -213,7 +251,7 @@ func (h *Hub) handlePlayerLeave(client *Client) {
 		return
 	}
 	
-	// 廣播玩家離開訊息
+	// 廣播玩家離開訊息（但排除已離開的客戶端）
 	leaveMsg := Message{
 		Type: "PLAYER_LEFT",
 		Data: map[string]interface{}{
@@ -225,10 +263,11 @@ func (h *Hub) handlePlayerLeave(client *Client) {
 	}
 	
 	if msgBytes, err := json.Marshal(leaveMsg); err == nil {
-		h.BroadcastToRoom(client.RoomID, msgBytes)
+		// 直接調用內部廣播，避免通道死鎖
+		h.broadcastToRoomExclude(client.RoomID, msgBytes, client)
 	}
 	
-	log.Printf("👋 玩家 %s 離開房間 %s", client.PlayerName, client.RoomID)
+	log.Printf("✅ 玩家 %s 離開房間 %s 處理完成", client.PlayerName, client.RoomID)
 }
 
 // GetRoomClients 獲取房間客戶端列表

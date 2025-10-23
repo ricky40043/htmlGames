@@ -157,12 +157,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocketStore } from '@/stores/socket'
 import { useGameStore } from '@/stores/game'
 import { useUIStore } from '@/stores/ui'
 import { apiService } from '@/services/api'
+import { logInfo, logWarn, logError, captureError } from '@/utils/logger'
 
 const router = useRouter()
 const socketStore = useSocketStore()
@@ -207,6 +208,12 @@ const createRoom = async () => {
   uiStore.setLoading(true, '正在創建房間...')
 
   try {
+    logInfo('VIEW_CREATE_ROOM', '開始創建房間', {
+      hostName: form.value.hostName,
+      totalQuestions: form.value.totalQuestions,
+      questionTimeLimit: form.value.questionTimeLimit
+    })
+
     // 詳細日誌記錄
     if (window.debugLogger) {
       window.debugLogger.info('CREATE_ROOM', '開始創建房間', {
@@ -230,6 +237,8 @@ const createRoom = async () => {
     }
 
     console.log('✅ 房間創建成功:', roomData)
+
+    logInfo('VIEW_CREATE_ROOM', 'API 創建房間成功', roomData)
 
     // 2. 設置房間信息到 store
     gameStore.setRoom({
@@ -262,31 +271,54 @@ const createRoom = async () => {
 
     // 4. 建立 WebSocket 連接到指定房間
     console.log('🔗 建立 WebSocket 連接...')
-    if (!socketStore.isConnected) {
-      socketStore.connect()
-      
-      // 等待 WebSocket 連接建立
-      await new Promise((resolve, reject) => {
-        let attempts = 0
-        const maxAttempts = 30 // 3秒超時
-        
-        const checkConnection = () => {
-          attempts++
-          if (socketStore.isConnected) {
-            resolve(true)
-          } else if (attempts >= maxAttempts) {
-            reject(new Error('WebSocket 連接超時'))
-          } else {
-            setTimeout(checkConnection, 100)
-          }
-        }
-        checkConnection()
+    
+    if (window.debugLogger) {
+      window.debugLogger.info('CREATE_ROOM', '檢查 WebSocket 連接狀態', {
+        isConnected: socketStore.isConnected,
+        willForceReconnect: true
       })
     }
+    
+    // 強制重新建立連接，確保是全新的連接
+    if (socketStore.isConnected) {
+      console.log('🔄 斷開現有連接，準備重新連接...')
+      socketStore.disconnect()
+      // 短暫等待確保連接完全關閉
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    
+    console.log('🔗 開始建立新的 WebSocket 連接...')
+    socketStore.connect()
+    
+    // 等待 WebSocket 連接建立
+    await new Promise((resolve, reject) => {
+      let attempts = 0
+      const maxAttempts = 50 // 5秒超時
+      
+      const checkConnection = () => {
+        attempts++
+        if (window.debugLogger && attempts % 10 === 0) {
+          window.debugLogger.debug('CREATE_ROOM', `等待 WebSocket 連接... 嘗試 ${attempts}/${maxAttempts}`)
+        }
+        
+        if (socketStore.isConnected) {
+          resolve(true)
+        } else if (attempts >= maxAttempts) {
+          reject(new Error('WebSocket 連接超時'))
+        } else {
+          setTimeout(checkConnection, 100)
+        }
+      }
+      checkConnection()
+    })
 
     if (window.debugLogger) {
       window.debugLogger.info('CREATE_ROOM', 'WebSocket 連接成功，準備加入房間')
     }
+
+    logInfo('VIEW_CREATE_ROOM', 'WebSocket 連線完成，即將以主持人身分加入', {
+      roomId: roomData.roomId
+    })
 
     // 5. 通過 WebSocket 加入房間作為主持人
     socketStore.sendMessage({
@@ -306,6 +338,9 @@ const createRoom = async () => {
     router.push(`/lobby/${roomData.roomId}`)
     
   } catch (error) {
+    captureError('VIEW_CREATE_ROOM', error, {
+      form: { ...form.value }
+    })
     console.error('❌ 創建房間失敗:', error)
     
     if (window.debugLogger) {
@@ -316,14 +351,18 @@ const createRoom = async () => {
     }
     
     let errorMessage = '創建房間失敗'
-    if (error.message.includes('timeout')) {
+    if (error.message?.includes?.('timeout')) {
       errorMessage = '創建房間超時，請重試'
-    } else if (error.message.includes('network')) {
+    } else if (error.message?.includes?.('network')) {
       errorMessage = '網路連線失敗，請檢查網路'
     } else if (error.message) {
       errorMessage = error.message
     }
-    
+
+    logError('VIEW_CREATE_ROOM', '創建房間失敗', {
+      error: errorMessage
+    })
+
     uiStore.showError(errorMessage)
     isSubmitting.value = false
     uiStore.setLoading(false)
@@ -333,7 +372,12 @@ const createRoom = async () => {
 // 不再需要監聽房間創建事件，因為已改為直接 HTTP API 創建
 
 // 組件卸載時清理
+onMounted(() => {
+  logInfo('VIEW_CREATE_ROOM', '頁面載入')
+})
+
 onUnmounted(() => {
+  logInfo('VIEW_CREATE_ROOM', '離開頁面')
   // 重置狀態
   isSubmitting.value = false
   uiStore.setLoading(false)

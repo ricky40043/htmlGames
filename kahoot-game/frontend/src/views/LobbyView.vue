@@ -274,6 +274,7 @@ import { useUIStore } from '@/stores/ui'
 import { useGameLogic } from '@/composables/useGameLogic'
 import QRCodeDisplay from '@/components/QRCodeDisplay.vue'
 import PlayerAvatar from '@/components/PlayerAvatar.vue'
+import { logInfo, logWarn, logError, logDebug, captureError } from '@/utils/logger'
 
 const route = useRoute()
 const router = useRouter()
@@ -333,15 +334,16 @@ const isDev = computed(() => {
 
 // 方法
 const onQRGenerated = (canvas: HTMLCanvasElement) => {
-  console.log('QR Code 生成成功')
+  logDebug('VIEW_LOBBY', 'QR Code 生成成功')
 }
 
 const copyRoomId = async () => {
   try {
     await navigator.clipboard.writeText(roomId.value)
+    logInfo('VIEW_LOBBY', '複製房間代碼成功', { roomId: roomId.value })
     uiStore.showSuccess('房間代碼已複製')
   } catch (error) {
-    console.error('複製失敗:', error)
+    captureError('VIEW_LOBBY', error, { action: 'copyRoomId' })
     uiStore.showError('複製失敗')
   }
 }
@@ -349,9 +351,10 @@ const copyRoomId = async () => {
 const copyJoinUrl = async () => {
   try {
     await navigator.clipboard.writeText(joinUrl.value)
+    logInfo('VIEW_LOBBY', '複製房間網址成功', { joinUrl: joinUrl.value })
     uiStore.showSuccess('加入網址已複製')
   } catch (error) {
-    console.error('複製失敗:', error)
+    captureError('VIEW_LOBBY', error, { action: 'copyJoinUrl' })
     uiStore.showError('複製失敗')
   }
 }
@@ -365,8 +368,10 @@ const shareRoom = async () => {
       text: `加入我的遊戲房間！房間代碼: ${roomId.value}`,
       url: joinUrl.value
     })
+    logInfo('VIEW_LOBBY', '分享房間成功', { roomId: roomId.value })
   } catch (error) {
-    console.error('分享失敗:', error)
+    captureError('VIEW_LOBBY', error, { action: 'shareRoom' })
+    logError('VIEW_LOBBY', '分享房間失敗', error)
   }
 }
 
@@ -381,6 +386,7 @@ const startGame = async () => {
   uiStore.setLoading(true, '正在載入題目...')
   
   try {
+    logInfo('VIEW_LOBBY', '主持人觸發開始遊戲', { roomId: roomId.value })
     // 載入題目
     const room = gameStore.currentRoom
     if (!room) throw new Error('房間資訊不存在')
@@ -398,7 +404,8 @@ const startGame = async () => {
     }
     
   } catch (error) {
-    console.error('開始遊戲失敗:', error)
+    captureError('VIEW_LOBBY', error, { action: 'startGame' })
+    logError('VIEW_LOBBY', '開始遊戲失敗', error)
     uiStore.showError('載入題目失敗，請稍後重試')
   } finally {
     uiStore.setLoading(false)
@@ -409,6 +416,7 @@ const startGameForce = async () => {
   uiStore.setLoading(true, '強制開始遊戲...')
   
   try {
+    logWarn('VIEW_LOBBY', '觸發強制開始遊戲', { roomId: roomId.value })
     // 載入備用題目
     await gameLogic.loadQuestions(5) // 強制模式只用5題
     socketStore.startGame(roomId.value)
@@ -420,7 +428,8 @@ const startGameForce = async () => {
     }
     
   } catch (error) {
-    console.error('強制開始失敗:', error)
+    captureError('VIEW_LOBBY', error, { action: 'startGameForce' })
+    logError('VIEW_LOBBY', '強制開始失敗', error)
     uiStore.showError('強制開始失敗')
   } finally {
     uiStore.setLoading(false)
@@ -428,6 +437,7 @@ const startGameForce = async () => {
 }
 
 const leaveRoom = () => {
+  logInfo('VIEW_LOBBY', '玩家離開房間', { roomId: roomId.value })
   socketStore.leaveRoom()
   gameStore.resetGame()
   router.push('/')
@@ -461,6 +471,7 @@ const unwatchGameState = gameStore.$subscribe((mutation, state) => {
 
 // 生命週期
 onMounted(() => {
+  logInfo('VIEW_LOBBY', '頁面載入', { roomId: roomId.value, isHost: gameStore.isHost })
   // 確保有房間資訊
   if (!gameStore.currentRoom) {
     uiStore.showError('房間資訊不存在，請重新加入')
@@ -470,6 +481,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  logInfo('VIEW_LOBBY', '離開頁面', { roomId: roomId.value })
   unwatchGameState()
 })
 </script>

@@ -199,6 +199,7 @@ import { useGameStore } from '@/stores/game'
 import { useSocketStore } from '@/stores/socket'
 import { useUIStore } from '@/stores/ui'
 import PlayerAvatar from '@/components/PlayerAvatar.vue'
+import { logInfo, logWarn, logError } from '@/utils/logger'
 
 const route = useRoute()
 const router = useRouter()
@@ -268,8 +269,13 @@ const shareResults = async () => {
       text: `我在 Kahoot 遊戲中獲得第 ${myRank} 名，得分 ${myScore} 分！一起來挑戰吧！`,
       url: window.location.origin
     })
+    logInfo('VIEW_RESULTS', '分享遊戲結果成功', {
+      roomId: roomId.value,
+      myRank,
+      myScore
+    })
   } catch (error) {
-    console.error('分享失敗:', error)
+    logError('VIEW_RESULTS', '分享遊戲結果失敗', error)
     uiStore.showError('分享失敗')
   }
 }
@@ -279,6 +285,7 @@ const playAgain = () => {
     window.debugLogger.info('CLEANUP', '用戶點擊"再來一局"，開始清理遊戲資源')
   }
   
+  logInfo('VIEW_RESULTS', '用戶選擇再來一局', { roomId: roomId.value })
   uiStore.showInfo('正在清理遊戲資源...')
   
   // 清理遊戲資源
@@ -295,6 +302,7 @@ const returnHome = () => {
     window.debugLogger.info('CLEANUP', '用戶點擊"返回主頁"，開始清理遊戲資源')
   }
   
+  logInfo('VIEW_RESULTS', '用戶選擇返回主頁', { roomId: roomId.value })
   uiStore.showInfo('正在清理遊戲資源...')
   
   // 清理遊戲資源
@@ -308,9 +316,17 @@ const returnHome = () => {
 
 // 生命週期
 onMounted(() => {
+  logInfo('VIEW_RESULTS', '頁面載入', {
+    roomId: roomId.value,
+    finalRankingCount: finalRanking.value.length
+  })
   // 確保有遊戲數據
   if (!gameStore.currentRoom || finalRanking.value.length === 0) {
     uiStore.showWarning('沒有遊戲結果數據')
+    logWarn('VIEW_RESULTS', '沒有遊戲結果數據', {
+      hasRoom: !!gameStore.currentRoom,
+      rankingCount: finalRanking.value.length
+    })
   }
 })
 </script>

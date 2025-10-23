@@ -159,11 +159,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSocketStore } from '@/stores/socket'
 import { useGameStore } from '@/stores/game'
 import { useUIStore } from '@/stores/ui'
+import { logInfo, logError, captureError } from '@/utils/logger'
 
 const route = useRoute()
 const router = useRouter()
@@ -215,6 +216,11 @@ const joinRoom = async () => {
   uiStore.setLoading(true, '正在加入房間...')
 
   try {
+    logInfo('VIEW_JOIN_ROOM', '開始加入房間', {
+      roomId: form.value.roomId,
+      playerName: form.value.playerName
+    })
+
     // 設置當前玩家
     gameStore.setPlayer({
       id: '', // 將由服務器分配
@@ -228,7 +234,7 @@ const joinRoom = async () => {
 
     // 確保 WebSocket 連接
     if (!socketStore.isConnected) {
-      console.log('🔗 建立 WebSocket 連接...')
+      logInfo('VIEW_JOIN_ROOM', '建立 WebSocket 連線中')
       socketStore.connect()
       
       // 等待連接建立
@@ -245,6 +251,8 @@ const joinRoom = async () => {
         // 5秒超時
         setTimeout(() => reject(new Error('連接超時')), 5000)
       })
+
+      logInfo('VIEW_JOIN_ROOM', 'WebSocket 連線成功，準備送出 JOIN_ROOM')
     }
 
     // 發送加入房間請求
@@ -260,7 +268,11 @@ const joinRoom = async () => {
     }, 10000) // 10秒超時
     
   } catch (error) {
-    console.error('加入房間失敗:', error)
+    captureError('VIEW_JOIN_ROOM', error, {
+      roomId: form.value.roomId,
+      playerName: form.value.playerName
+    })
+    logError('VIEW_JOIN_ROOM', '加入房間失敗', error)
     uiStore.showError('加入房間失敗，請檢查房間代碼或網路連線')
     isSubmitting.value = false
     uiStore.setLoading(false)
@@ -290,7 +302,10 @@ const mockQRScan = () => {
 // 監聽加入房間成功事件
 const unwatchRoom = gameStore.$subscribe((mutation, state) => {
   if (state.currentRoom && state.currentPlayer && !state.currentPlayer.isHost) {
-    console.log('🎯 玩家加入成功，準備跳轉到:', `/game/player/${state.currentRoom.id}`)
+    logInfo('VIEW_JOIN_ROOM', '玩家加入成功，即將跳轉遊戲畫面', {
+      roomId: state.currentRoom.id,
+      playerId: state.currentPlayer.id
+    })
     
     // 停止 loading 狀態
     isSubmitting.value = false
@@ -304,11 +319,19 @@ const unwatchRoom = gameStore.$subscribe((mutation, state) => {
 
 // 生命週期
 onMounted(() => {
+  logInfo('VIEW_JOIN_ROOM', '頁面載入', {
+    prefilledRoomId: props.roomId || route.params.roomId
+  })
   // 如果 URL 中有房間 ID，自動填入
   if (props.roomId) {
     form.value.roomId = props.roomId.toUpperCase()
   } else if (route.params.roomId) {
     form.value.roomId = (route.params.roomId as string).toUpperCase()
   }
+})
+
+onUnmounted(() => {
+  logInfo('VIEW_JOIN_ROOM', '離開頁面')
+  unwatchRoom()
 })
 </script>

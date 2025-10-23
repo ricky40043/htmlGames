@@ -71,6 +71,8 @@ window.debugLogger.error('分類', '錯誤訊息', 數據物件)
 - 問題18: 查看 TIMER_UPDATE 分類，查找重複計時器警告 
 ✅ 19.玩完一次遊戲就無法開創第二次房間 - 已修復（修正房間創建流程 + joinUrl修復 + 用戶操作觸發清理）
 ✅ 20.玩家列表顯示為空 - 已修復（修正前端 PLAYER_JOINED 事件處理邏輯）
+✅ 21.第二次創建房間後無法建立 WebSocket 連接 - 已修復（強制重新建立 WebSocket 連接 + 修正 shouldReconnect 邏輯）
+🔍 22.第二次遊戲開始後卡住無法進行 - 調試中（添加 GAME_STARTED 廣播日誌以診斷問題）
 
 【問題19修復詳情】
 - 修復原因1：遊戲結束後沒有清理 WebSocket 連接和遊戲狀態
@@ -112,3 +114,33 @@ window.debugLogger.error('分類', '錯誤訊息', 數據物件)
   * 【邏輯優化】改進玩家列表處理邏輯，支持完整列表和單個玩家更新
   * 【錯誤處理】添加數組檢查和異常情況處理
 - 修復效果：玩家加入房間後，玩家列表正確顯示所有玩家信息
+
+【問題21修復詳情】
+- 修復原因：cleanupAfterGame 函數中 shouldReconnect 被設為 false 且沒有重置，導致後續 WebSocket 無法重新連接
+- 問題分析：
+  * 第一次遊戲結束後，cleanupAfterGame 執行並設置 shouldReconnect = false
+  * 第二次創建房間時，雖然調用 connect() 但 shouldReconnect 仍為 false
+  * WebSocket 連接失敗時不會自動重連，導致加入房間失敗
+  * 後端成功創建房間，但前端無法建立 WebSocket 連接
+  * isConnected 狀態可能存在不一致，導致條件判斷錯誤
+- 修復方案：
+  * 【邏輯修正】在 cleanupAfterGame 最後恢復 shouldReconnect = true
+  * 【強制重連】在 CreateRoomView 中強制斷開現有連接並重新建立
+  * 【狀態檢查】詳細記錄連接狀態和重連過程
+  * 【時序優化】等待 500ms 確保舊連接完全關閉再建立新連接
+  * 【超時延長】將連接等待時間從 3秒 延長到 5秒
+- 修復效果：第二次及後續遊戲都能正常建立 WebSocket 連接和加入房間
+
+【問題22修復詳情】
+- 修復原因：第二次遊戲時房間的題目數組為空，sendFirstQuestion 直接返回無法發送題目
+- 問題分析：
+  * 第一次遊戲：HTTP API 創建房間時載入題目 (CreateRoom → GetRandomQuestions)
+  * 第二次遊戲：自動化測試重用相同房間ID，但房間對象可能沒有題目
+  * sendFirstQuestion 檢查 len(room.Questions) == 0 時直接返回
+  * 導致第二次遊戲發送 GAME_STARTED 但沒有 NEW_QUESTION
+- 修復方案：
+  * 【動態檢查】在 sendFirstQuestion 中檢查題目數量
+  * 【自動重載】如果沒有題目，自動調用 services.GetRandomQuestions 重新載入
+  * 【詳細日誌】記錄題目檢查和重載過程，便於診斷
+  * 【錯誤處理】如果重載失敗，發送錯誤訊息給前端
+- 修復效果：第二次及後續遊戲都能正常載入題目並進行完整遊戲流程

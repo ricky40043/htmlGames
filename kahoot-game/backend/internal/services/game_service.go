@@ -130,10 +130,24 @@ func (s *GameService) StartTwoTypesGame(room *models.Room) error {
 		return fmt.Errorf("至少需要2個玩家才能開始遊戲")
 	}
 	
+	// 每次開始遊戲都重新載入題目，確保遊戲能正常進行
+	room.Questions = GetRandomQuestions(room.TotalQuestions)
+	if len(room.Questions) == 0 {
+		return fmt.Errorf("無法載入遊戲題目")
+	}
+	
+	// 重置遊戲狀態
+	room.CurrentQuestion = 1
+	room.Answers = make(map[string]*models.Answer)
+	
+	// 重置所有玩家分數
+	for _, player := range room.Players {
+		player.Score = 0
+	}
+	
 	// 設定第一題的主角
 	room.CurrentHost = s.selectNextHost(room, "")
 	room.Status = models.RoomStatusQuestionDisplay
-	room.CurrentQuestion = 1
 	
 	return nil
 }
