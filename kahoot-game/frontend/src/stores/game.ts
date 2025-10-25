@@ -166,6 +166,39 @@ export const useGameStore = defineStore('game', () => {
     return currentRoom.value.players[currentHost.value] || null
   })
 
+  // 更新玩家答題狀態
+  const updatePlayerAnswerStatus = (playerId: string, answerInfo: { hasAnswered: boolean, answer?: string, isHost?: boolean }) => {
+    if (currentRoom.value && currentRoom.value.players[playerId]) {
+      const player = currentRoom.value.players[playerId]
+      player.hasAnswered = answerInfo.hasAnswered
+      if (answerInfo.answer) {
+        player.currentAnswer = answerInfo.answer
+      }
+      if (answerInfo.isHost !== undefined) {
+        player.isCurrentHost = answerInfo.isHost
+      }
+      console.log(`📝 更新玩家答題狀態: ${player.name} - ${answerInfo.hasAnswered ? '已答題' : '未答題'} - 答案: ${answerInfo.answer || '未知'}`)
+    }
+  }
+
+  // 重置所有玩家答題狀態
+  const resetPlayerAnswerStatus = () => {
+    if (currentRoom.value) {
+      Object.values(currentRoom.value.players).forEach(player => {
+        player.hasAnswered = false
+        player.currentAnswer = ''
+        player.isCurrentHost = false
+      })
+      console.log('🔄 重置所有玩家答題狀態')
+    }
+  }
+
+  // 計算已答題玩家數量
+  const answeredPlayersCount = computed(() => {
+    if (!currentRoom.value) return 0
+    return Object.values(currentRoom.value.players).filter(player => player.hasAnswered).length
+  })
+
   return {
     // 狀態
     currentRoom,
@@ -188,6 +221,7 @@ export const useGameStore = defineStore('game', () => {
     myRank,
     isMyTurn,
     getCurrentHostPlayer,
+    answeredPlayersCount,
 
     // 動作
     setRoom,
@@ -204,6 +238,8 @@ export const useGameStore = defineStore('game', () => {
     setCurrentHost,
     resetGame,
     updatePlayerScore,
-    getPlayerById
+    getPlayerById,
+    updatePlayerAnswerStatus,
+    resetPlayerAnswerStatus
   }
 })

@@ -7,6 +7,9 @@ export interface Player {
   isHost: boolean
   isConnected: boolean
   lastActivity: Date
+  hasAnswered?: boolean      // 是否已答題
+  currentAnswer?: string     // 當前答案 (A 或 B)
+  isCurrentHost?: boolean    // 是否為當前題目的主角
 }
 
 // 房間類型

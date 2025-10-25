@@ -331,9 +331,8 @@ const myAnswerCorrect = computed(() => {
 })
 
 const answeredPlayersCount = computed(() => {
-  // 從分數信息中計算已答題的玩家數量
-  // 如果分數數組有數據，說明那些玩家已經答題了
-  return gameStore.scores.length
+  // 使用 GameStore 中的計算屬性
+  return gameStore.answeredPlayersCount
 })
 
 // 方法
@@ -379,10 +378,19 @@ const resetQuestionState = () => {
   scoreGained.value = 0
 }
 
+// 追蹤當前題目編號，用於判斷是否為新題目
+const currentQuestionId = ref<number>(0)
+
 // 監聽遊戲狀態變化
 const unwatchGameState = gameStore.$subscribe((mutation, state) => {
   if (state.gameState === 'playing') {
-    resetQuestionState()
+    // 檢查是否是新題目（題目ID變化）
+    const newQuestionId = gameStore.currentQuestion?.id || 0
+    if (newQuestionId !== currentQuestionId.value) {
+      console.log(`🔄 新題目開始: ${currentQuestionId.value} → ${newQuestionId}`)
+      currentQuestionId.value = newQuestionId
+      resetQuestionState()
+    }
   } else if (state.gameState === 'show_result') {
     showResult.value = true
   } else if (state.gameState === 'finished') {
