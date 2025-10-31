@@ -33,6 +33,10 @@
       "dest": "/guess-number/index.html"
     },
     {
+      "src": "/1A2B",
+      "dest": "/1A2B/index.html"
+    },
+    {
       "src": "/two-types-people",
       "dest": "/two-types-people/index.html"
     },
