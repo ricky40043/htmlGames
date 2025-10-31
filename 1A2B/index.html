@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1A2B 猜數字遊戲</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 960px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .screen {
+            display: none;
+        }
+        .screen.active {
+            display: block;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+            margin: 10px 0;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .input-group {
+            margin: 20px 0;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 10px;
+            color: #333;
+            font-weight: bold;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1.1em;
+            transition: border-color 0.3s;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .record {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 18px;
+            margin: 18px 0;
+            max-height: 420px;
+            overflow-y: auto;
+        }
+        .record-grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        }
+        .record-columns {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 18px;
+        }
+        @media (min-width: 1200px) {
+            .record-columns {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        .player-column {
+            background: white;
+            border-radius: 8px;
+            padding: 12px;
+            border: 2px solid #667eea;
+        }
+        .player-column h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 1.1em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 8px;
+        }
+        .player-column.active {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border: 3px solid #667eea;
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.3);
+        }
+        .record-item {
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            font-size: 0.95em;
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.12);
+        }
+        .record-item .guess {
+            font-weight: bold;
+            color: #333;
+            font-size: 1.1em;
+        }
+        .record-item .result {
+            color: #667eea;
+            font-weight: bold;
+            margin-left: 10px;
+            font-size: 1em;
+        }
+        .record-item .target {
+            color: #95a5a6;
+            font-size: 0.85em;
+            display: block;
+            margin-top: 2px;
+        }
+        .player-turn {
+            text-align: center;
+            padding: 22px;
+            background: linear-gradient(135deg, #1f1c2c 0%, #928dab 100%);
+            color: #ffe066;
+            border-radius: 14px;
+            margin-bottom: 26px;
+            font-size: 1.7em;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+            box-shadow: 0 15px 35px rgba(31, 28, 44, 0.35);
+        }
+        .player-setup {
+            margin: 20px 0;
+        }
+        .player-input {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        .error {
+            color: #e74c3c;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .success {
+            color: #27ae60;
+            font-size: 1.5em;
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 1A2B 猜數字</h1>
+        
+        <!-- 模式選擇畫面 -->
+        <div id="modeScreen" class="screen active">
+            <h2 style="text-align: center; margin-bottom: 20px;">選擇遊戲模式</h2>
+            <button class="btn" onclick="selectMode('computer')">💻 電腦出題模式</button>
+            <button class="btn" onclick="selectMode('multiplayer')">👥 多人對戰模式</button>
+        </div>
+
+        <!-- 多人模式：設定人數 -->
+        <div id="playerCountScreen" class="screen">
+            <h2 style="text-align: center; margin-bottom: 20px;">設定玩家人數</h2>
+            <div class="input-group">
+                <label>玩家人數 (2-6人)</label>
+                <input type="number" id="playerCount" min="2" max="6" value="2">
+            </div>
+            <button class="btn" onclick="setupPlayers()">確定</button>
+            <button class="btn" style="background: #95a5a6;" onclick="backToMode()">返回</button>
+        </div>
+
+        <!-- 多人模式：每個人出題 -->
+        <div id="setupAnswersScreen" class="screen">
+            <h2 style="text-align: center; margin-bottom: 20px;">每位玩家出題</h2>
+            <div id="playerSetupList"></div>
+            <button class="btn" onclick="startMultiplayerGame()">開始遊戲</button>
+        </div>
+
+        <!-- 遊戲進行畫面 -->
+        <div id="gameScreen" class="screen">
+            <div id="playerTurnInfo" class="player-turn"></div>
+            <div class="input-group">
+                <label>輸入你的猜測 (4位不重複數字)</label>
+                <input type="text" id="guessInput" maxlength="4" placeholder="例如: 1234">
+            </div>
+            <div id="errorMsg" class="error"></div>
+            <button class="btn" onclick="makeGuess()">猜測</button>
+            
+            <h3 style="margin-top: 30px; color: #333;">猜測紀錄</h3>
+            <div id="recordList" class="record"></div>
+            
+            <button class="btn" style="background: #95a5a6; margin-top: 20px;" onclick="restartGame()">重新開始</button>
+        </div>
+
+        <!-- 遊戲結束畫面 -->
+        <div id="endScreen" class="screen">
+            <div id="winnerInfo" class="success"></div>
+            <h3 style="margin-top: 30px; color: #333;">完整紀錄</h3>
+            <div id="finalRecords" class="record"></div>
+            <button class="btn" onclick="restartGame()">再玩一次</button>
+        </div>
+    </div>
+
+    <script>
+        let gameMode = '';
+        let playerCount = 0;
+        let players = [];
+        let currentPlayerIndex = 0;
+        let answers = {};
+        let records = {};
+        let computerAnswer = '';
+
+        function selectMode(mode) {
+            gameMode = mode;
+            if (mode === 'computer') {
+                startComputerGame();
+            } else {
+                showScreen('playerCountScreen');
+            }
+        }
+
+        function generateRandomNumber() {
+            let digits = [];
+            while (digits.length < 4) {
+                let digit = Math.floor(Math.random() * 10).toString();
+                if (!digits.includes(digit)) {
+                    digits.push(digit);
+                }
+            }
+            return digits.join('');
+        }
+
+        function startComputerGame() {
+            computerAnswer = generateRandomNumber();
+            players = ['玩家'];
+            currentPlayerIndex = 0;
+            records = {'玩家': []};
+            updateGameScreen();
+            showScreen('gameScreen');
+        }
+
+        function setupPlayers() {
+            playerCount = parseInt(document.getElementById('playerCount').value);
+            if (playerCount < 2 || playerCount > 6) {
+                alert('請輸入2-6人之間的數字');
+                return;
+            }
+            
+            players = [];
+            for (let i = 1; i <= playerCount; i++) {
+                players.push(`玩家${i}`);
+            }
+            
+            let html = '';
+            players.forEach((player, index) => {
+                html += `
+                    <div class="player-input">
+                        <label>${player} 的答案 (4位不重複數字)</label>
+                        <input type="password" id="answer${index}" maxlength="4" placeholder="例如: 1234">
+                    </div>
+                `;
+            });
+            document.getElementById('playerSetupList').innerHTML = html;
+            addAnswerInputListeners();
+            showScreen('setupAnswersScreen');
+        }
+
+        function startMultiplayerGame() {
+            answers = {};
+            let valid = true;
+            let errorPlayer = '';
+            
+            players.forEach((player, index) => {
+                let answer = document.getElementById(`answer${index}`).value;
+                if (!isValidNumber(answer)) {
+                    errorPlayer = player;
+                    valid = false;
+                    return;
+                }
+                answers[player] = answer;
+            });
+            
+            if (!valid) {
+                alert(`${errorPlayer} 的數字重複或不符合規則！`);
+                return;
+            }
+            
+            currentPlayerIndex = 0;
+            records = {};
+            players.forEach(player => {
+                records[player] = [];
+            });
+            
+            updateGameScreen();
+            showScreen('gameScreen');
+        }
+
+        function isValidNumber(num) {
+            if (num.length !== 4) return false;
+            if (!/^\d+$/.test(num)) return false;
+            let digits = num.split('');
+            return new Set(digits).size === 4;
+        }
+
+        function calculateAB(guess, answer) {
+            let a = 0, b = 0;
+            for (let i = 0; i < 4; i++) {
+                if (guess[i] === answer[i]) {
+                    a++;
+                } else if (answer.includes(guess[i])) {
+                    b++;
+                }
+            }
+            return {a, b};
+        }
+
+        function updateGameScreen() {
+            let currentPlayer = players[currentPlayerIndex];
+            let targetPlayer = gameMode === 'computer' ? '電腦' : players[(currentPlayerIndex + 1) % players.length];
+            
+            document.getElementById('playerTurnInfo').textContent = 
+                gameMode === 'computer' 
+                    ? `${currentPlayer} 的回合 - 猜測電腦的數字`
+                    : `${currentPlayer} 的回合 - 猜測 ${targetPlayer} 的數字`;
+            
+            updateRecordList();
+            document.getElementById('guessInput').value = '';
+            document.getElementById('errorMsg').textContent = '';
+        }
+
+        function updateRecordList() {
+            let html = '';
+            
+            if (gameMode === 'computer') {
+                // 電腦模式：只顯示單一玩家紀錄
+                let currentPlayer = players[0];
+                if (records[currentPlayer] && records[currentPlayer].length > 0) {
+                    html += '<div class="record-grid">';
+                    records[currentPlayer].forEach(record => {
+                        html += `
+                            <div class="record-item">
+                                <span class="guess">${record.guess}</span>
+                                <span class="result">${record.a}A${record.b}B</span>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                } else {
+                    html = '<p style="text-align: center; color: #999;">尚無紀錄</p>';
+                }
+            } else {
+                // 多人模式：顯示所有玩家的分欄紀錄
+                html = '<div class="record-columns">';
+                players.forEach((player, index) => {
+                    let isActive = index === currentPlayerIndex ? 'active' : '';
+                    html += `<div class="player-column ${isActive}">`;
+                    html += `<h4>${player}</h4>`;
+                    
+                    if (records[player] && records[player].length > 0) {
+                        records[player].forEach(record => {
+                            html += `
+                                <div class="record-item">
+                                    <div>
+                                        <span class="guess">${record.guess}</span>
+                                        <span class="result">${record.a}A${record.b}B</span>
+                                    </div>
+                                    <span class="target">猜 ${record.target}</span>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        html += '<p style="text-align: center; color: #999; font-size: 0.9em;">尚無紀錄</p>';
+                    }
+                    
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            
+            document.getElementById('recordList').innerHTML = html;
+        }
+
+        function makeGuess() {
+            let guess = document.getElementById('guessInput').value;
+            let errorMsg = document.getElementById('errorMsg');
+            
+            if (!isValidNumber(guess)) {
+                errorMsg.textContent = '請輸入4位不重複的數字！';
+                return;
+            }
+            
+            let currentPlayer = players[currentPlayerIndex];
+            
+            if (gameMode === 'computer') {
+                // 電腦模式：玩家一直猜到猜中為止
+                let result = calculateAB(guess, computerAnswer);
+                records[currentPlayer].push({
+                    guess: guess,
+                    a: result.a,
+                    b: result.b
+                });
+                
+                if (result.a === 4) {
+                    showWinner(currentPlayer);
+                    return;
+                }
+                
+                updateRecordList();
+                document.getElementById('guessInput').value = '';
+                document.getElementById('errorMsg').textContent = '';
+            } else {
+                // 多人模式：每人猜一次就換下一個人
+                let targetIndex = (currentPlayerIndex + 1) % players.length;
+                let answer = answers[players[targetIndex]];
+                
+                let result = calculateAB(guess, answer);
+                records[currentPlayer].push({
+                    guess: guess,
+                    a: result.a,
+                    b: result.b,
+                    target: players[targetIndex]
+                });
+                
+                if (result.a === 4) {
+                    showWinner(currentPlayer);
+                    return;
+                }
+                
+                // 換下一個玩家
+                currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+                updateGameScreen();
+            }
+        }
+
+        function showWinner(winner) {
+            let winnerInfo = document.getElementById('winnerInfo');
+            winnerInfo.innerHTML = `🎉 恭喜 ${winner} 獲勝！🎉`;
+            
+            let finalHtml = '';
+            
+            if (gameMode === 'computer') {
+                finalHtml += `<h4 style="color: #667eea; margin-top: 15px;">玩家的紀錄</h4>`;
+                finalHtml += '<div class="record-grid">';
+                records['玩家'].forEach(record => {
+                    finalHtml += `
+                        <div class="record-item">
+                            <span class="guess">${record.guess}</span>
+                            <span class="result">${record.a}A${record.b}B</span>
+                        </div>
+                    `;
+                });
+                finalHtml += '</div>';
+            } else {
+                finalHtml = '<div class="record-columns">';
+                players.forEach(player => {
+                    finalHtml += `<div class="player-column">`;
+                    finalHtml += `<h4>${player}</h4>`;
+                    
+                    if (records[player] && records[player].length > 0) {
+                        records[player].forEach(record => {
+                            finalHtml += `
+                                <div class="record-item">
+                                    <div>
+                                        <span class="guess">${record.guess}</span>
+                                        <span class="result">${record.a}A${record.b}B</span>
+                                    </div>
+                                    <span class="target">猜 ${record.target}</span>
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    finalHtml += '</div>';
+                });
+                finalHtml += '</div>';
+            }
+            
+            document.getElementById('finalRecords').innerHTML = finalHtml;
+            showScreen('endScreen');
+        }
+
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        function backToMode() {
+            showScreen('modeScreen');
+        }
+
+        function restartGame() {
+            gameMode = '';
+            playerCount = 0;
+            players = [];
+            currentPlayerIndex = 0;
+            answers = {};
+            records = {};
+            computerAnswer = '';
+            showScreen('modeScreen');
+        }
+
+        document.getElementById('guessInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                makeGuess();
+            }
+        });
+
+        // 防止輸入重複數字
+        document.getElementById('guessInput').addEventListener('input', function(e) {
+            let value = e.target.value;
+            // 移除非數字字元
+            value = value.replace(/\D/g, '');
+            // 移除重複數字
+            let unique = '';
+            for (let char of value) {
+                if (!unique.includes(char)) {
+                    unique += char;
+                }
+            }
+            e.target.value = unique;
+        });
+
+        // 為出題輸入框添加防重複功能
+        function addAnswerInputListeners() {
+            setTimeout(() => {
+                document.querySelectorAll('[id^="answer"]').forEach(input => {
+                    input.addEventListener('input', function(e) {
+                        let value = e.target.value;
+                        value = value.replace(/\D/g, '');
+                        let unique = '';
+                        for (let char of value) {
+                            if (!unique.includes(char)) {
+                                unique += char;
+                            }
+                        }
+                        e.target.value = unique;
+                    });
+                });
+            }, 100);
+        }
+    </script>
+</body>
+</html>
