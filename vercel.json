@@ -19,38 +19,38 @@
       "use": "@vercel/static"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/",
-      "dest": "/index.html"
+      "source": "/",
+      "destination": "/index.html"
     },
     {
-      "src": "/bomb-topic",
-      "dest": "/bomb-topic/index.html"
+      "source": "/bomb-topic",
+      "destination": "/bomb-topic/index.html"
     },
     {
-      "src": "/guess-number",
-      "dest": "/guess-number/index.html"
+      "source": "/guess-number",
+      "destination": "/guess-number/index.html"
     },
     {
-      "src": "/1A2B",
-      "dest": "/1A2B/index.html"
+      "source": "/1A2B",
+      "destination": "/1A2B/index.html"
     },
     {
-      "src": "/two-types-people",
-      "dest": "/two-types-people/index.html"
+      "source": "/two-types-people",
+      "destination": "/two-types-people/index.html"
     },
     {
-      "src": "/two-player-quiz",
-      "dest": "/two-player-quiz/index.html"
+      "source": "/two-player-quiz",
+      "destination": "/two-player-quiz/index.html"
     },
     {
-      "src": "/who-is-spy",
-      "dest": "/who-is-spy/index.html"
+      "source": "/who-is-spy",
+      "destination": "/who-is-spy/index.html"
     },
     {
-      "src": "/2048",
-      "dest": "/CascadeProjects/2048/index.html"
+      "source": "/2048",
+      "destination": "/CascadeProjects/2048/index.html"
     }
   ],
   "headers": [
