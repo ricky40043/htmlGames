@@ -221,36 +221,37 @@ function generateQRCodes() {
         
         // 嘗試生成QR Code，如果失敗則使用替代方案
         setTimeout(() => {
-            if (typeof QRCodeGenerator !== 'undefined' && QRCodeGenerator !== null) {
+            const qrContainer = document.getElementById(`qr-${player.id}`)
+            if (!qrContainer) {
+                console.warn('QR container not found, using fallback')
+                showFallbackQR(player.id, qrData)
+                return
+            }
+
+            if (typeof window.QRCode !== 'undefined' && window.QRCode) {
                 try {
-                    const qrDataString = `${qrData.player}：${qrData.word}
+                    const qrDataString = `玩家:${qrData.player};身份:${qrData.role};詞彙:${qrData.word};保密!`
 
-身份：${qrData.role}
+                    qrContainer.innerHTML = ''
+                    new window.QRCode(qrContainer, {
+                        text: qrDataString,
+                        width: 256,
+                        height: 256,
+                        colorDark: '#000000',
+                        colorLight: '#ffffff',
+                        correctLevel: window.QRCode.CorrectLevel.L
+                    })
 
-請記住你的詞彙，在描述時不要直接說出來！
-
-遊戲開始後，請根據你的詞彙進行描述，找出臥底！`;
-                    
-                    // 使用QRious庫生成QR Code
-                    const qr = new QRCodeGenerator({
-                        element: document.getElementById(`qr-${player.id}`),
-                        value: qrDataString,
-                        size: 200,
-                        level: 'M',
-                        background: '#ffffff',
-                        foreground: '#000000'
-                    });
-                    
-                    console.log(`QR Code generated for ${player.name}`);
+                    console.log(`QR Code generated for ${player.name}`)
                 } catch (error) {
-                    console.error('QR Code generation error:', error);
-                    showFallbackQR(player.id, qrData);
+                    console.error('QR Code generation error:', error)
+                    showFallbackQR(player.id, qrData)
                 }
             } else {
-                console.warn('QR Code library not available, using fallback');
-                showFallbackQR(player.id, qrData);
+                console.warn('QR Code library not available, using fallback')
+                showFallbackQR(player.id, qrData)
             }
-        }, 200); // 延遲200ms確保庫已載入
+        }, 100)
     });
 }
 

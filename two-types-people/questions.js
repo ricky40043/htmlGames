@@ -1229,10 +1229,314 @@ const questionBank = [
         optionA: '買東西會比較三家',
         optionB: '買東西第一家就決定'
     },
+
+    // 超日常生活選擇題
+    {
+        category: 'home',
+        question: '世界上只有兩種人',
+        optionA: '回家鞋子踢進鞋櫃',
+        optionB: '回家鞋子排整齊'
+    },
+    {
+        category: 'home',
+        question: '世界上只有兩種人',
+        optionA: '衣服脫下直接丟椅子',
+        optionB: '衣服脫下立刻進洗衣籃'
+    },
+    {
+        category: 'home',
+        question: '世界上只有兩種人',
+        optionA: '客廳遙控器放固定位置',
+        optionB: '遙控器永遠找不到'
+    },
+    {
+        category: 'home',
+        question: '世界上只有兩種人',
+        optionA: '冰箱會先整理過期食物',
+        optionB: '冰箱等味道提醒再整理'
+    },
+    {
+        category: 'home',
+        question: '世界上只有兩種人',
+        optionA: '餐桌立刻擦乾淨',
+        optionB: '餐桌等下次吃飯再擦'
+    },
+    {
+        category: 'habit',
+        question: '世界上只有兩種人',
+        optionA: '鬧鐘響就起床',
+        optionB: '鬧鐘要按三次貪睡'
+    },
+    {
+        category: 'habit',
+        question: '世界上只有兩種人',
+        optionA: '早餐吃甜的',
+        optionB: '早餐吃鹹的'
+    },
+    {
+        category: 'habit',
+        question: '世界上只有兩種人',
+        optionA: '飲料有冰才過癮',
+        optionB: '飲料常溫最好喝'
+    },
+    {
+        category: 'habit',
+        question: '世界上只有兩種人',
+        optionA: '水杯只用一個',
+        optionB: '水杯每次換新的'
+    },
+    {
+        category: 'habit',
+        question: '世界上只有兩種人',
+        optionA: '早餐要吃飽才有力',
+        optionB: '中午再吃也OK'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '出門手機耳機鑰匙全檢查',
+        optionB: '出門想到什麼拿什麼'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '捷運到站先排隊讓人下',
+        optionB: '門一開立刻往裡衝'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '零錢會分類放錢包',
+        optionB: '零錢進口袋遇到再說'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '電話來了先接再說',
+        optionB: '電話來了先查是誰'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '超商點餐先看完整菜單',
+        optionB: '超商點餐永遠點一樣'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '洗澡要先放熱水再進去',
+        optionB: '洗澡邊開水邊調溫'
+    },
+    {
+        category: 'work',
+        question: '世界上只有兩種人',
+        optionA: '午餐時間準時出發',
+        optionB: '午餐時間拖到最後一刻'
+    },
+    {
+        category: 'work',
+        question: '世界上只有兩種人',
+        optionA: '下班桌面清乾淨再走',
+        optionB: '下班桌面保持原樣'
+    },
+    {
+        category: 'work',
+        question: '世界上只有兩種人',
+        optionA: '開會一定帶筆記本',
+        optionB: '開會全靠記憶'
+    },
+    {
+        category: 'transport',
+        question: '世界上只有兩種人',
+        optionA: '搭乘計程車坐前座聊天',
+        optionB: '搭乘計程車坐後座靜靜的'
+    },
+    {
+        category: 'transport',
+        question: '世界上只有兩種人',
+        optionA: '停車一定拉手煞車',
+        optionB: '停車有P檔就好'
+    },
+    {
+        category: 'cleaning',
+        question: '世界上只有兩種人',
+        optionA: '吸塵器每週固定開工',
+        optionB: '看到灰塵再吸就好'
+    },
+    {
+        category: 'cleaning',
+        question: '世界上只有兩種人',
+        optionA: '垃圾桶滿了立刻倒',
+        optionB: '垃圾桶滿了再壓一下'
+    },
+    {
+        category: 'food',
+        question: '世界上只有兩種人',
+        optionA: '鍋燒意麵要加泡菜',
+        optionB: '鍋燒意麵原湯最好'
+    },
+    {
+        category: 'food',
+        question: '世界上只有兩種人',
+        optionA: '白飯一定要配菜',
+        optionB: '白飯單吃也可以'
+    },
     {
         category: 'daily',
         question: '世界上只有兩種人',
         optionA: '等紅燈會按按鈕',
         optionB: '等紅燈就直接等'
+    },
+
+    // 更生活化的題目補充
+    {
+        category: 'home',
+        question: '世界上只有兩種人',
+        optionA: '回家鞋子踢進鞋櫃',
+        optionB: '回家鞋子排整齊'
+    },
+    {
+        category: 'home',
+        question: '世界上只有兩種人',
+        optionA: '衣服脫下直接丟椅子',
+        optionB: '衣服脫下立刻進洗衣籃'
+    },
+    {
+        category: 'home',
+        question: '世界上只有兩種人',
+        optionA: '杯子喝完馬上洗',
+        optionB: '杯子堆一排一起洗'
+    },
+    {
+        category: 'home',
+        question: '世界上只有兩種人',
+        optionA: '冰箱會固定整理',
+        optionB: '冰箱等味道提醒再整理'
+    },
+    {
+        category: 'home',
+        question: '世界上只有兩種人',
+        optionA: '餐桌飯後立刻擦乾淨',
+        optionB: '餐桌等下次吃再擦'
+    },
+    {
+        category: 'habit',
+        question: '世界上只有兩種人',
+        optionA: '鬧鐘響就起床',
+        optionB: '鬧鐘至少按三次貪睡'
+    },
+    {
+        category: 'habit',
+        question: '世界上只有兩種人',
+        optionA: '早餐要吃鹹的',
+        optionB: '早餐要吃甜的'
+    },
+    {
+        category: 'habit',
+        question: '世界上只有兩種人',
+        optionA: '飲料有冰才過癮',
+        optionB: '飲料常溫最好喝'
+    },
+    {
+        category: 'habit',
+        question: '世界上只有兩種人',
+        optionA: '零食要留一點',
+        optionB: '零食開封一定吃光'
+    },
+    {
+        category: 'habit',
+        question: '世界上只有兩種人',
+        optionA: '出門一定戴手錶',
+        optionB: '出門看手機就好'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '出門手機耳機鑰匙全檢查',
+        optionB: '出門想到什麼拿什麼'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '捷運到站先排隊讓人下',
+        optionB: '門一開立刻往裡走'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '等公車站在第一排',
+        optionB: '等公車站在後面慢慢補'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '假日要排滿行程',
+        optionB: '假日只想待在家'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '下雨一定帶摺疊傘',
+        optionB: '下雨看到再說'
+    },
+    {
+        category: 'daily',
+        question: '世界上只有兩種人',
+        optionA: '上車一定抓扶手',
+        optionB: '上車練平衡不抓扶手'
+    },
+    {
+        category: 'work',
+        question: '世界上只有兩種人',
+        optionA: '午休一定出去走走',
+        optionB: '午休趴桌補眠'
+    },
+    {
+        category: 'work',
+        question: '世界上只有兩種人',
+        optionA: '下班桌面清乾淨再走',
+        optionB: '下班桌面保持原樣'
+    },
+    {
+        category: 'work',
+        question: '世界上只有兩種人',
+        optionA: '通勤聽 podcast',
+        optionB: '通勤滑手機刷社群'
+    },
+    {
+        category: 'cleaning',
+        question: '世界上只有兩種人',
+        optionA: '垃圾桶滿了立刻倒',
+        optionB: '垃圾桶再壓一下撐一下'
+    },
+    {
+        category: 'cleaning',
+        question: '世界上只有兩種人',
+        optionA: '吸塵器每週固定開工',
+        optionB: '看到灰塵再吸就好'
+    },
+    {
+        category: 'food',
+        question: '世界上只有兩種人',
+        optionA: '水餃配辣椒醬',
+        optionB: '水餃配蒜蓉醬'
+    },
+    {
+        category: 'food',
+        question: '世界上只有兩種人',
+        optionA: '水果會切塊分盤',
+        optionB: '水果直接拿起來啃'
+    },
+    {
+        category: 'food',
+        question: '世界上只有兩種人',
+        optionA: '涼麵要淋滿醬',
+        optionB: '涼麵沾醬再吃'
+    },
+    {
+        category: 'food',
+        question: '世界上只有兩種人',
+        optionA: '玉米濃湯配麵包',
+        optionB: '玉米濃湯直接喝'
     }
 ];

@@ -336,46 +336,12 @@
         </div>
     </div>
 
-    <!-- QR Code庫 - 使用可用的CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script>
-        // 載入QRious庫 (輕量級QR Code生成器)
-        function loadQRCode() {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js';
-                script.onload = () => {
-                    console.log('QRious library loaded successfully');
-                    // QRious使用不同的API，需要設定相容性
-                    window.QRCodeGenerator = QRious;
-                    resolve();
-                };
-                script.onerror = () => {
-                    console.warn('Primary CDN failed, trying backup...');
-                    // 嘗試備用CDN
-                    const backupScript = document.createElement('script');
-                    backupScript.src = 'https://unpkg.com/qrious@4.0.2/dist/qrious.min.js';
-                    backupScript.onload = () => {
-                        console.log('QRious library loaded from backup CDN');
-                        window.QRCodeGenerator = QRious;
-                        resolve();
-                    };
-                    backupScript.onerror = () => {
-                        console.warn('All CDNs failed, using fallback');
-                        window.QRCodeGenerator = null;
-                        resolve();
-                    };
-                    document.head.appendChild(backupScript);
-                };
-                document.head.appendChild(script);
-            });
+        window.QRCodeGenerator = window.QRCode || null;
+        if (!window.QRCodeGenerator) {
+            console.warn('QRCode.js failed to load, will use visual fallback instead');
         }
-        
-        // 頁面載入時載入QR Code庫
-        document.addEventListener('DOMContentLoaded', () => {
-            loadQRCode().then(() => {
-                console.log('Ready to generate QR codes');
-            });
-        });
     </script>
     <script src="words.js"></script>
     <script src="script.js"></script>
