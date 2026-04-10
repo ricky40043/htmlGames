@@ -1,61 +1,257 @@
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#111" />
+  <meta name="theme-color" content="#0d0d14" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>🎮 小遊戲大集合</title>
   <style>
-    body { background: #111; color: #fff; font-family: sans-serif; text-align: center; padding-top: 60px; }
-    h1 { font-size: 2.5rem; margin-bottom: 30px; }
-    ul { list-style: none; padding: 0; max-width: 400px; margin: auto; }
-    li { margin: 20px 0; }
-    a {
-      color: #00f0ff;
-      font-size: 1.4rem;
-      text-decoration: none;
-      border: 1px solid #00f0ff;
-      padding: 10px 20px;
-      border-radius: 8px;
-      display: inline-block;
-      transition: 0.2s;
-    }
-    a:hover {
-      background-color: #00f0ff;
-      color: #111;
-    }
-    
-    /* 移动设备优化 */
-    * {
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0; padding: 0;
       -webkit-tap-highlight-color: transparent;
-      -webkit-touch-callout: none;
     }
-    
-    @media (max-width: 768px) {
-      body { padding-top: 40px; }
-      h1 { font-size: 2rem; }
-      a { font-size: 1.2rem; padding: 12px 24px; }
-      ul { max-width: 90%; }
+
+    body {
+      background: #0d0d14;
+      color: #fff;
+      font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+      min-height: 100vh;
+      padding: 0 0 60px;
+    }
+
+    /* ── HEADER ── */
+    header {
+      padding: 52px 20px 36px;
+      text-align: center;
+      background: linear-gradient(180deg, #13131f 0%, transparent 100%);
+    }
+    header h1 {
+      font-size: clamp(1.9rem, 6vw, 2.8rem);
+      letter-spacing: 3px;
+      background: linear-gradient(135deg, #fff 30%, #a0a0c0);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header p {
+      margin-top: 8px;
+      color: #555;
+      font-size: 0.95rem;
+      letter-spacing: 1px;
+    }
+
+    /* ── MAIN ── */
+    main {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 0 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 36px;
+    }
+
+    /* ── CATEGORY SECTION ── */
+    .category {}
+
+    .cat-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding-left: 4px;
+    }
+    .cat-bar {
+      width: 4px;
+      height: 22px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .cat-title {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .cat-count {
+      margin-left: auto;
+      font-size: 0.78rem;
+      color: #444;
+      letter-spacing: 1px;
+    }
+
+    /* category accent colours */
+    .solo   .cat-bar { background: linear-gradient(#4facfe, #00f2fe); }
+    .solo   .cat-title { color: #4facfe; }
+    .party  .cat-bar { background: linear-gradient(#f7971e, #ffd200); }
+    .party  .cat-title { color: #f7971e; }
+    .online .cat-bar { background: linear-gradient(#a78bfa, #ec4899); }
+    .online .cat-title { color: #a78bfa; }
+
+    /* ── GAME GRID ── */
+    .game-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    @media (min-width: 520px) {
+      .game-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    /* ── GAME CARD ── */
+    .game-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 22px 12px 18px;
+      background: #16161f;
+      border: 1px solid #252535;
+      border-radius: 18px;
+      text-decoration: none;
+      color: #fff;
+      transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+      cursor: pointer;
+    }
+    .game-card:hover,
+    .game-card:active {
+      transform: translateY(-4px);
+      border-color: #3a3a55;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    /* card accent on hover per category */
+    .solo   .game-card:hover { box-shadow: 0 8px 28px rgba(79,172,254,0.18); border-color: rgba(79,172,254,0.4); }
+    .party  .game-card:hover { box-shadow: 0 8px 28px rgba(247,151,30,0.18); border-color: rgba(247,151,30,0.4); }
+    .online .game-card:hover { box-shadow: 0 8px 28px rgba(167,139,250,0.18); border-color: rgba(167,139,250,0.4); }
+
+    .game-icon {
+      font-size: 2.4rem;
+      line-height: 1;
+    }
+    .game-name {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-align: center;
+    }
+    .game-desc {
+      font-size: 0.75rem;
+      color: #555;
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    /* external badge */
+    .badge-ext {
+      font-size: 0.62rem;
+      padding: 2px 7px;
+      border-radius: 20px;
+      background: rgba(167,139,250,0.15);
+      color: #a78bfa;
+      border: 1px solid rgba(167,139,250,0.3);
+      letter-spacing: 1px;
+    }
+
+    /* divider */
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, #222, transparent);
     }
   </style>
 </head>
 <body>
-  <h1>🎲 小遊戲大集合</h1>
-  <ul>
-    <li><a href="./bomb-topic/index.html">💣 定時炸彈</a></li>
-    <li><a href="./guess-number/index.html">🔢 猜數字</a></li>
-    <li><a href="./1A2B/index.html">🧮 1A2B 猜數字</a></li>
-    <li><a href="./two-types-people/index.html">🔄 2種人</a></li>
-    <li><a href="./two-player-quiz/index.html">🎯 你問我答</a></li>
-    <li><a href="https://spy-game-9ouk.onrender.com" target="_blank">🕵️ 誰是臥底</a></li>
-    <li><a href="./CascadeProjects/2048/index.html">🎮 2048</a></li>
-    <!-- 未來可以新增更多 -->
-  </ul>
-  
-  <!-- 兼容性检查脚本 -->
-  <script src="tmp_rovodev_compatibility_fixes.js"></script>
+
+  <header>
+    <h1>🎲 小遊戲大集合</h1>
+    <p>選一個遊戲開始玩吧</p>
+  </header>
+
+  <main>
+
+    <!-- ── 單機遊戲 ── -->
+    <section class="category solo">
+      <div class="cat-header">
+        <div class="cat-bar"></div>
+        <span class="cat-title">🕹️ 單機遊戲</span>
+        <span class="cat-count">2 games</span>
+      </div>
+      <div class="game-grid">
+        <a class="game-card" href="./guess-number/index.html">
+          <span class="game-icon">🔢</span>
+          <span class="game-name">猜數字</span>
+          <span class="game-desc">挑戰邏輯推理</span>
+        </a>
+        <a class="game-card" href="./CascadeProjects/2048/index.html">
+          <span class="game-icon">🎮</span>
+          <span class="game-name">2048</span>
+          <span class="game-desc">數字合併益智</span>
+        </a>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ── 靜態遊戲 ── -->
+    <section class="category party">
+      <div class="cat-header">
+        <div class="cat-bar"></div>
+        <span class="cat-title">🎉 靜態遊戲</span>
+        <span class="cat-count">4 games</span>
+      </div>
+      <div class="game-grid">
+        <a class="game-card" href="./bomb-topic/index.html">
+          <span class="game-icon">💣</span>
+          <span class="game-name">定時炸彈</span>
+          <span class="game-desc">炸彈傳遞桌遊</span>
+        </a>
+        <a class="game-card" href="./1A2B/index.html">
+          <span class="game-icon">🧮</span>
+          <span class="game-name">1A2B</span>
+          <span class="game-desc">猜數字推理</span>
+        </a>
+        <a class="game-card" href="./two-types-people/index.html">
+          <span class="game-icon">🔄</span>
+          <span class="game-name">2種人</span>
+          <span class="game-desc">你是哪一種？</span>
+        </a>
+        <a class="game-card" href="./two-player-quiz/index.html">
+          <span class="game-icon">🎯</span>
+          <span class="game-name">你問我答</span>
+          <span class="game-desc">雙人問答對決</span>
+        </a>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ── 多人連線遊戲 ── -->
+    <section class="category online">
+      <div class="cat-header">
+        <div class="cat-bar"></div>
+        <span class="cat-title">🌐 多人連線遊戲</span>
+        <span class="cat-count">2 games</span>
+      </div>
+      <div class="game-grid">
+        <a class="game-card" href="https://spy-game-9ouk.onrender.com" target="_blank">
+          <span class="game-icon">🕵️</span>
+          <span class="game-name">誰是臥底</span>
+          <span class="game-desc">多人推理淘汰</span>
+          <span class="badge-ext">線上</span>
+        </a>
+        <a class="game-card" href="https://two-people-game.onrender.com" target="_blank">
+          <span class="game-icon">👥</span>
+          <span class="game-name">2種人連線版</span>
+          <span class="game-desc">即時和朋友對比</span>
+          <span class="badge-ext">線上</span>
+        </a>
+      </div>
+    </section>
+
+  </main>
+
 </body>
 </html>
