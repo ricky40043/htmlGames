@@ -1,81 +1,271 @@
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#4CAF50">
-  <title>進階猜數字遊戲</title>
+  <meta name="theme-color" content="#0d0d14">
+  <title>猜數字遊戲</title>
   <style>
-    body { background: #111; color: #fff; font-family: sans-serif; text-align: center; padding-top: 50px; }
-    h1 { margin-bottom: 20px; }
-    select, input, button { font-size: 1.2rem; padding: 5px 10px; margin: 10px; }
-    #log { margin-top: 20px; white-space: pre-line; max-width: 500px; margin-left: auto; margin-right: auto; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background: #0d0d14;
+      color: #fff;
+      font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 56px 16px 60px;
+    }
+
+    .back-btn {
+      position: fixed;
+      top: 16px; left: 16px;
+      color: #444;
+      text-decoration: none;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      transition: color 0.15s;
+    }
+    .back-btn:hover { color: #aaa; }
+
+    h1 {
+      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      letter-spacing: 2px;
+      text-align: center;
+      margin-bottom: 32px;
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .card {
+      background: #16161f;
+      border: 1px solid #252535;
+      border-radius: 20px;
+      padding: 26px 22px;
+      width: 100%;
+      max-width: 420px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Setup ── */
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .range-label { color: #666; font-size: 0.9rem; white-space: nowrap; }
+
+    select {
+      flex: 1;
+      background: #0d0d14;
+      color: #fff;
+      border: 1px solid #2e2e40;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 1rem;
+      appearance: none;
+      cursor: pointer;
+    }
+    select:focus { outline: none; border-color: #4facfe; }
+
+    .btn-primary {
+      display: block;
+      width: 100%;
+      margin-top: 16px;
+      padding: 13px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: bold;
+      letter-spacing: 2px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #4facfe, #00c4ff);
+      color: #0a0a10;
+      transition: transform 0.1s, box-shadow 0.15s;
+    }
+    .btn-primary:hover { box-shadow: 0 6px 24px rgba(79,172,254,0.3); }
+    .btn-primary:active { transform: scale(0.97); }
+
+    /* ── Game ── */
+    .range-badge {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(79,172,254,0.1);
+      border: 1px solid rgba(79,172,254,0.2);
+      border-radius: 8px;
+      padding: 4px 12px;
+      font-size: 0.82rem;
+      color: #4facfe;
+      margin-bottom: 14px;
+    }
+
+    .hint-text { color: #555; font-size: 0.9rem; text-align: center; margin-bottom: 14px; }
+
+    .input-row { display: flex; gap: 10px; }
+    input[type="number"] {
+      flex: 1;
+      background: #0d0d14;
+      color: #fff;
+      border: 1px solid #2e2e40;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 1.15rem;
+      text-align: center;
+    }
+    input[type="number"]:focus { outline: none; border-color: #4facfe; }
+    input[type="number"]:disabled { opacity: 0.4; }
+
+    .btn-guess {
+      padding: 12px 22px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: bold;
+      letter-spacing: 1px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #4facfe, #00c4ff);
+      color: #0a0a10;
+      transition: transform 0.1s;
+      flex-shrink: 0;
+    }
+    .btn-guess:active { transform: scale(0.96); }
+    .btn-guess:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── Log ── */
+    .log-header {
+      font-size: 0.78rem;
+      color: #333;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .log-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 380px;
+      overflow-y: auto;
+    }
+    .log-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #0d0d14;
+      border: 1px solid #1e1e2a;
+      border-radius: 10px;
+      padding: 10px 14px;
+    }
+    .log-no { color: #333; font-size: 0.75rem; width: 26px; flex-shrink: 0; text-align: right; }
+    .log-guess { font-weight: bold; font-size: 1.05rem; min-width: 44px; }
+    .log-range { color: #333; font-size: 0.78rem; flex: 1; }
+    .log-hint { font-size: 0.9rem; font-weight: 600; flex-shrink: 0; }
+    .hint-low  { color: #4facfe; }
+    .hint-high { color: #f7971e; }
+    .hint-win  { color: #4ade80; }
+    .log-empty { text-align: center; color: #2a2a3a; font-size: 0.9rem; padding: 24px 0; }
   </style>
 </head>
 <body>
-  <h1>🔢 猜數字遊戲（自訂範圍）</h1>
-  <div>
-    選擇範圍：
-    <select id="rangeSelect">
-      <option value="100">1 ～ 100</option>
-      <option value="1000">1 ～ 1000</option>
-    </select>
-    <button onclick="generateAnswer()">出題！</button>
+
+  <a class="back-btn" href="../index.html">← 返回</a>
+  <h1>🔢 猜數字</h1>
+
+  <!-- Setup -->
+  <div class="card">
+    <div class="range-row">
+      <span class="range-label">選擇範圍</span>
+      <select id="rangeSelect">
+        <option value="100">1 ～ 100</option>
+        <option value="1000">1 ～ 1000</option>
+      </select>
+    </div>
+    <button class="btn-primary" onclick="generateAnswer()">出題！</button>
   </div>
 
-  <div id="gameArea" style="display:none;">
-    <p>我想了一個數字，你來猜！</p>
-    <input type="number" id="guess" placeholder="輸入你的猜測">
-    <button onclick="submitGuess()">猜！</button>
-    <div id="log"></div>
+  <!-- Game -->
+  <div class="card" id="gameCard" style="display:none">
+    <div class="range-badge" id="rangeBadge">範圍：1 ～ 100</div>
+    <p class="hint-text">我想了一個數字，你來猜！</p>
+    <div class="input-row">
+      <input type="number" id="guess" placeholder="輸入猜測" />
+      <button class="btn-guess" id="guessBtn" onclick="submitGuess()">猜！</button>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="card" id="logCard" style="display:none">
+    <div class="log-header">猜測紀錄</div>
+    <div class="log-list" id="logList">
+      <div class="log-empty">尚無紀錄</div>
+    </div>
   </div>
 
   <script>
-    let answer = 0;
-    let attempts = 0;
-    let min = 1;
-    let max = 100;
+    let answer = 0, attempts = 0, low = 1, high = 100;
 
     function generateAnswer() {
-      const range = Number(document.getElementById("rangeSelect").value);
-      min = 1;
-      max = range;
+      const range = Number(document.getElementById('rangeSelect').value);
+      low = 1; high = range;
       answer = Math.floor(Math.random() * range) + 1;
       attempts = 0;
-      document.getElementById("log").textContent = '';
-      document.getElementById("gameArea").style.display = 'block';
-      document.getElementById("guess").disabled = false;
-      document.getElementById("guess").value = '';
-      console.log("答案（開發用）:", answer); // 可移除
+
+      document.getElementById('rangeBadge').textContent = `範圍：1 ～ ${range}`;
+      document.getElementById('logList').innerHTML = '<div class="log-empty">尚無紀錄</div>';
+      document.getElementById('gameCard').style.display = 'block';
+      document.getElementById('logCard').style.display = 'block';
+
+      const g = document.getElementById('guess');
+      const btn = document.getElementById('guessBtn');
+      g.disabled = false;
+      g.value = '';
+      btn.disabled = false;
+      g.focus();
     }
 
     function submitGuess() {
       const input = document.getElementById('guess');
-      const log = document.getElementById('log');
-      const guess = Number(input.value);
-
-      if (guess < min || guess > max) {
-        log.textContent += `⚠️ 請輸入 ${min} ～ ${max} 之間的數字\n`;
-        return;
-      }
+      const val = input.value.trim();
+      if (!val) return;
+      const guess = Number(val);
+      if (guess < low || guess > high) return;
 
       attempts++;
+      const logList = document.getElementById('logList');
+      if (logList.querySelector('.log-empty')) logList.innerHTML = '';
 
+      let cls, hint;
       if (guess < answer) {
-        min = Math.max(min, guess + 1);
-        log.textContent += `第 ${attempts} 次：${guess} 太小了，請猜 ${min}～${max}\n`;
+        low = Math.max(low, guess + 1);
+        cls = 'hint-low'; hint = '太小了 ↑';
       } else if (guess > answer) {
-        max = Math.min(max, guess - 1);
-        log.textContent += `第 ${attempts} 次：${guess} 太大了，請猜 ${min}～${max}\n`;
+        high = Math.min(high, guess - 1);
+        cls = 'hint-high'; hint = '太大了 ↓';
       } else {
-        log.textContent += `🎉 恭喜你猜中了！答案是 ${answer}，共猜了 ${attempts} 次\n`;
-        document.getElementById("guess").disabled = true;
+        cls = 'hint-win'; hint = '🎉 答對！';
+        input.disabled = true;
+        document.getElementById('guessBtn').disabled = true;
       }
 
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `
+        <span class="log-no">#${attempts}</span>
+        <span class="log-guess">${guess}</span>
+        <span class="log-range">${guess !== answer ? `${low} ～ ${high}` : ''}</span>
+        <span class="log-hint ${cls}">${hint}</span>
+      `;
+      logList.prepend(item);
       input.value = '';
-      input.focus();
+      if (!input.disabled) input.focus();
     }
+
+    document.getElementById('guess').addEventListener('keydown', e => {
+      if (e.key === 'Enter') submitGuess();
+    });
   </script>
 </body>
 </html>

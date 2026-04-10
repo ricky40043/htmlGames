@@ -5,207 +5,234 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>1A2B 猜數字遊戲</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
+        *, *::before, *::after {
             box-sizing: border-box;
+            margin: 0; padding: 0;
+            -webkit-tap-highlight-color: transparent;
         }
         body {
-            font-family: 'Microsoft JhengHei', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+            background: #0d0d14;
+            color: #fff;
             min-height: 100vh;
             display: flex;
             justify-content: center;
-            align-items: center;
-            padding: 20px;
+            align-items: flex-start;
+            padding: 32px 16px 60px;
         }
         .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            background: #16161f;
+            border: 1px solid #252535;
+            border-radius: 22px;
+            padding: 32px 28px;
             max-width: 960px;
             width: 100%;
         }
+        @media (max-width: 480px) {
+            .container { padding: 22px 16px; }
+        }
         .rule-card {
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+            background: rgba(102,126,234,0.07);
             border-radius: 14px;
-            padding: 24px;
-            margin-bottom: 26px;
-            border-left: 6px solid #667eea;
-            color: #2c3e50;
-            box-shadow: 0 12px 30px rgba(102, 126, 234, 0.18);
+            padding: 20px 22px;
+            margin-bottom: 24px;
+            border-left: 4px solid #667eea;
         }
         .rule-card h2 {
-            margin-bottom: 16px;
-            font-size: 1.6em;
-            color: #3b3b98;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+            color: #a78bfa;
+            letter-spacing: 1px;
         }
         .rule-card ul {
             list-style: none;
             padding-left: 0;
-            line-height: 1.6;
-            font-size: 1.05em;
+            line-height: 1.75;
+            font-size: 0.92em;
+            color: #888;
         }
         .rule-card li::before {
-            content: "★";
-            color: #f39c12;
+            content: "▸";
+            color: #667eea;
             margin-right: 8px;
         }
-        .rule-card strong {
-            color: #c0392b;
-        }
+        .rule-card strong { color: #f87171; }
         h1 {
             text-align: center;
-            color: #667eea;
-            margin-bottom: 30px;
-            font-size: 2.5em;
+            font-size: clamp(1.6rem, 5vw, 2.2rem);
+            letter-spacing: 2px;
+            margin-bottom: 28px;
+            background: linear-gradient(135deg, #a78bfa, #667eea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
-        .screen {
-            display: none;
-        }
-        .screen.active {
-            display: block;
-        }
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        /* ── Buttons ── */
         .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
             border: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 1.1em;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s;
             width: 100%;
-            margin: 10px 0;
+            margin: 8px 0;
+            transition: transform 0.12s, box-shadow 0.15s;
+            letter-spacing: 1px;
         }
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        .btn:active {
-            transform: translateY(0);
-        }
-        .input-group {
-            margin: 20px 0;
-        }
+        .btn:hover { box-shadow: 0 6px 20px rgba(102,126,234,0.35); }
+        .btn:active { transform: scale(0.97); }
+
+        /* ── Inputs ── */
+        .input-group { margin: 18px 0; }
         .input-group label {
             display: block;
-            margin-bottom: 10px;
-            color: #333;
-            font-weight: bold;
+            margin-bottom: 8px;
+            color: #888;
+            font-size: 0.88rem;
+            letter-spacing: 0.5px;
         }
         .input-group input {
             width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 1.1em;
-            transition: border-color 0.3s;
+            padding: 12px 14px;
+            background: #0d0d14;
+            color: #fff;
+            border: 1px solid #2e2e40;
+            border-radius: 10px;
+            font-size: 1.05em;
+            transition: border-color 0.2s;
         }
         .input-group input:focus {
             outline: none;
             border-color: #667eea;
         }
+
+        /* ── Record ── */
         .record {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 18px;
-            margin: 18px 0;
+            background: #0d0d14;
+            border: 1px solid #1e1e2a;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
             max-height: 420px;
             overflow-y: auto;
         }
         .record-grid {
             display: grid;
-            gap: 12px;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
         }
         .record-columns {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 18px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
         }
         @media (min-width: 1200px) {
-            .record-columns {
-                grid-template-columns: repeat(4, 1fr);
-            }
+            .record-columns { grid-template-columns: repeat(4, 1fr); }
         }
         .player-column {
-            background: white;
-            border-radius: 8px;
+            background: #16161f;
+            border-radius: 10px;
             padding: 12px;
-            border: 2px solid #667eea;
+            border: 1px solid #2e2e40;
         }
         .player-column h4 {
             color: #667eea;
             margin-bottom: 10px;
             text-align: center;
-            font-size: 1.1em;
-            border-bottom: 2px solid #667eea;
+            font-size: 0.95em;
+            border-bottom: 1px solid #2e2e40;
             padding-bottom: 8px;
         }
         .player-column.active {
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-            border: 3px solid #667eea;
-            box-shadow: 0 0 15px rgba(102, 126, 234, 0.3);
+            border: 1px solid #667eea;
+            box-shadow: 0 0 16px rgba(102,126,234,0.2);
         }
         .record-item {
-            padding: 10px;
-            background: white;
+            padding: 9px 11px;
+            background: #0d0d14;
             border-radius: 8px;
-            border-left: 4px solid #667eea;
-            font-size: 0.95em;
-            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.12);
+            border-left: 3px solid #667eea;
+            font-size: 0.9em;
+            margin-bottom: 6px;
         }
-        .record-item .guess {
-            font-weight: bold;
-            color: #333;
-            font-size: 1.1em;
-        }
-        .record-item .result {
-            color: #667eea;
-            font-weight: bold;
-            margin-left: 10px;
-            font-size: 1em;
-        }
-        .record-item .target {
-            color: #95a5a6;
-            font-size: 0.85em;
-            display: block;
-            margin-top: 2px;
-        }
+        .record-item .guess { font-weight: bold; color: #fff; font-size: 1.05em; }
+        .record-item .result { color: #a78bfa; font-weight: bold; margin-left: 8px; }
+        .record-item .target { color: #444; font-size: 0.8em; display: block; margin-top: 2px; }
+
+        /* ── Player turn ── */
         .player-turn {
             text-align: center;
-            padding: 22px;
-            background: linear-gradient(135deg, #1f1c2c 0%, #928dab 100%);
-            color: #ffe066;
+            padding: 20px;
+            background: linear-gradient(135deg, #1a1a2e, #2d2b55);
+            color: #ffd700;
             border-radius: 14px;
-            margin-bottom: 26px;
-            font-size: 1.7em;
+            margin-bottom: 22px;
+            font-size: clamp(1.1rem, 4vw, 1.5rem);
             font-weight: 700;
-            letter-spacing: 0.08em;
-            text-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-            box-shadow: 0 15px 35px rgba(31, 28, 44, 0.35);
+            letter-spacing: 0.06em;
+            border: 1px solid #3d3a6e;
         }
-        .player-setup {
-            margin: 20px 0;
-        }
+
+        /* ── Player setup cards ── */
         .player-input {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: #0d0d14;
+            border: 1px solid #1e1e2a;
+            border-radius: 14px;
+            padding: 16px 18px;
             margin: 10px 0;
         }
-        .error {
-            color: #e74c3c;
-            margin: 10px 0;
-            text-align: center;
+        .player-badge {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+            color: #fff;
         }
+        .player-input-inner { flex: 1; }
+        .player-input-inner label {
+            display: block;
+            font-size: 0.82rem;
+            color: #555;
+            margin-bottom: 6px;
+        }
+        .player-input-inner input {
+            width: 100%;
+            background: #16161f;
+            color: #fff;
+            border: 1px solid #2e2e40;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 1.05rem;
+            letter-spacing: 4px;
+            transition: border-color 0.2s;
+        }
+        .player-input-inner input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .error { color: #f87171; margin: 10px 0; text-align: center; font-size: 0.9rem; }
         .success {
-            color: #27ae60;
-            font-size: 1.5em;
+            color: #4ade80;
+            font-size: 1.4em;
             text-align: center;
             margin: 20px 0;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -225,25 +252,25 @@
         
         <!-- 模式選擇畫面 -->
         <div id="modeScreen" class="screen active">
-            <h2 style="text-align: center; margin-bottom: 20px;">選擇遊戲模式</h2>
+            <h2 style="text-align: center; margin-bottom: 20px; color: #c4b5fd; letter-spacing: 1px;">選擇遊戲模式</h2>
             <button class="btn" onclick="selectMode('computer')">💻 電腦出題模式</button>
             <button class="btn" onclick="selectMode('multiplayer')">👥 多人對戰模式</button>
         </div>
 
         <!-- 多人模式：設定人數 -->
         <div id="playerCountScreen" class="screen">
-            <h2 style="text-align: center; margin-bottom: 20px;">設定玩家人數</h2>
+            <h2 style="text-align: center; margin-bottom: 20px; color: #c4b5fd; letter-spacing: 1px;">設定玩家人數</h2>
             <div class="input-group">
                 <label>玩家人數</label>
                 <input type="number" id="playerCount" min="2" value="2">
             </div>
             <button class="btn" onclick="setupPlayers()">確定</button>
-            <button class="btn" style="background: #95a5a6;" onclick="backToMode()">返回</button>
+            <button class="btn" style="background: #2a2a3a; color: #888;" onclick="backToMode()">返回</button>
         </div>
 
         <!-- 多人模式：每個人出題 -->
         <div id="setupAnswersScreen" class="screen">
-            <h2 style="text-align: center; margin-bottom: 20px;">每位玩家出題</h2>
+            <h2 style="text-align: center; margin-bottom: 20px; color: #c4b5fd; letter-spacing: 1px;">每位玩家出題</h2>
             <div id="playerSetupList"></div>
             <button class="btn" onclick="startMultiplayerGame()">開始遊戲</button>
         </div>
@@ -258,16 +285,16 @@
             <div id="errorMsg" class="error"></div>
             <button class="btn" onclick="makeGuess()">猜測</button>
             
-            <h3 style="margin-top: 30px; color: #333;">猜測紀錄</h3>
+            <h3 style="margin-top: 30px; color: #888; letter-spacing: 1px;">猜測紀錄</h3>
             <div id="recordList" class="record"></div>
             
-            <button class="btn" style="background: #95a5a6; margin-top: 20px;" onclick="restartGame()">重新開始</button>
+            <button class="btn" style="background: #2a2a3a; color: #888; margin-top: 20px;" onclick="restartGame()">重新開始</button>
         </div>
 
         <!-- 遊戲結束畫面 -->
         <div id="endScreen" class="screen">
             <div id="winnerInfo" class="success"></div>
-            <h3 style="margin-top: 30px; color: #333;">完整紀錄</h3>
+            <h3 style="margin-top: 30px; color: #888; letter-spacing: 1px;">完整紀錄</h3>
             <div id="finalRecords" class="record"></div>
             <button class="btn" onclick="restartGame()">再玩一次</button>
         </div>
@@ -327,8 +354,11 @@
             players.forEach((player, index) => {
                 html += `
                     <div class="player-input">
-                        <label>${player} 的答案 (4位不重複數字)</label>
-                        <input type="password" id="answer${index}" maxlength="4" placeholder="例如: 1234">
+                        <div class="player-badge">${index + 1}</div>
+                        <div class="player-input-inner">
+                            <label>${player} 的秘密答案（4位不重複數字）</label>
+                            <input type="password" id="answer${index}" maxlength="4" placeholder="例如: 1234">
+                        </div>
                     </div>
                 `;
             });
