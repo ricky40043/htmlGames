@@ -234,8 +234,8 @@
         <div id="playerCountScreen" class="screen">
             <h2 style="text-align: center; margin-bottom: 20px;">設定玩家人數</h2>
             <div class="input-group">
-                <label>玩家人數 (2-6人)</label>
-                <input type="number" id="playerCount" min="2" max="6" value="2">
+                <label>玩家人數</label>
+                <input type="number" id="playerCount" min="2" value="2">
             </div>
             <button class="btn" onclick="setupPlayers()">確定</button>
             <button class="btn" style="background: #95a5a6;" onclick="backToMode()">返回</button>
@@ -313,8 +313,8 @@
 
         function setupPlayers() {
             playerCount = parseInt(document.getElementById('playerCount').value);
-            if (playerCount < 2 || playerCount > 6) {
-                alert('請輸入2-6人之間的數字');
+            if (isNaN(playerCount) || playerCount < 2) {
+                alert('請輸入至少2人');
                 return;
             }
             
