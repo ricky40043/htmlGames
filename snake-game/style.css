@@ -72,9 +72,9 @@ h1 {
 
 /* ── GAME AREA ── */
 .game-container {
-  width: 100%;
-  max-width: 600px; /* Limit size on desktop */
-  aspect-ratio: 1 / 1; /* Keep it square */
+  /* Fit within viewport - never cause vertical scroll */
+  width: min(100%, min(600px, calc(100vh - 220px)));
+  aspect-ratio: 1 / 1;
   position: relative;
   background: #11111a;
   border: 2px solid #252535;

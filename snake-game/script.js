@@ -34,7 +34,7 @@ canvas.height = CANVAS_SIZE;
 highScoreEl.textContent = highScore;
 
 let selectedTileCount = 20; // default "小"
-let selectedBaseSpeed = 300; // default "慢" (ms, higher = slower)
+let selectedBaseSpeed = 350; // default (slider value=100 → 450-100=350ms)
 
 function initGame() {
   TILE_COUNT = selectedTileCount;
@@ -64,14 +64,14 @@ function initGame() {
 }
 
 function onSpeedSlider(val) {
-  // Slider value = ms interval (higher = slower)
-  selectedBaseSpeed = Number(val);
+  // Invert: left (min=50) = slow (400ms), right (max=400) = fast (50ms)
+  selectedBaseSpeed = 450 - Number(val);
   const labels = [
-    [50, '極快'], [100, '快'], [150, '中快'], [200, '中'], 
-    [260, '中慢'], [320, '慢'], [400, '極慢']
+    [400, '極慢'], [320, '慢'], [260, '中慢'], [200, '中'],
+    [150, '中快'], [100, '快'], [50, '極快']
   ];
-  const closest = labels.reduce((a, b) => 
-    Math.abs(b[0] - val) < Math.abs(a[0] - val) ? b : a
+  const closest = labels.reduce((a, b) =>
+    Math.abs(b[0] - selectedBaseSpeed) < Math.abs(a[0] - selectedBaseSpeed) ? b : a
   );
   document.getElementById('speed-display').textContent = closest[1];
 }
