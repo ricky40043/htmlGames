@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0d0d14">
+  <title>🐍 經典貪吃蛇</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <a class="back-btn" href="../index.html">← 返回</a>
+  <h1>🐍 貪吃蛇</h1>
+
+  <div class="stats-container">
+    <div class="stat-box">
+      <span class="stat-label">Score</span>
+      <span class="stat-value" id="current-score">0</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-label">Best</span>
+      <span class="stat-value" id="high-score">0</span>
+    </div>
+  </div>
+
+  <div class="game-container">
+    <canvas id="gameCanvas"></canvas>
+    
+    <div class="overlay" id="overlay">
+      <div class="overlay-title">GAME OVER</div>
+      <div class="overlay-score">你的分數：<span id="final-score">0</span></div>
+      <button class="btn-restart" onclick="initGame()">再試一次</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl-btn up" onclick="changeDirection(0, -1)">▲</div>
+    <div class="ctrl-btn left" onclick="changeDirection(-1, 0)">◀</div>
+    <div class="ctrl-btn down" onclick="changeDirection(0, 1)">▼</div>
+    <div class="ctrl-btn right" onclick="changeDirection(1, 0)">▶</div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
