@@ -8,8 +8,8 @@ const finalScoreEl = document.getElementById('final-score');
 
 // Constants
 const GRID_SIZE = 20;
-const TILE_COUNT = 20;
-const CANVAS_SIZE = 400;
+let TILE_COUNT = 20; // mutable now
+let CANVAS_SIZE = TILE_COUNT * GRID_SIZE;
 
 // Game state
 let snake = [
@@ -29,16 +29,26 @@ let selectedBaseSpeed = 150; // default
 let gameSpeed = 150; // ms
 let lastTime = 0;
 
-// Initialize
+// Initialize canvas base width
 canvas.width = CANVAS_SIZE;
 canvas.height = CANVAS_SIZE;
 highScoreEl.textContent = highScore;
 
+let selectedTileCount = 20; // default mapped to "小"
+
 function initGame() {
+  TILE_COUNT = selectedTileCount;
+  CANVAS_SIZE = TILE_COUNT * GRID_SIZE;
+  canvas.width = CANVAS_SIZE;
+  canvas.height = CANVAS_SIZE;
+
+  let startX = Math.floor(TILE_COUNT / 2);
+  let startY = Math.floor(TILE_COUNT / 2);
+  
   snake = [
-    { x: 10, y: 10 },
-    { x: 10, y: 11 },
-    { x: 10, y: 12 }
+    { x: startX, y: startY },
+    { x: startX, y: startY + 1 },
+    { x: startX, y: startY + 2 }
   ];
   dx = 0; dy = -1;
   nextDx = 0; nextDy = -1;
@@ -55,8 +65,15 @@ function initGame() {
 
 function setSpeed(spd, btn) {
   selectedBaseSpeed = spd;
-  // Update UI
-  document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+  // Update UI for speed options
+  document.querySelectorAll('.speed-options .settings-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function setSize(tiles, btn) {
+  selectedTileCount = tiles;
+  // Update UI for size options
+  document.querySelectorAll('.size-options .settings-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 }
 
