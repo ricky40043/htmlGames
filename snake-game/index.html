@@ -29,7 +29,18 @@
     <div class="overlay" id="overlay">
       <div class="overlay-title">GAME OVER</div>
       <div class="overlay-score">你的分數：<span id="final-score">0</span></div>
-      <button class="btn-restart" onclick="initGame()">再試一次</button>
+      <button class="btn-restart" onclick="showMenu()">返回選單</button>
+    </div>
+
+    <!-- START MENU -->
+    <div class="overlay visible" id="start-overlay">
+      <div class="overlay-title" style="color: #4ade80; font-size: 2rem;">選擇難度</div>
+      <div class="speed-options">
+        <button class="speed-btn active" onclick="setSpeed(150, this)">慢</button>
+        <button class="speed-btn" onclick="setSpeed(100, this)">中</button>
+        <button class="speed-btn" onclick="setSpeed(60, this)">快</button>
+      </div>
+      <button class="btn-restart" onclick="initGame()" style="margin-top: 20px;">開始遊戲</button>
     </div>
   </div>
 

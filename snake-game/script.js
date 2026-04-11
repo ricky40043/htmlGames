@@ -3,6 +3,7 @@ const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('current-score');
 const highScoreEl = document.getElementById('high-score');
 const overlayEl = document.getElementById('overlay');
+const startOverlayEl = document.getElementById('start-overlay');
 const finalScoreEl = document.getElementById('final-score');
 
 // Constants
@@ -24,7 +25,8 @@ let nextDy = -1;
 let score = 0;
 let highScore = localStorage.getItem('snakeHighScore') || 0;
 let gameRunning = false;
-let gameSpeed = 120; // ms
+let selectedBaseSpeed = 150; // default
+let gameSpeed = 150; // ms
 let lastTime = 0;
 
 // Initialize
@@ -41,12 +43,26 @@ function initGame() {
   dx = 0; dy = -1;
   nextDx = 0; nextDy = -1;
   score = 0;
-  gameSpeed = 120;
+  gameSpeed = selectedBaseSpeed;
   scoreEl.textContent = score;
   placeFood();
   overlayEl.classList.remove('visible');
+  startOverlayEl.classList.remove('visible');
   gameRunning = true;
+  lastTime = performance.now();
   requestAnimationFrame(gameLoop);
+}
+
+function setSpeed(spd, btn) {
+  selectedBaseSpeed = spd;
+  // Update UI
+  document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function showMenu() {
+  overlayEl.classList.remove('visible');
+  startOverlayEl.classList.add('visible');
 }
 
 function placeFood() {
@@ -202,5 +218,5 @@ window.addEventListener('keydown', e => {
   }
 });
 
-// Start game on load
-initGame();
+// The game no longer starts automatically.
+// initGame();

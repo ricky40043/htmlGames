@@ -129,6 +129,33 @@ canvas {
 }
 .btn-restart:active { transform: scale(0.95); }
 
+/* ── SPEED SELECTOR ── */
+.speed-options {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}
+.speed-btn {
+  background: #1a1a25;
+  color: #aaa;
+  border: 1px solid #333345;
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.speed-btn:hover {
+  border-color: #4ade80;
+  color: #fff;
+}
+.speed-btn.active {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: #4ade80;
+  color: #4ade80;
+  box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
+}
+
 /* ── CONTROLS ── */
 .controls {
   margin-top: 32px;
