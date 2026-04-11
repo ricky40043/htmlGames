@@ -36,21 +36,35 @@
     <div class="overlay visible" id="start-overlay">
       <div class="overlay-title" style="color: #4ade80; font-size: 2rem; margin-bottom: 20px;">遊戲設定</div>
       
-      <div style="color: #aaa; font-size: 0.85rem; margin-bottom: 6px;">選擇速度</div>
-      <div class="speed-options">
-        <button class="settings-btn active" onclick="setSpeed(150, this)">慢</button>
-        <button class="settings-btn" onclick="setSpeed(100, this)">中</button>
-        <button class="settings-btn" onclick="setSpeed(60, this)">快</button>
+      <!-- Speed Slider -->
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">速度</span>
+          <span class="slider-value" id="speed-display">慢</span>
+        </div>
+        <input type="range" id="speed-slider" class="custom-slider"
+          min="50" max="400" step="10" value="300"
+          oninput="onSpeedSlider(this.value)">
+        <div class="slider-ticks">
+          <span>慢</span><span>快</span>
+        </div>
       </div>
 
-      <div style="color: #aaa; font-size: 0.85rem; margin-top: 16px; margin-bottom: 6px;">地圖大小</div>
-      <div class="size-options">
-        <button class="settings-btn active" onclick="setSize(20, this)">小</button>
-        <button class="settings-btn" onclick="setSize(30, this)">中</button>
-        <button class="settings-btn" onclick="setSize(40, this)">大</button>
+      <!-- Size Slider -->
+      <div class="slider-group" style="margin-top: 20px;">
+        <div class="slider-header">
+          <span class="slider-label">地圖大小</span>
+          <span class="slider-value" id="size-display">20 × 20</span>
+        </div>
+        <input type="range" id="size-slider" class="custom-slider"
+          min="10" max="50" step="5" value="20"
+          oninput="onSizeSlider(this.value)">
+        <div class="slider-ticks">
+          <span>小</span><span>大</span>
+        </div>
       </div>
 
-      <button class="btn-restart" onclick="initGame()" style="margin-top: 24px;">開始遊戲</button>
+      <button class="btn-restart" onclick="initGame()" style="margin-top: 28px;">開始遊戲</button>
     </div>
   </div>
 

@@ -25,8 +25,7 @@ let nextDy = -1;
 let score = 0;
 let highScore = localStorage.getItem('snakeHighScore') || 0;
 let gameRunning = false;
-let selectedBaseSpeed = 150; // default
-let gameSpeed = 150; // ms
+let gameSpeed = 300; // ms
 let lastTime = 0;
 
 // Initialize canvas base width
@@ -34,7 +33,8 @@ canvas.width = CANVAS_SIZE;
 canvas.height = CANVAS_SIZE;
 highScoreEl.textContent = highScore;
 
-let selectedTileCount = 20; // default mapped to "小"
+let selectedTileCount = 20; // default "小"
+let selectedBaseSpeed = 300; // default "慢" (ms, higher = slower)
 
 function initGame() {
   TILE_COUNT = selectedTileCount;
@@ -63,18 +63,22 @@ function initGame() {
   requestAnimationFrame(gameLoop);
 }
 
-function setSpeed(spd, btn) {
-  selectedBaseSpeed = spd;
-  // Update UI for speed options
-  document.querySelectorAll('.speed-options .settings-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+function onSpeedSlider(val) {
+  // Slider value = ms interval (higher = slower)
+  selectedBaseSpeed = Number(val);
+  const labels = [
+    [50, '極快'], [100, '快'], [150, '中快'], [200, '中'], 
+    [260, '中慢'], [320, '慢'], [400, '極慢']
+  ];
+  const closest = labels.reduce((a, b) => 
+    Math.abs(b[0] - val) < Math.abs(a[0] - val) ? b : a
+  );
+  document.getElementById('speed-display').textContent = closest[1];
 }
 
-function setSize(tiles, btn) {
-  selectedTileCount = tiles;
-  // Update UI for size options
-  document.querySelectorAll('.size-options .settings-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+function onSizeSlider(val) {
+  selectedTileCount = Number(val);
+  document.getElementById('size-display').textContent = `${val} × ${val}`;
 }
 
 function showMenu() {
