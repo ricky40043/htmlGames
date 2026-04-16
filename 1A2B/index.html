@@ -357,7 +357,7 @@
                         <div class="player-badge">${index + 1}</div>
                         <div class="player-input-inner">
                             <label>${player} 的秘密答案（4位不重複數字）</label>
-                            <input type="password" id="answer${index}" maxlength="4" placeholder="例如: 1234">
+                            <input type="text" inputmode="numeric" id="answer${index}" maxlength="4" placeholder="例如: 1234" autocomplete="off">
                         </div>
                     </div>
                 `;
@@ -373,7 +373,8 @@
             let errorPlayer = '';
             
             players.forEach((player, index) => {
-                let answer = document.getElementById(`answer${index}`).value;
+                let el = document.getElementById(`answer${index}`);
+                let answer = el.dataset.realValue !== undefined && el.dataset.realValue !== '' ? el.dataset.realValue : el.value;
                 if (!isValidNumber(answer)) {
                     errorPlayer = player;
                     valid = false;
@@ -624,20 +625,35 @@
             e.target.value = unique;
         });
 
-        // 為出題輸入框添加防重複功能
+        // 為出題輸入框添加即時遮罩（避免第一個字可見）
         function addAnswerInputListeners() {
             setTimeout(() => {
                 document.querySelectorAll('[id^="answer"]').forEach(input => {
-                    input.addEventListener('input', function(e) {
-                        let value = e.target.value;
-                        value = value.replace(/\D/g, '');
-                        let unique = '';
-                        for (let char of value) {
-                            if (!unique.includes(char)) {
-                                unique += char;
-                            }
+                    input.dataset.realValue = '';
+
+                    input.addEventListener('keydown', function(e) {
+                        if (e.key === 'Backspace') {
+                            e.preventDefault();
+                            let real = this.dataset.realValue;
+                            real = real.slice(0, -1);
+                            this.dataset.realValue = real;
+                            this.value = '●'.repeat(real.length);
                         }
-                        e.target.value = unique;
+                    });
+
+                    input.addEventListener('input', function(e) {
+                        let displayed = this.value;
+                        let real = this.dataset.realValue;
+                        let bulletCount = (displayed.match(/●/g) || []).length;
+                        let newChars = displayed.replace(/●/g, '').replace(/\D/g, '');
+                        real = real.slice(0, bulletCount) + newChars;
+                        let unique = '';
+                        for (let char of real) {
+                            if (!unique.includes(char)) unique += char;
+                        }
+                        real = unique.slice(0, 4);
+                        this.dataset.realValue = real;
+                        this.value = '●'.repeat(real.length);
                     });
                 });
             }, 100);
