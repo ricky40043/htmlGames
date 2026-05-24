@@ -343,34 +343,78 @@
 
     // ── Audio ──
     let audioCtx = null, tickBuffer = null, boomBuffer = null, tickSource = null;
-    let useAudioElements = false, tickAudio = null, boomAudio = null;
+    let audioReadyPromise = null, audioUnlocked = false;
+    const tickAudio = new Audio("tick.mp3");
+    const boomAudio = new Audio("boom.mp3");
+    tickAudio.loop = true;
+    tickAudio.preload = "auto";
+    boomAudio.preload = "auto";
 
     async function initAudio() {
-      if (audioCtx || useAudioElements) return;
-      try {
+      if (audioReadyPromise) return audioReadyPromise;
+      audioReadyPromise = (async () => {
+        if (!window.AudioContext && !window.webkitAudioContext) return;
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === "suspended") await audioCtx.resume();
-        function decode(ab) {
-          return new Promise((res, rej) => audioCtx.decodeAudioData(ab, res, rej));
-        }
+        if (audioCtx.state === "suspended") await audioCtx.resume().catch(() => {});
         const [tickData, boomData] = await Promise.all([
           fetch("tick.mp3").then(r => r.arrayBuffer()),
           fetch("boom.mp3").then(r => r.arrayBuffer()),
         ]);
-        tickBuffer = await decode(tickData);
-        boomBuffer = await decode(boomData);
-      } catch (e) {
+        tickBuffer = await audioCtx.decodeAudioData(tickData);
+        boomBuffer = await audioCtx.decodeAudioData(boomData);
+      })().catch(() => {
         audioCtx = null;
-        useAudioElements = true;
-        tickAudio = new Audio("tick.mp3");
-        boomAudio = new Audio("boom.mp3");
-        tickAudio.loop = true;
+      });
+      return audioReadyPromise;
+    }
+
+    function safePlay(audio) {
+      const promise = audio.play();
+      if (promise && typeof promise.catch === "function") promise.catch(() => {});
+      return promise;
+    }
+
+    async function primeAudioElement(audio) {
+      const wasMuted = audio.muted;
+      const oldVolume = audio.volume;
+      try {
+        audio.muted = true;
+        audio.volume = 0;
+        await safePlay(audio);
+        audio.pause();
+        audio.currentTime = 0;
+      } catch (_) {
+        // Some browsers still reject priming; the Web Audio path remains preferred.
+      } finally {
+        audio.muted = wasMuted;
+        audio.volume = oldVolume;
       }
     }
 
+    async function unlockAudio() {
+      if (audioUnlocked) return;
+      await initAudio();
+      if (audioCtx && audioCtx.state === "suspended") await audioCtx.resume().catch(() => {});
+
+      if (audioCtx) {
+        const silent = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+        const src = audioCtx.createBufferSource();
+        src.buffer = silent;
+        src.connect(audioCtx.destination);
+        src.start(0);
+      }
+
+      await Promise.all([primeAudioElement(tickAudio), primeAudioElement(boomAudio)]);
+      audioUnlocked = true;
+    }
+
     function playTick() {
-      if (useAudioElements) { tickAudio.currentTime = 0; tickAudio.play(); return; }
-      if (!audioCtx || !tickBuffer) return;
+      if (!audioCtx || !tickBuffer) {
+        tickAudio.currentTime = 0;
+        safePlay(tickAudio);
+        return;
+      }
+      if (audioCtx.state === "suspended") audioCtx.resume();
       tickSource = audioCtx.createBufferSource();
       tickSource.buffer = tickBuffer;
       tickSource.loop = true;
@@ -379,13 +423,18 @@
     }
 
     function stopTick() {
-      if (useAudioElements) { tickAudio.pause(); return; }
+      tickAudio.pause();
+      tickAudio.currentTime = 0;
       if (tickSource) { tickSource.stop(); tickSource = null; }
     }
 
     function playBoom() {
-      if (useAudioElements) { boomAudio.currentTime = 0; boomAudio.play(); return; }
-      if (!audioCtx || !boomBuffer) return;
+      if (!audioCtx || !boomBuffer) {
+        boomAudio.currentTime = 0;
+        safePlay(boomAudio);
+        return;
+      }
+      if (audioCtx.state === "suspended") audioCtx.resume();
       const src = audioCtx.createBufferSource();
       src.buffer = boomBuffer;
       src.connect(audioCtx.destination);
@@ -443,7 +492,7 @@
       }
       errorEl.textContent = "";
 
-      await initAudio();
+      await unlockAudio();
 
       const topic = topics[Math.floor(Math.random() * topics.length)];
       document.getElementById("topic-display").textContent = topic;
