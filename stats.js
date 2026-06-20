@@ -6,6 +6,7 @@
     var name = parts[0] || 'menu';
     if (/^index\.html?$/i.test(name) || parts.length === 0) name = 'menu';
     else if (name === 'CascadeProjects' && parts[1]) name = parts[1];
+    if (name === 'menu') return; // 首頁選單不算遊戲，不上報
     var body = JSON.stringify({ game: 'html-' + name, event: 'open' });
     var url = 'https://admin-games.ricky-nova.com/api/event';
     if (navigator.sendBeacon) {
