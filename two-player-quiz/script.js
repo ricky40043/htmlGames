@@ -408,11 +408,12 @@ function goHome() {
 // 取得類別顯示名稱
 function getCategoryDisplayName(category) {
     const categoryNames = {
-        'general': '📚 一般常識',
-        'history': '🏛️ 歷史地理',
+        'geography': '🌍 地理',
+        'history': '🏛️ 歷史',
         'science': '🔬 科學技術',
-        'entertainment': '🎬 娛樂體育',
-        'life': '🏠 生活趣味'
+        'sports': '⚽ 體育',
+        'culture': '🎬 文化娛樂',
+        'current-affairs': '📰 時事新聞'
     };
     return categoryNames[category] || '📚 綜合題目';
 }

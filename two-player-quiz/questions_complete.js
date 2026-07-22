@@ -386,10 +386,7 @@ const questionBank = (() => {
         });
     }
 
-    generateAdditionQuestions();
-    generateSubtractionQuestions();
-    generateMultiplicationQuestions();
-    generateDivisionQuestions();
+    // 數學題已移除：避免出現過於簡單、缺乏遊戲性的基礎四則運算題。
 
     // === 科學題庫 ===
     const scienceRaw = `
@@ -417,17 +414,6 @@ easy|讓鐵生鏽的主要因素是什麼？|水和氧氣|陽光|寒冷|震動
 easy|哪一種能源是不可再生的？|石油|太陽能|風能|潮汐能
 easy|人體需要哪一種維生素來預防壞血病？|維生素C|維生素A|維生素D|維生素K
 easy|哪一種血管把血液從心臟送出？|動脈|靜脈|毛細血管|淋巴管
-easy|下列哪一種材料是良好的導電體？|銅|木頭|玻璃|塑膠
-medium|光合作用主要發生在植物的哪個結構？|葉綠體|細胞核|線粒體|液泡
-medium|地球的外層被稱為什麼？|地殼|地核|地函|岩漿
-medium|人類第一顆人造衛星是由哪個國家發射？|蘇聯|美國|中國|法國
-medium|哪一種粒子帶負電？|電子|質子|中子|阿爾法粒子
-medium|聲音在什麼介質中傳播最快？|固體|液體|氣體|真空
-medium|人體的平衡感主要由哪個器官控制？|內耳|眼睛|舌頭|脾臟
-medium|海水中含量最高的鹽是哪一種？|氯化鈉|硫酸鎂|碳酸鈣|氯化鉀
-medium|DNA的基本組成單位稱為什麼？|核苷酸|胺基酸|脂肪酸|單醣
-medium|歐亞板塊和印度板塊碰撞形成哪一座山脈？|喜馬拉雅山|阿爾卑斯山|洛磯山|安地斯山
-medium|哪一種天氣現象是由冷暖氣團交會造成的？|鋒面|季風|海風|焚風
 medium|聲音的高低取決於什麼？|頻率|振幅|波長|速度
 medium|人體哪個腺體分泌胰島素？|胰臟|肝臟|腎上腺|甲狀腺
 medium|在攝氏溫標下，水的冰點是多少度？|0度|100度|32度|4度
@@ -597,6 +583,37 @@ hard|阿茲特克帝國的首都特諾奇提特蘭位於今日哪座城市？|�
         insertQuestion('history', item.difficulty, item.question, item.correct, item.wrongOptions);
     });
 
+    // === 時事題庫 ===
+    // 題目依 2026 年 7 月查閱的官方新聞整理；事件可能隨時間更新，建議定期換新。
+    // 來源：NASA Missions、NASA News Releases、教育部、WHO、FIFA 官方網站。
+    const currentAffairsRaw = `
+medium|NASA 為了讓大眾看到 Artemis III 任務的影像，選用哪一家公司提供雷射通訊能力？|SpaceX|波音|藍色起源|洛克希德・馬丁
+medium|NASA 預計於 2026 年 8 月發射、用來研究暗能量與宇宙結構的太空望遠鏡是？|Nancy Grace Roman 太空望遠鏡|哈伯太空望遠鏡|詹姆斯・韋伯太空望遠鏡|錢德拉 X 射線望遠鏡
+medium|NASA 的 Psyche 任務目前正前往研究哪一類天體？|金屬含量可能很高的小行星|木星的衛星|火星的極冠|彗星
+medium|2026 年 7 月台灣「王爺上太空」試航任務，結合了太空科技與哪一項在地文化元素？|王爺信仰|布袋戲|茶文化|客家山歌
+medium|WHO 於 2026 年發布指南指出，最多約多少比例的失智症風險有機會預防或延後？|45%|10%|25%|70%
+hard|WHO 在 2026 年 7 月列入緊急使用清單的首個 Bundibugyo 伊波拉病毒診斷工具，主要用途是什麼？|快速診斷感染|製造疫苗|治療發燒|追蹤蚊蟲數量
+medium|2026 年 7 月，哪一個國家獲 WHO 認證已消除沙眼這項公共衛生問題？|薩爾瓦多|哥斯大黎加|摩洛哥|菲律賓
+medium|NASA 選定的 Nancy Grace Roman 太空望遠鏡，預定從哪個美國太空中心發射？|甘迺迪太空中心|休士頓太空中心|甘迺迪航太中心以外的范登堡基地|華勒普斯飛行設施
+medium|2026 FIFA 世界盃的官方吉祥物在近期新聞中被提到要推廣哪個理念？|永續發展|深海探索|古典音樂|冬季運動
+medium|2026 FIFA 世界盃由哪三個國家共同主辦？|加拿大、墨西哥、美國|巴西、阿根廷、智利|英國、愛爾蘭、法國|西班牙、葡萄牙、摩洛哥
+hard|NASA 的 Artemis III 任務，預計讓太空人前往哪個天體附近進行任務？|月球|火星|金星|木星
+medium|2026 年 7 月台灣教育部公布的「王爺上太空」任務，發射時間約在台灣時間哪一天？|7 月 7 日|6 月 7 日|7 月 17 日|8 月 7 日
+hard|WHO 2026 年 7 月的新聞指出，若目前趨勢持續，2050 年全球新發生的癌症病例可能如何變化？|接近增加一倍|減少一半|維持不變|增加約十倍
+medium|NASA 2026 年 7 月的任務消息提到，國際太空站新一批任務人員搭乘哪種俄羅斯載人太空船抵達？|聯盟號|太空梭|獵鷹 9 號|龍飛船
+hard|FIFA 2026 世界盃新聞中，哪位球星在堪薩斯城的賽事故事中受到特別提及？|梅西|姆巴佩|哈蘭德|內馬爾
+medium|2026 年 7 月 NASA 提到的 LINK 機器人服務太空船，主要展示哪種太空任務能力？|在軌道上提升衛星軌道|在月球挖掘冰|載人登陸火星|清理海洋垃圾
+`;
+
+    const currentAffairsList = currentAffairsRaw.trim().split('\n').map(line => {
+        const [difficulty, question, correct, wrong1, wrong2, wrong3] = line.split('|');
+        return { difficulty, question, correct, wrongOptions: [wrong1, wrong2, wrong3] };
+    });
+
+    currentAffairsList.forEach(item => {
+        insertQuestion('current-affairs', item.difficulty, item.question, item.correct, item.wrongOptions);
+    });
+
     // === 體育題庫 ===
     const sportsRaw = `
 easy|足球比賽每隊上場球員人數是多少？|11人|9人|10人|12人
@@ -609,10 +626,8 @@ easy|羽毛球比賽每局多少分為勝？|21分|11分|15分|25分
 easy|FIFA世界盃足球賽多久舉行一次？|4年|2年|3年|5年
 easy|桌球發球時球至少要彈幾次？|兩次|一次|三次|四次
 easy|一場籃球比賽分成幾節？|4節|2節|3節|5節
-easy|世界杯板球賽主要在哪些國家流行？|英聯邦國家|阿拉伯國家|北歐|東歐
 easy|奧運五環的顏色代表什麼？|五大洲|五種運動|五位創辦人|五種精神
 easy|足球場上負責守門的是哪個位置？|守門員|後衛|中場|前鋒
-easy|冰上曲棍球使用的不是球而是什麼？|冰球|羽毛球|飛盤|圓盤
 easy|網球賽事排名積分制度稱為什麼？|ATP/WTA積分|FIFA排名|ELO分|UEFA積分
 easy|在高爾夫球中，低於標準桿一桿稱為？|小鳥|老鷹|柏忌|信天翁
 easy|田徑中的100公尺短跑起跑台稱為什麼？|起跑器|踏板|助跑器|引擎
@@ -622,12 +637,10 @@ easy|冰球比賽場地稱為？|冰場|球場|賽道|泳池
 medium|世界盃足球賽首屆於哪一年舉辦？|1930年|1928年|1942年|1950年
 medium|NBA球隊洛杉磯湖人的主場館是？|加密網體育館|聯合中心|花園球場|豐田中心
 medium|在棒球中，投手投出三振需幾個好球？|3個|2個|4個|5個
-medium|花式滑冰自由滑最高時長是多少？|4分|2分|5分|6分
 medium|哪一項運動起源於蘇格蘭，是用石頭滑向目標區？|冰壺|草地滾球|手球|擊球
 medium|男子網球大滿貫史上最長比賽持續多長時間？|超過11小時|5小時|8小時|9小時
 medium|世界羽球聯盟的英文縮寫是什麼？|BWF|FIVB|FIFA|IAAF
 medium|在足球中，被稱為「手球」的犯規是指球碰到？|手臂|頭部|腳部|肩膀
-medium|冬季奧運會的官方語言不包括哪一種？|西班牙語|法語|英語|主辦國語言
 medium|棒球中內野由幾個壘包組成？|4個|3個|5個|6個
 medium|英國的頂級足球聯賽叫做什麼？|英超聯賽|西甲聯賽|德甲聯賽|義甲聯賽
 medium|籃球三分線距離NBA約是幾公尺？|7.24公尺|6.75公尺|8.25公尺|5.8公尺
@@ -743,7 +756,7 @@ hard|北歐神話中，彩虹橋通往哪個世界？|阿斯加德|米德加爾�
         insertQuestion('culture', item.difficulty, item.question, item.correct, item.wrongOptions);
     });
 
-    const EXPECTED_TOTAL = 800;
+    const EXPECTED_TOTAL = 561;
     if (questions.length !== EXPECTED_TOTAL) {
         console.warn(`題庫目前共有 ${questions.length} 題，預期為 ${EXPECTED_TOTAL} 題`);
     }
