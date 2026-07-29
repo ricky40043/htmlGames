@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f0f1a">
+    <meta name="description" content="冷知識大挑戰 - 包含 1,000 題多元趣味冷知識，個人挑戰與小組破冰派對問答遊戲。">
+    <title>💡 冷知識大挑戰 - 1,000題知識王者與小組破冰</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+
+        <!-- ── HEADER ── -->
+        <header class="app-header">
+            <a href="../index.html" class="icon-btn back-btn" id="home-link" title="返回大廳">
+                <span>🏠</span>
+            </a>
+            <div class="logo-title">
+                <span class="logo-icon">💡</span>
+                <span class="logo-text">冷知識大挑戰</span>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn" id="sound-btn" title="切換音效">
+                    <span id="sound-icon">🔊</span>
+                </button>
+                <button class="icon-btn" id="stats-modal-btn" title="個人成就統計">
+                    <span>🏆</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- ── MAIN CONTENT AREA ── -->
+        <main class="main-content">
+
+            <!-- ── SCREEN 1: HOME MENU ── -->
+            <section id="screen-home" class="screen active">
+                <div class="hero-banner">
+                    <div class="hero-badge">✨ 1,000 題海量冷知識庫</div>
+                    <h1 class="hero-title">冷知識大挑戰</h1>
+                    <p class="hero-subtitle">個人挑戰與小組破冰派對最首選！</p>
+                </div>
+
+                <div class="mode-grid">
+                    <!-- 小組破冰 / 派對對決 (PROMINENT FOR ICEBREAKER) -->
+                    <div class="mode-card icebreaker-card" id="start-icebreaker-btn">
+                        <div class="mode-icon-wrapper icebreaker-bg">
+                            <span class="mode-icon">👥</span>
+                        </div>
+                        <div class="mode-info">
+                            <div class="hot-tag">🔥 破冰熱門</div>
+                            <h3>小組破冰 / 派對對決</h3>
+                            <p>每次 20 題隨機題庫，公布答案與冷知識解密，支援雙隊對決計分！</p>
+                        </div>
+                        <span class="arrow-icon">➔</span>
+                    </div>
+
+                    <!-- 闖關模式 -->
+                    <div class="mode-card stage-card" id="start-stage-btn">
+                        <div class="mode-icon-wrapper stage-bg">
+                            <span class="mode-icon">⚡</span>
+                        </div>
+                        <div class="mode-info">
+                            <h3>闖關模式</h3>
+                            <p>100 個關卡，解鎖三星評分與成就稱號</p>
+                            <div class="mode-tag" id="stage-progress-tag">進度: 0 / 100 關</div>
+                        </div>
+                        <span class="arrow-icon">➔</span>
+                    </div>
+
+                    <!-- 無限挑戰 -->
+                    <div class="mode-card endless-card" id="start-endless-btn">
+                        <div class="mode-icon-wrapper endless-bg">
+                            <span class="mode-icon">🏆</span>
+                        </div>
+                        <div class="mode-info">
+                            <h3>無限挑戰</h3>
+                            <p>3 顆心心容錯，挑戰最高連擊 Combo 與極限高分</p>
+                            <div class="mode-tag" id="endless-best-tag">最高分: 0 分</div>
+                        </div>
+                        <span class="arrow-icon">➔</span>
+                    </div>
+
+                    <!-- 限時速答 -->
+                    <div class="mode-card timer-card" id="start-time-btn">
+                        <div class="mode-icon-wrapper timer-bg">
+                            <span class="mode-icon">⏱️</span>
+                        </div>
+                        <div class="mode-info">
+                            <h3>60秒極速答題</h3>
+                            <p>爭分奪秒，倒數計時內看你能答對多少題</p>
+                            <div class="mode-tag" id="time-best-tag">最高速答: 0 題</div>
+                        </div>
+                        <span class="arrow-icon">➔</span>
+                    </div>
+                </div>
+
+                <!-- 每日冷知識小卡 -->
+                <div class="daily-fact-card">
+                    <div class="fact-card-header">
+                        <span>🌟 今日冷知識驚喜解密</span>
+                        <button class="refresh-fact-btn" id="refresh-fact-btn">換一題 🔄</button>
+                    </div>
+                    <div class="fact-card-body">
+                        <span class="fact-cat-pill" id="daily-cat">🐾 動物自然</span>
+                        <p class="fact-question" id="daily-question">加載中...</p>
+                        <div class="fact-answer-box" id="daily-answer-box">
+                            <span class="fact-answer-title">💡 知識小科普：</span>
+                            <span class="fact-answer-text" id="daily-explanation">加載解答中...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── SCREEN 2: STAGE SELECTOR ── -->
+            <section id="screen-stages" class="screen">
+                <div class="screen-top-bar">
+                    <button class="btn-secondary" id="back-to-home-btn">← 主選單</button>
+                    <h2>🗺️ 闖關地圖 (100關)</h2>
+                    <div class="total-stars-badge">
+                        <span>⭐</span> <span id="user-total-stars">0</span> / 300
+                    </div>
+                </div>
+
+                <div class="stage-grid" id="stage-grid">
+                    <!-- Stage level cards injected via JS -->
+                </div>
+            </section>
+
+            <!-- ── SCREEN 3: QUIZ ARENA ── -->
+            <section id="screen-quiz" class="screen">
+                <!-- Status Top Bar -->
+                <div class="quiz-status-bar">
+                    <div class="status-group">
+                        <span class="badge category-badge" id="quiz-cat-badge">🐾 動物與自然</span>
+                        <span class="stage-indicator" id="quiz-stage-indicator">第 1 / 10 題</span>
+                    </div>
+                    <div class="status-group right">
+                        <div class="stat-pill" id="hearts-pill" style="display: none;">
+                            <span class="stat-icon">❤️</span>
+                            <span class="stat-val" id="hearts-val">3</span>
+                        </div>
+                        <div class="stat-pill" id="timer-pill" style="display: none;">
+                            <span class="stat-icon">⏱️</span>
+                            <span class="stat-val" id="timer-val">60s</span>
+                        </div>
+                        <div class="stat-pill" id="score-pill">
+                            <span class="stat-icon">🌟</span>
+                            <span class="stat-val" id="score-val">0</span>
+                        </div>
+                        <div class="stat-pill streak-pill" id="streak-pill">
+                            <span class="stat-icon">🔥</span>
+                            <span class="stat-val" id="streak-val">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Team Icebreaker Scoreboard (Displayed only in Icebreaker Team VS Mode) -->
+                <div class="team-scoreboard" id="team-scoreboard" style="display: none;">
+                    <div class="team-card team-red">
+                        <div class="team-name">🔴 紅隊</div>
+                        <div class="team-score" id="red-team-score">0</div>
+                        <button class="btn-add-score" id="btn-add-red">+1 分</button>
+                    </div>
+                    <div class="team-vs">VS</div>
+                    <div class="team-card team-blue">
+                        <div class="team-name">🔵 藍隊</div>
+                        <div class="team-score" id="blue-team-score">0</div>
+                        <button class="btn-add-score" id="btn-add-blue">+1 分</button>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="progress-track">
+                    <div class="progress-fill" id="quiz-progress-fill" style="width: 0%;"></div>
+                </div>
+
+                <!-- Question Card -->
+                <div class="question-card" id="question-card">
+                    <div class="q-number-chip" id="q-id-chip">#001</div>
+                    <h2 class="question-text" id="question-text">載入題目中...</h2>
+                </div>
+
+                <!-- Options Grid -->
+                <div class="options-grid" id="options-grid">
+                    <!-- Option buttons dynamically generated -->
+                </div>
+
+                <!-- Powerups Bar -->
+                <div class="powerups-bar" id="powerups-bar">
+                    <button class="powerup-btn" id="powerup-5050" title="排除兩個錯誤選項">
+                        <span class="powerup-icon">💡</span>
+                        <span class="powerup-name">50:50</span>
+                        <span class="powerup-count" id="count-5050">3</span>
+                    </button>
+                    <button class="powerup-btn" id="powerup-hint" title="顯示關鍵冷知識提示">
+                        <span class="powerup-icon">📖</span>
+                        <span class="powerup-name">提示</span>
+                        <span class="powerup-count" id="count-hint">3</span>
+                    </button>
+                    <button class="powerup-btn" id="powerup-time" title="時光加時 (+10秒)">
+                        <span class="powerup-icon">⏳</span>
+                        <span class="powerup-name">加時</span>
+                        <span class="powerup-count" id="count-time">3</span>
+                    </button>
+                </div>
+
+                <!-- Explanation Drawer / Modal -->
+                <div class="explanation-drawer hidden" id="explanation-drawer">
+                    <div class="drawer-header">
+                        <div class="result-tag" id="drawer-result-tag">✅ 正確答案！</div>
+                        <span class="combo-bonus-badge" id="drawer-combo-badge">+100 分</span>
+                    </div>
+                    <div class="drawer-content">
+                        <div class="fact-title">💡 冷知識大解密：</div>
+                        <p class="fact-detail" id="drawer-explanation-text">微波爐發出的微波能被食物中的水分子吸收...</p>
+                    </div>
+                    <button class="btn-primary next-q-btn" id="next-q-btn">下一題 ➔</button>
+                </div>
+            </section>
+
+            <!-- ── SCREEN 4: RESULT SUMMARY ── -->
+            <section id="screen-result" class="screen">
+                <div class="result-card">
+                    <div class="result-icon-glow" id="result-icon-emoji">🎉</div>
+                    <h2 class="result-title" id="result-title">破冰挑戰完成！</h2>
+                    <p class="result-subtitle" id="result-subtitle">大家太棒了，展現了驚人的團隊冷知識！</p>
+
+                    <!-- Team Winner Display for Icebreaker Mode -->
+                    <div class="team-winner-banner" id="team-winner-banner" style="display: none;">
+                        <div class="winner-trophy">🏆</div>
+                        <h3 class="winner-title" id="winner-title-text">🔴 恭喜 紅隊 獲勝！</h3>
+                        <p class="winner-scores" id="winner-scores-text">紅隊 12 分 vs 藍隊 8 分</p>
+                    </div>
+
+                    <!-- Star Rating for Stage mode -->
+                    <div class="stars-row" id="result-stars-row">
+                        <span class="star-icon">⭐</span>
+                        <span class="star-icon">⭐</span>
+                        <span class="star-icon">⭐</span>
+                    </div>
+
+                    <!-- Stats breakdown -->
+                    <div class="stats-summary-grid">
+                        <div class="summary-item">
+                            <span class="summary-label">得分 / 題數</span>
+                            <span class="summary-value" id="res-score">1,200</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">正確率</span>
+                            <span class="summary-value" id="res-acc">90%</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">最大連擊</span>
+                            <span class="summary-value" id="res-streak">🔥 8</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">稱號成就</span>
+                            <span class="summary-value title-val" id="res-title-unlocked">「知識達人」</span>
+                        </div>
+                    </div>
+
+                    <div class="result-actions">
+                        <button class="btn-secondary" id="res-home-btn">回主選單</button>
+                        <button class="btn-primary" id="res-retry-btn">再玩一次 (換20題)</button>
+                        <button class="btn-accent" id="res-next-stage-btn" style="display:none;">下一關 ➔</button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- ── ICEBREAKER SETUP MODAL ── -->
+        <div class="modal-overlay hidden" id="icebreaker-modal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>👥 小組破冰對決設定</h3>
+                    <button class="modal-close" id="icebreaker-modal-close">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="setup-group">
+                        <label class="setup-label">📌 題目數量：</label>
+                        <div class="chip-options" id="count-chip-options">
+                            <button class="chip-btn" data-count="10">10 題</button>
+                            <button class="chip-btn active" data-count="20">20 題 (預設)</button>
+                            <button class="chip-btn" data-count="30">30 題</button>
+                        </div>
+                    </div>
+
+                    <div class="setup-group">
+                        <label class="setup-label">⚖️ 破冰玩法：</label>
+                        <div class="mode-select-box">
+                            <label class="radio-option">
+                                <input type="radio" name="icebreaker-type" value="vs" checked>
+                                <div class="radio-content">
+                                    <strong>🔴🔵 雙隊對決 (紅隊 vs 藍隊)</strong>
+                                    <span>適合分組比賽，即時紀錄紅藍兩隊得分</span>
+                                </div>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="icebreaker-type" value="solo">
+                                <div class="radio-content">
+                                    <strong>🙋‍♂️ 團體自由猜題 (不分隊)</strong>
+                                    <span>適合全體同樂，答完直接公布答案與冷知識小解密</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button class="btn-primary" id="confirm-icebreaker-btn" style="margin-top: 16px;">🚀 開始破冰大挑戰</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── STATS & ACHIEVEMENTS MODAL ── -->
+        <div class="modal-overlay hidden" id="stats-modal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>🏆 個人知識成就卡</h3>
+                    <button class="modal-close" id="stats-modal-close">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="user-profile-badge">
+                        <div class="profile-avatar">🎓</div>
+                        <div class="profile-meta">
+                            <h4 id="user-title-text">冷知識新手</h4>
+                            <p id="user-total-q-text">已累計答對 0 題</p>
+                        </div>
+                    </div>
+
+                    <div class="modal-stats-list">
+                        <div class="modal-stat-item">
+                            <span>闖關進度：</span>
+                            <strong id="m-stat-stage">0 / 100 關</strong>
+                        </div>
+                        <div class="modal-stat-item">
+                            <span>獲得星數：</span>
+                            <strong id="m-stat-stars">0 / 300 ⭐</strong>
+                        </div>
+                        <div class="modal-stat-item">
+                            <span>無限模式最高分：</span>
+                            <strong id="m-stat-endless">0 分</strong>
+                        </div>
+                        <div class="modal-stat-item">
+                            <span>限時模式最高速答：</span>
+                            <strong id="m-stat-time">0 題</strong>
+                        </div>
+                        <div class="modal-stat-item">
+                            <span>歷史最高連擊：</span>
+                            <strong id="m-stat-streak">🔥 0 連擊</strong>
+                        </div>
+                    </div>
+
+                    <div class="modal-danger-zone">
+                        <button class="btn-danger-outline" id="reset-data-btn">🗑️ 重置所有遊戲進度</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confetti Canvas -->
+        <canvas id="confetti-canvas"></canvas>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="questions_data.js"></script>
+    <script src="script.js"></script>
+    <script src="/stats.js"></script>
+</body>
+</html>
