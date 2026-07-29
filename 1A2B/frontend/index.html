@@ -5,10 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>連線版 1A2B 競技場 - 多人對戰猜數字</title>
   <link rel="stylesheet" href="style.css">
-  <!-- Socket.IO Client Library -->
   <script src="/socket.io/socket.io.js"></script>
-  <!-- PeerJS Fallback Library (CDN) -->
-  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
@@ -18,7 +15,6 @@
       <p>極速心算與邏輯推理的極致連線對決</p>
     </header>
 
-    <!-- 錯誤與提示訊息彈窗 -->
     <div id="toastMessage" style="display:none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #ef4444; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 600; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.3);"></div>
 
     <!-- 畫面 1：大廳 (Lobby Screen) -->
@@ -28,8 +24,8 @@
         <ul>
           <li><strong>階段 1（同時出題）</strong>：全員有 1 分鐘（60秒）設定各自的 4 位數秘密題目。</li>
           <li><strong>階段 2（輪流/同時打題）</strong>：玩家將隨機被指派固定猜測對手的題目。</li>
-          <li><strong>限時機制</strong>：第 1~2 局每次猜題限時 <strong>60 秒</strong>；第 3 局起升級為 <strong>90 秒</strong>。</li>
-          <li><strong>勝負與冠軍</strong>：以<strong>最少猜題次數</strong>猜出 4A0B 者獲勝！若次數相同，以<strong>累積猜題時間最快</strong>者奪冠。</li>
+          <li><strong>限時與終止條件</strong>：第 1~2 局限時 60 秒，第 3 局起 90 秒。<strong>只要有 3 人答對，遊戲立即結束！</strong></li>
+          <li><strong>勝負與冠軍</strong>：以<strong>最少猜題次數</strong>猜出 4A0B 者獲勝！冠亞軍享受彩花禮炮大典！</li>
         </ul>
       </div>
 
@@ -119,7 +115,6 @@
       </div>
 
       <div class="play-layout">
-        <!-- 左側：個人猜題區與歷程 -->
         <div>
           <div class="card">
             <div style="font-size: 0.95rem; font-weight: 600; color: #c4b5fd; margin-bottom: 10px;">
@@ -146,7 +141,6 @@
           </div>
         </div>
 
-        <!-- 右側：實況對戰動態牆 -->
         <div>
           <div class="live-feed">
             <div class="feed-title">
@@ -163,7 +157,6 @@
 
     <!-- 畫面 5：結算排行榜 (Ended Screen) -->
     <div id="endedScreen" class="screen">
-      <!-- 採花彩花粒子畫布 -->
       <canvas id="confettiCanvas"></canvas>
 
       <div class="podium-container">
@@ -182,7 +175,6 @@
         </div>
       </div>
 
-      <!-- 揭曉自己猜測的題目答案資訊卡 -->
       <div id="myTargetRevealCard" class="card" style="background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); text-align: center; margin-bottom: 20px;">
         <div style="font-size: 0.9rem; color: #c4b5fd; margin-bottom: 4px;">🔍 解密揭曉！您當初被指派猜測的對手題目是：</div>
         <div id="myTargetRevealText" style="font-size: 1.6rem; font-weight: 800; letter-spacing: 4px; color: #f43f5e;">對手: ---- (----)</div>
