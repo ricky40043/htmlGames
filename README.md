@@ -4,75 +4,84 @@
 
 ## 🎯 包含的遊戲
 
-- 💡 **冷知識大挑戰** - 1,000題海量冷知識個人問答遊戲
-- 💣 **定時炸彈** - 緊張刺激的話題遊戲
-- 🔢 **猜數字** - 經典的數字猜謎遊戲  
-- 🔄 **2種人** - 有趣的分類問答遊戲
-- 🎯 **你問我答** - 雙人互動問答遊戲
-- 🕵️ **誰是臥底** - 經典的角色扮演遊戲
-- 🎮 **2048** - 經典的數字拼圖遊戲
+### 單機遊戲
+
+- 💡 **冷知識大挑戰** - 1,000 題冷知識問答
+- 🔢 **猜數字** - 經典數字猜謎
+- 🎮 **2048** - 數字合併益智遊戲
+- 🐍 **貪吃蛇** - 經典貪食挑戰
+
+### 聚會與靜態遊戲
+
+- 💣 **定時炸彈** - 話題傳遞遊戲
+- 🔐 **1A2B** - 猜數字推理
+- 🎭 **2種人** - 分類問答遊戲
+- 💬 **你問我答** - 雙人互動問答
+- 🥁 **節奏接龍** - 可設定 BPM、玩家與回答拍數，依節奏輪流作答
+- ㄅ **注音挑戰** - 隨機產生 2～5 個注音聲母，按空白鍵切換題目
+- 🔗 **詞語接龍** - 指定分類、玩家與倒數秒數的限時輪流作答遊戲
+
+### 多人連線遊戲
+
+- 🐍 多人貪吃蛇
+- 🕵️ 誰是臥底
+- 👥 2種人連線版
 
 ## 🚀 本地開發
 
 ```bash
-# 啟動本地開發伺服器
 npm run dev
 ```
 
-然後訪問 `http://localhost:3000`
+然後訪問 `http://localhost:3000`。
 
 ## 📦 部署到 Vercel
 
-### 方法1: 使用 Vercel CLI (推薦)
-
-1. 安裝 Vercel CLI:
-```bash
-npm i -g vercel
-```
-
-2. 登入並部署:
-```bash
-vercel login
-vercel --prod
-```
-
-### 方法2: 使用 Git 部署
-
-1. 推送到 GitHub
-2. 在 Vercel 官網連接你的 GitHub 倉庫
-3. 自動部署完成
+1. 將程式推送到 GitHub。
+2. 在 Vercel 連接此 Repository。
+3. 由 Vercel 自動部署。
 
 ## 🛠️ 技術架構
 
-- 純靜態 HTML/CSS/JavaScript
+- 純靜態 HTML / CSS / JavaScript
 - 響應式設計
-- Web Audio 音效支援
-- PWA 就緒
+- Web Audio API 節拍與音效
+- SpeechSynthesis 題目播報
+- LocalStorage 保存遊戲設定
+- 鍵盤與手機按鈕操作
 
-## 📁 項目結構
+## 📁 主要目錄
 
+```text
+├── index.html
+├── trivia-quiz/
+├── bomb-topic/
+├── guess-number/
+├── two-types-people/
+├── two-player-quiz/
+├── rhythm-chain/
+├── bopomofo-challenge/
+├── word-chain/
+├── CascadeProjects/2048/
+├── vercel.json
+└── package.json
 ```
-├── index.html              # 主選單頁面
-├── trivia-quiz/           # 冷知識大挑戰 (1,000題)
-├── bomb-topic/            # 定時炸彈遊戲
-├── guess-number/          # 猜數字遊戲
-├── two-types-people/      # 2種人遊戲
-├── two-player-quiz/       # 你問我答遊戲
-├── who-is-spy/           # 誰是臥底遊戲
-├── CascadeProjects/2048/  # 2048遊戲
-├── vercel.json           # Vercel 配置
-└── package.json          # 項目配置
-```
 
-## 🔮 未來擴展
+## 新增遊戲操作
 
-這個項目已經為未來的功能做好準備：
+### 節奏接龍
 
-- WebSocket 實時多人遊戲
-- 用戶系統和積分榜
-- 遊戲數據持久化
-- API Routes 後端功能
+- 設定 BPM、玩家人數、回答拍數與題目。
+- 空白鍵代表回答成功並切換下一位玩家。
+- 可開啟中文題目語音播報。
 
----
+### 注音挑戰
 
-Made with ❤️ 使用 Vercel 部署
+- 設定題數與字數。
+- 空白鍵下一題、方向鍵左鍵上一題、`R` 重新抽目前題目。
+
+### 詞語接龍
+
+- 設定玩家、倒數秒數、字數限制與題目。
+- 玩家回答後按空白鍵，切換下一位並重置倒數。
+- 倒數結束時停在輸家畫面，不會自動跳題。
