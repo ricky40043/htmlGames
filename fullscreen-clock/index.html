@@ -58,6 +58,23 @@
             opacity: 0.8;
         }
 
+        #landscape-button {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            padding: 10px 14px;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 999px;
+            font: 600 14px/1 -apple-system, "Helvetica Neue", Arial, sans-serif;
+            cursor: pointer;
+        }
+
+        #landscape-button:active {
+            background: rgba(255, 255, 255, 0.24);
+        }
+
         #status {
             position: fixed;
             bottom: 10px;
@@ -75,7 +92,8 @@
         <div id="date">YYYY/MM/DD</div>
     </div>
 
-    <div id="status">點擊螢幕開啟全螢幕 (防休眠/自動打橫)</div>
+    <button id="landscape-button" type="button">↔ 打橫顯示</button>
+    <div id="status" aria-live="polite">防黑屏啟動中…</div>
 
     <script>
         const hoursDisplay = document.getElementById('hours');
@@ -85,10 +103,10 @@
         const rightColon = document.getElementById('right-colon');
         const dateDisplay = document.getElementById('date');
         const statusDisplay = document.getElementById('status');
+        const landscapeButton = document.getElementById('landscape-button');
         const bodyElem = document.body;
 
         let wakeLock = null;
-        let isFullscreen = false;
 
         // --- 1. 電子時鐘邏輯 ---
         function updateClock() {
@@ -135,78 +153,91 @@
         updateClock();
 
         // --- 2. 防休眠 (Wake Lock) 邏輯 ---
-        async function requestWakeLock() {
-            if ('wakeLock' in navigator) {
-                try {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    statusDisplay.textContent = '全螢幕中 - 防休眠已啟動';
-
-                    // 監聽 Wake Lock 釋放事件（例如系統強制介入）
-                    wakeLock.addEventListener('release', () => {
-                        console.log('Wake Lock 被釋放');
-                    });
-                } catch (err) {
-                    statusDisplay.textContent = `防休眠失敗: ${err.message}`;
-                    console.error(err);
-                }
-            } else {
-                statusDisplay.textContent = '此瀏覽器不支援防休眠 API';
-            }
-        }
-
-        // --- 4. 點擊觸發全螢幕、打橫、防休眠 ---
-        async function activateFullFeatures() {
-            // 如果已經是全螢幕，則退出
-            if (document.fullscreenElement) {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                }
-                return;
+        async function requestWakeLock(showStatus = true) {
+            if (!('wakeLock' in navigator)) {
+                if (showStatus) statusDisplay.textContent = '此瀏覽器不支援防黑屏';
+                return false;
             }
 
             try {
-                // 1. 請求進入全螢幕 (放大)
-                const docElem = document.documentElement;
-                if (docElem.requestFullscreen) {
-                    await docElem.requestFullscreen();
-                } else if (docElem.webkitRequestFullscreen) { /* Safari/iOS */
-                    await docElem.webkitRequestFullscreen();
-                }
-
-                // 2. 請求鎖定橫屏
-                // 註：iOS Safari 往往會拒絕此請求，除非是在播放原生影片
-                if (screen.orientation && screen.orientation.lock) {
-                    await screen.orientation.lock('landscape').catch(err => {
-                        console.warn('橫屏鎖定被系統拒絕，請手動旋轉手機。', err);
-                        statusDisplay.textContent = '全螢幕中 - 請手動旋轉至橫屏';
+                if (wakeLock === null) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => {
+                        wakeLock = null;
+                        if (document.visibilityState === 'visible') {
+                            statusDisplay.textContent = '防黑屏已暫停，點一下畫面重新啟動';
+                        }
                     });
                 }
-
-                // 3. 請求防休眠
-                await requestWakeLock();
-
+                if (showStatus) statusDisplay.textContent = '防黑屏已啟動';
+                return true;
             } catch (err) {
-                console.error('啟動失敗:', err);
+                if (showStatus) statusDisplay.textContent = '防黑屏無法自動啟動，點一下畫面重試';
+                console.error(err);
+                return false;
             }
         }
 
-        // 監聽全螢幕變化，如果使用者退出全螢幕，也釋放 Wake Lock
-        document.addEventListener('fullscreenchange', () => {
-            if (!document.fullscreenElement) {
-                isFullscreen = false;
-                if (wakeLock !== null) {
-                    wakeLock.release();
-                    wakeLock = null;
-                }
-                statusDisplay.textContent = '點擊螢幕開啟全螢幕 (防休眠/自動打橫)';
-            } else {
-                isFullscreen = true;
+        function isDocumentFullscreen() {
+            return document.fullscreenElement || document.webkitFullscreenElement;
+        }
+
+        async function enterFullscreen() {
+            const docElem = document.documentElement;
+            if (docElem.requestFullscreen) {
+                await docElem.requestFullscreen();
+            } else if (docElem.webkitRequestFullscreen) {
+                await docElem.webkitRequestFullscreen();
             }
+        }
+
+        async function lockLandscape() {
+            try {
+                if (screen.orientation && screen.orientation.lock) {
+                    await screen.orientation.lock('landscape');
+                    return true;
+                }
+            } catch (err) {
+                console.warn('橫屏鎖定被系統拒絕，請手動旋轉手機。', err);
+            }
+            return false;
+        }
+
+        async function activateLandscapeMode() {
+            try {
+                if (!isDocumentFullscreen()) await enterFullscreen();
+            } catch (err) {
+                console.warn('無法進入全螢幕，仍嘗試打橫顯示。', err);
+            }
+
+            const landscapeLocked = await lockLandscape();
+            const wakeLockEnabled = await requestWakeLock(false);
+            statusDisplay.textContent = landscapeLocked
+                ? `已打橫顯示${wakeLockEnabled ? ' · 防黑屏已啟動' : ''}`
+                : `無法自動打橫，請手動旋轉${wakeLockEnabled ? ' · 防黑屏已啟動' : ''}`;
+        }
+
+        // 點擊空白處可切換全螢幕，並同時嘗試打橫及防黑屏。
+        async function activateFullFeatures() {
+            if (isDocumentFullscreen()) {
+                if (document.exitFullscreen) await document.exitFullscreen();
+                return;
+            }
+
+            await activateLandscapeMode();
+        }
+
+        landscapeButton.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            await activateLandscapeMode();
         });
 
-        // 監聽分頁可見性，如果切換 App 回來，重新申請 Wake Lock
+        // 預設先申請防黑屏；若瀏覽器限制自動啟動，使用者可再點按畫面或打橫按鈕。
+        requestWakeLock();
+
+        // 回到此頁時，重新申請防黑屏。
         document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible' && isFullscreen) {
+            if (document.visibilityState === 'visible' && wakeLock === null) {
                 await requestWakeLock();
             }
         });
