@@ -25,39 +25,26 @@
             cursor: pointer;
         }
 
-        /* 維持黑色底，只讓左右兩側依序短暫閃爍。 */
-        #flash-left,
-        #flash-right {
-            position: fixed;
-            top: 0;
-            bottom: 0;
-            width: 50%;
-            background-color: rgba(255, 255, 255, 0.28);
-            opacity: 0;
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        #flash-left {
-            left: 0;
-        }
-
-        #flash-right {
-            right: 0;
-        }
-
         #clock-container {
             text-align: center;
             -webkit-user-select: none;
             user-select: none;
-            position: relative;
-            z-index: 1;
         }
 
         #time {
             font-size: 20vw;
             font-weight: bold;
             line-height: 1;
+        }
+
+        #time .colon {
+            color: #00e5ff;
+            animation: colon-blink 1s steps(1, end) infinite;
+        }
+
+        @keyframes colon-blink {
+            0%, 49.99% { opacity: 1; }
+            50%, 100% { opacity: 0; }
         }
 
         #date {
@@ -73,24 +60,22 @@
             font-size: 12px;
             color: rgba(255,255,255,0.5);
             font-family: sans-serif;
-            z-index: 1;
         }
     </style>
 </head>
 <body>
 
-    <div id="flash-left" aria-hidden="true"></div>
-    <div id="flash-right" aria-hidden="true"></div>
-
     <div id="clock-container">
-        <div id="time">00:00:00</div>
+        <div id="time"><span id="hours">00</span><span class="colon">:</span><span id="minutes">00</span><span class="colon">:</span><span id="seconds">00</span></div>
         <div id="date">YYYY/MM/DD</div>
     </div>
 
     <div id="status">點擊螢幕開啟全螢幕 (防休眠/自動打橫)</div>
 
     <script>
-        const timeDisplay = document.getElementById('time');
+        const hoursDisplay = document.getElementById('hours');
+        const minutesDisplay = document.getElementById('minutes');
+        const secondsDisplay = document.getElementById('seconds');
         const dateDisplay = document.getElementById('date');
         const statusDisplay = document.getElementById('status');
         const bodyElem = document.body;
@@ -106,7 +91,9 @@
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
             const seconds = String(now.getSeconds()).padStart(2, '0');
-            timeDisplay.textContent = `${hours}:${minutes}:${seconds}`;
+            hoursDisplay.textContent = hours;
+            minutesDisplay.textContent = minutes;
+            secondsDisplay.textContent = seconds;
 
             // 格式化日期
             const year = now.getFullYear();
@@ -116,29 +103,6 @@
             const day = weekdays[now.getDay()];
             dateDisplay.textContent = `${year}/${month}/${date} ${day}`;
 
-            // --- 3. 每 6 秒左右依序閃爍 ---
-            // 當秒數能被 6 整除時 (例如 00, 06, 12...)
-            if (now.getSeconds() % 6 === 0) {
-                flashSides();
-            }
-        }
-
-        // 左半秒閃左側，右半秒閃右側；底色維持原本黑色。
-        function flashSides() {
-            const leftFlash = document.getElementById('flash-left');
-            const rightFlash = document.getElementById('flash-right');
-
-            leftFlash.style.opacity = '1';
-            rightFlash.style.opacity = '0';
-
-            setTimeout(() => {
-                leftFlash.style.opacity = '0';
-                rightFlash.style.opacity = '1';
-            }, 500);
-
-            setTimeout(() => {
-                rightFlash.style.opacity = '0';
-            }, 1000);
         }
 
         // 啟動時鐘，每秒更新
