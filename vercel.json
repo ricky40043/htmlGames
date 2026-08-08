@@ -49,6 +49,10 @@
       "destination": "/who-is-spy/index.html"
     },
     {
+      "source": "/fullscreen-clock",
+      "destination": "/fullscreen-clock/index.html"
+    },
+    {
       "source": "/2048",
       "destination": "/CascadeProjects/2048/index.html"
     }
