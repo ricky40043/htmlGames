@@ -38,44 +38,35 @@
             font-variant-numeric: tabular-nums;
             letter-spacing: -0.045em;
             line-height: 1;
+            white-space: nowrap;
         }
 
+        /* 用背景直接畫兩顆圓點，避免 iPhone Safari 的 inline-flex / pseudo-element 跑版。 */
         #time .colon {
-            display: inline-flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            gap: 0.11em;
+            --colon-color: var(--text-color);
+            --colon-glow: transparent;
+            display: inline-block;
             width: 0.22em;
-            height: 0.58em;
-            margin: 0 0.02em;
-            vertical-align: 0.06em;
-            font-size: 1em;
+            height: 0.62em;
+            margin: 0 0.025em;
+            vertical-align: 0.02em;
             color: transparent;
+            font-size: 1em;
+            background:
+                radial-gradient(circle, var(--colon-color) 0 48%, transparent 52%) 50% 20% / 0.18em 0.18em no-repeat,
+                radial-gradient(circle, var(--colon-color) 0 48%, transparent 52%) 50% 80% / 0.18em 0.18em no-repeat;
+            filter: drop-shadow(0 0 0.07em var(--colon-glow));
+            transition: filter 0.06s ease;
         }
 
-        #time .colon::before,
-        #time .colon::after {
-            content: "";
-            display: block;
-            width: 0.18em;
-            height: 0.18em;
-            flex: 0 0 0.18em;
-            border-radius: 50%;
-            background: var(--text-color);
-            transition: background-color 0.06s ease, box-shadow 0.06s ease;
+        #left-colon.is-flashing {
+            --colon-color: #ff4fd8;
+            --colon-glow: #ff4fd8;
         }
 
-        #left-colon.is-flashing::before,
-        #left-colon.is-flashing::after {
-            background: #ff4fd8;
-            box-shadow: 0 0 24px #ff4fd8;
-        }
-
-        #right-colon.is-flashing::before,
-        #right-colon.is-flashing::after {
-            background: #00e5ff;
-            box-shadow: 0 0 24px #00e5ff;
+        #right-colon.is-flashing {
+            --colon-color: #00e5ff;
+            --colon-glow: #00e5ff;
         }
 
         #date {
