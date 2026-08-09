@@ -44,18 +44,21 @@
             display: inline-block;
             color: var(--text-color);
             font-weight: 900;
+            opacity: 0.16;
             transform: scale(1.28);
             transform-origin: center;
-            transition: color 0.12s ease, text-shadow 0.12s ease;
+            transition: color 0.12s ease, text-shadow 0.12s ease, opacity 0.12s ease;
         }
 
         #left-colon.is-flashing {
             color: #ff4fd8;
+            opacity: 1;
             text-shadow: 0 0 24px #ff4fd8;
         }
 
         #right-colon.is-flashing {
             color: #00e5ff;
+            opacity: 1;
             text-shadow: 0 0 24px #00e5ff;
         }
 
@@ -115,6 +118,7 @@
         const bodyElem = document.body;
 
         let wakeLock = null;
+        let leftColonActive = true;
 
         // --- 1. 電子時鐘邏輯 ---
         function updateClock() {
@@ -135,30 +139,22 @@
             const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
             const day = weekdays[now.getDay()];
             dateDisplay.textContent = `${year}/${month}/${date} ${day}`;
-
-            // 每 6 秒依序閃爍左右冒號。
-            if (now.getSeconds() % 6 === 0) {
-                flashColons();
-            }
         }
 
-        // 左冒號先亮洋紅色 0.5 秒，再換右冒號亮青色 0.5 秒。
-        function flashColons() {
-            leftColon.classList.add('is-flashing');
-
-            setTimeout(() => {
-                leftColon.classList.remove('is-flashing');
-                rightColon.classList.add('is-flashing');
-            }, 500);
-
-            setTimeout(() => {
-                rightColon.classList.remove('is-flashing');
-            }, 1000);
+        // 80 BPM：每拍 0.75 秒，左右冒號輪流亮起；一邊亮時另一邊維持熄滅。
+        function updateColonBeat() {
+            leftColon.classList.toggle('is-flashing', leftColonActive);
+            rightColon.classList.toggle('is-flashing', !leftColonActive);
+            leftColonActive = !leftColonActive;
         }
 
         // 啟動時鐘，每秒更新
         setInterval(updateClock, 1000);
         updateClock();
+
+        // 冒號拍點：0.75 秒切換一次，對應 80 BPM。
+        updateColonBeat();
+        setInterval(updateColonBeat, 750);
 
         // --- 2. 防休眠 (Wake Lock) 邏輯 ---
         async function requestWakeLock(showStatus = true) {
