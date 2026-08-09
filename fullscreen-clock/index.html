@@ -44,10 +44,10 @@
             display: inline-block;
             color: var(--text-color);
             font-weight: 900;
-            opacity: 0.16;
+            opacity: 0;
             transform: scale(1.28);
             transform-origin: center;
-            transition: color 0.12s ease, text-shadow 0.12s ease, opacity 0.12s ease;
+            transition: color 0.06s ease, text-shadow 0.06s ease, opacity 0.06s ease;
         }
 
         #left-colon.is-flashing {
@@ -119,6 +119,7 @@
 
         let wakeLock = null;
         let leftColonActive = true;
+        const BEAT_MS = 750;
 
         // --- 1. 電子時鐘邏輯 ---
         function updateClock() {
@@ -141,20 +142,20 @@
             dateDisplay.textContent = `${year}/${month}/${date} ${day}`;
         }
 
-        // 80 BPM：每拍 0.75 秒，左右冒號輪流亮起；一邊亮時另一邊維持熄滅。
+        // 80 BPM：每 0.75 秒換邊，一邊亮時另一邊完全熄滅。
         function updateColonBeat() {
             leftColon.classList.toggle('is-flashing', leftColonActive);
             rightColon.classList.toggle('is-flashing', !leftColonActive);
             leftColonActive = !leftColonActive;
         }
 
-        // 啟動時鐘，每秒更新
+        // 時鐘數字每秒更新；與冒號節拍分開計時。
         setInterval(updateClock, 1000);
         updateClock();
 
-        // 冒號拍點：0.75 秒切換一次，對應 80 BPM。
+        // 冒號固定每 750ms（0.75 秒）切換一次。
         updateColonBeat();
-        setInterval(updateColonBeat, 750);
+        setInterval(updateColonBeat, BEAT_MS);
 
         // --- 2. 防休眠 (Wake Lock) 邏輯 ---
         async function requestWakeLock(showStatus = true) {
