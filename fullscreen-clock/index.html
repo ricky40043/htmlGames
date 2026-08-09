@@ -41,23 +41,41 @@
         }
 
         #time .colon {
-            display: inline-block;
-            color: var(--text-color);
-            font-weight: 900;
-            opacity: 1;
-            transform: scale(1.28);
-            transform-origin: center;
-            transition: color 0.06s ease, text-shadow 0.06s ease;
+            display: inline-flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 0.11em;
+            width: 0.22em;
+            height: 0.58em;
+            margin: 0 0.02em;
+            vertical-align: 0.06em;
+            font-size: 1em;
+            color: transparent;
         }
 
-        #left-colon.is-flashing {
-            color: #ff4fd8;
-            text-shadow: 0 0 24px #ff4fd8;
+        #time .colon::before,
+        #time .colon::after {
+            content: "";
+            display: block;
+            width: 0.18em;
+            height: 0.18em;
+            flex: 0 0 0.18em;
+            border-radius: 50%;
+            background: var(--text-color);
+            transition: background-color 0.06s ease, box-shadow 0.06s ease;
         }
 
-        #right-colon.is-flashing {
-            color: #00e5ff;
-            text-shadow: 0 0 24px #00e5ff;
+        #left-colon.is-flashing::before,
+        #left-colon.is-flashing::after {
+            background: #ff4fd8;
+            box-shadow: 0 0 24px #ff4fd8;
+        }
+
+        #right-colon.is-flashing::before,
+        #right-colon.is-flashing::after {
+            background: #00e5ff;
+            box-shadow: 0 0 24px #00e5ff;
         }
 
         #date {
