@@ -44,21 +44,19 @@
             display: inline-block;
             color: var(--text-color);
             font-weight: 900;
-            opacity: 0;
+            opacity: 1;
             transform: scale(1.28);
             transform-origin: center;
-            transition: color 0.06s ease, text-shadow 0.06s ease, opacity 0.06s ease;
+            transition: color 0.06s ease, text-shadow 0.06s ease;
         }
 
         #left-colon.is-flashing {
             color: #ff4fd8;
-            opacity: 1;
             text-shadow: 0 0 24px #ff4fd8;
         }
 
         #right-colon.is-flashing {
             color: #00e5ff;
-            opacity: 1;
             text-shadow: 0 0 24px #00e5ff;
         }
 
@@ -118,8 +116,9 @@
         const bodyElem = document.body;
 
         let wakeLock = null;
-        let leftColonActive = true;
-        const BEAT_MS = 750;
+        let leftColonNext = true;
+        let colonResetTimer = null;
+        const FLASH_MS = 750;
 
         // --- 1. 電子時鐘邏輯 ---
         function updateClock() {
@@ -142,20 +141,37 @@
             dateDisplay.textContent = `${year}/${month}/${date} ${day}`;
         }
 
-        // 80 BPM：每 0.75 秒換邊，一邊亮時另一邊完全熄滅。
-        function updateColonBeat() {
-            leftColon.classList.toggle('is-flashing', leftColonActive);
-            rightColon.classList.toggle('is-flashing', !leftColonActive);
-            leftColonActive = !leftColonActive;
+        function resetColonColor() {
+            leftColon.classList.remove('is-flashing');
+            rightColon.classList.remove('is-flashing');
         }
 
-        // 時鐘數字每秒更新；與冒號節拍分開計時。
-        setInterval(updateClock, 1000);
-        updateClock();
+        // 每個整秒開始時，左右冒號交替閃色 0.75 秒；之後恢復白色 0.25 秒。
+        function flashColonOnWholeSecond() {
+            resetColonColor();
+            const targetColon = leftColonNext ? leftColon : rightColon;
+            targetColon.classList.add('is-flashing');
+            leftColonNext = !leftColonNext;
 
-        // 冒號固定每 750ms（0.75 秒）切換一次。
-        updateColonBeat();
-        setInterval(updateColonBeat, BEAT_MS);
+            clearTimeout(colonResetTimer);
+            colonResetTimer = setTimeout(resetColonColor, FLASH_MS);
+        }
+
+        function onWholeSecond() {
+            updateClock();
+            flashColonOnWholeSecond();
+            scheduleNextWholeSecond();
+        }
+
+        // 每次都重新對齊下一個整秒，避免 setInterval 長時間累積誤差。
+        function scheduleNextWholeSecond() {
+            const delay = 1000 - (Date.now() % 1000);
+            setTimeout(onWholeSecond, delay);
+        }
+
+        updateClock();
+        resetColonColor();
+        scheduleNextWholeSecond();
 
         // --- 2. 防休眠 (Wake Lock) 邏輯 ---
         async function requestWakeLock(showStatus = true) {
