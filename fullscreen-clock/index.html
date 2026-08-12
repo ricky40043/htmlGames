@@ -102,12 +102,7 @@
         }
 
         #status {
-            position: fixed;
-            bottom: 10px;
-            left: 10px;
-            font-size: 12px;
-            color: rgba(255,255,255,0.5);
-            font-family: sans-serif;
+            display: none;
         }
     </style>
 </head>
@@ -133,7 +128,6 @@
         const bodyElem = document.body;
 
         let wakeLock = null;
-        let leftColonActive = true;
         const BEAT_MS = 750;
 
         // --- 1. 電子時鐘邏輯 ---
@@ -157,11 +151,19 @@
             dateDisplay.textContent = `${year}/${month}/${date} ${day}`;
         }
 
-        // 每 0.75 秒左右交替閃色；沒在閃的冒號保持白色。
+        // 以牆上時鐘對齊 0.75 秒節拍：0、3、6 秒都會落在同一個節拍起點。
+        // 不使用會逐漸漂移的 setInterval 狀態翻轉，避免冒號越來越偏離整秒。
         function updateColonBeat() {
+            const now = new Date();
+            const elapsedInMinute = now.getSeconds() * 1000 + now.getMilliseconds();
+            const beatIndex = Math.floor(elapsedInMinute / BEAT_MS);
+            const leftColonActive = beatIndex % 2 === 0;
+
             leftColon.classList.toggle('is-flashing', leftColonActive);
             rightColon.classList.toggle('is-flashing', !leftColonActive);
-            leftColonActive = !leftColonActive;
+
+            const nextBeatIn = BEAT_MS - (elapsedInMinute % BEAT_MS);
+            setTimeout(updateColonBeat, nextBeatIn);
         }
 
         // 時鐘數字每秒更新；冒號節拍獨立以 0.75 秒運作。
@@ -169,7 +171,6 @@
         updateClock();
 
         updateColonBeat();
-        setInterval(updateColonBeat, BEAT_MS);
 
         // --- 2. 防休眠 (Wake Lock) 邏輯 ---
         async function requestWakeLock(showStatus = true) {
