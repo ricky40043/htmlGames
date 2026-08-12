@@ -128,6 +128,8 @@
         const bodyElem = document.body;
 
         let wakeLock = null;
+        let clockTimer = null;
+        let colonTimer = null;
         const BEAT_MS = 750;
 
         // --- 1. 電子時鐘邏輯 ---
@@ -164,12 +166,20 @@
 
             // 對準下一個絕對節拍邊界，避免 setTimeout 延遲後逐步偏移。
             const nextBeatIn = BEAT_MS - (cyclePosition % BEAT_MS);
-            setTimeout(updateColonBeat, Math.max(1, nextBeatIn));
+            clearTimeout(colonTimer);
+            colonTimer = setTimeout(updateColonBeat, Math.max(1, nextBeatIn));
         }
 
-        // 時鐘數字每秒更新；冒號節拍獨立以 0.75 秒運作。
-        setInterval(updateClock, 1000);
-        updateClock();
+        // 數字也對準牆上時鐘的整秒更新，避免從載入時間開始而逐漸錯開。
+        function scheduleClockUpdate() {
+            updateClock();
+            const nextSecondIn = 1000 - (Date.now() % 1000);
+            clearTimeout(clockTimer);
+            clockTimer = setTimeout(scheduleClockUpdate, Math.max(1, nextSecondIn));
+        }
+
+        // 時鐘數字與冒號節拍都以目前時間重新計算，不累積 setInterval 漂移。
+        scheduleClockUpdate();
 
         updateColonBeat();
 
@@ -258,8 +268,13 @@
 
         // 回到此頁時，重新申請防黑屏。
         document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible' && wakeLock === null) {
-                await requestWakeLock();
+            if (document.visibilityState === 'visible') {
+                // 手機背景暫停計時器後，回到頁面立即重新同步畫面。
+                scheduleClockUpdate();
+                updateColonBeat();
+                if (wakeLock === null) {
+                    await requestWakeLock();
+                }
             }
         });
 
