@@ -151,19 +151,20 @@
             dateDisplay.textContent = `${year}/${month}/${date} ${day}`;
         }
 
-        // 以牆上時鐘對齊 0.75 秒節拍：0、3、6 秒都會落在同一個節拍起點。
-        // 不使用會逐漸漂移的 setInterval 狀態翻轉，避免冒號越來越偏離整秒。
+        // 以每分鐘的牆上時間作為節拍基準：0、3、6 秒都從左冒號開始。
+        // 0.75 秒輪流一次，重新整理頁面也會回到目前正確的相位，不會累積漂移。
         function updateColonBeat() {
             const now = new Date();
             const elapsedInMinute = now.getSeconds() * 1000 + now.getMilliseconds();
-            const beatIndex = Math.floor(elapsedInMinute / BEAT_MS);
-            const leftColonActive = beatIndex % 2 === 0;
+            const cyclePosition = elapsedInMinute % (BEAT_MS * 2);
+            const leftColonActive = cyclePosition < BEAT_MS;
 
             leftColon.classList.toggle('is-flashing', leftColonActive);
             rightColon.classList.toggle('is-flashing', !leftColonActive);
 
-            const nextBeatIn = BEAT_MS - (elapsedInMinute % BEAT_MS);
-            setTimeout(updateColonBeat, nextBeatIn);
+            // 對準下一個絕對節拍邊界，避免 setTimeout 延遲後逐步偏移。
+            const nextBeatIn = BEAT_MS - (cyclePosition % BEAT_MS);
+            setTimeout(updateColonBeat, Math.max(1, nextBeatIn));
         }
 
         // 時鐘數字每秒更新；冒號節拍獨立以 0.75 秒運作。
