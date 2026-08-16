@@ -26,6 +26,8 @@
     .online .cat-title { color: #a78bfa; }
     .tools .cat-bar { background: linear-gradient(#34d399, #22d3ee); }
     .tools .cat-title { color: #34d399; }
+    .learning .cat-bar { background: linear-gradient(#6ea8fe, #8b5cf6); }
+    .learning .cat-title { color: #8ab8ff; }
     .game-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
     @media (min-width: 520px) { .game-grid { grid-template-columns: repeat(3, 1fr); } }
     .game-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 22px 12px 18px; min-height: 150px; background: #16161f; border: 1px solid #252535; border-radius: 18px; text-decoration: none; color: #fff; transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s; cursor: pointer; }
@@ -34,6 +36,7 @@
     .party .game-card:hover { box-shadow: 0 8px 28px rgba(247,151,30,0.18); border-color: rgba(247,151,30,0.4); }
     .online .game-card:hover { box-shadow: 0 8px 28px rgba(167,139,250,0.18); border-color: rgba(167,139,250,0.4); }
     .tools .game-card:hover { box-shadow: 0 8px 28px rgba(52,211,153,0.18); border-color: rgba(52,211,153,0.4); }
+    .learning .game-card:hover { box-shadow: 0 8px 28px rgba(110,168,254,0.18); border-color: rgba(110,168,254,0.4); }
     .game-icon { font-size: 2.4rem; line-height: 1; }
     .game-name { font-size: 1rem; font-weight: 700; letter-spacing: 1px; text-align: center; }
     .game-desc { font-size: 0.75rem; color: #555; text-align: center; line-height: 1.4; }
@@ -55,6 +58,15 @@
         <a class="game-card" href="./guess-number/index.html"><span class="game-icon">🔢</span><span class="game-name">猜數字</span><span class="game-desc">挑戰邏輯推理</span></a>
         <a class="game-card" href="./CascadeProjects/2048/index.html"><span class="game-icon">🎮</span><span class="game-name">2048</span><span class="game-desc">數字合併益智</span></a>
         <a class="game-card" href="./snake-game/index.html"><span class="game-icon">🐍</span><span class="game-name">貪吃蛇</span><span class="game-desc">經典貪食挑戰</span></a>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <section class="category learning">
+      <div class="cat-header"><div class="cat-bar"></div><span class="cat-title">📚 學習工具</span><span class="cat-count">1 course</span></div>
+      <div class="game-grid">
+        <a class="game-card" href="./software-learning/index.html"><span class="game-icon">💻</span><span class="game-name">軟體工程學習</span><span class="game-desc">前後端、程式語言與系統設計闖關</span></a>
       </div>
     </section>
 
