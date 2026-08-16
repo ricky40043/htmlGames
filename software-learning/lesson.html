@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0d0d14" />
+    <title>課程｜軟體工程學習</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="lesson">
+    <header class="topbar">
+        <a class="brand" href="index.html">💻 軟體工程學習</a>
+        <nav class="topnav">
+            <a href="index.html">課程</a>
+            <a href="progress.html">進度</a>
+        </nav>
+    </header>
+
+    <main id="lessonRoot" class="container narrow">
+        <article class="lesson-shell">
+            <header class="lesson-header">
+                <div id="breadcrumb" class="breadcrumb"></div>
+                <h1 id="lessonTitle"></h1>
+                <div id="lessonMeta" class="lesson-meta-line"></div>
+                <p id="lessonSummary" class="lesson-summary"></p>
+            </header>
+
+            <div id="lessonContent" class="lesson-content"></div>
+
+            <footer class="lesson-footer">
+                <div id="lessonStatus"></div>
+                <a id="examButton" class="button" href="#">開始本章考試</a>
+            </footer>
+        </article>
+    </main>
+
+    <script src="data/courses.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
