@@ -1,6 +1,6 @@
 # 🎮 小遊戲大集合
 
-一個包含多種有趣小遊戲與實用工具的靜態網站集合。
+一個包含多種有趣小遊戲、學習工具與實用工具的靜態網站集合。
 
 ## 🎯 包含的遊戲
 
@@ -10,6 +10,10 @@
 - 🔢 **猜數字** - 經典數字猜謎
 - 🎮 **2048** - 數字合併益智遊戲
 - 🐍 **貪吃蛇** - 經典貪食挑戰
+
+### 學習工具
+
+- 💻 **軟體工程學習** - 前端、後端、Python、C# 與系統設計短課程，支援章節考試、80 分通過與 LocalStorage 學習紀錄
 
 ### 聚會與靜態遊戲
 
@@ -51,7 +55,7 @@ npm run dev
 - 響應式設計
 - Web Audio API 節拍與音效
 - SpeechSynthesis 題目播報
-- LocalStorage 保存遊戲設定
+- LocalStorage 保存遊戲設定與學習進度
 - 鍵盤與手機按鈕操作
 
 ## 📁 主要目錄
@@ -59,6 +63,14 @@ npm run dev
 ```text
 ├── index.html
 ├── trivia-quiz/
+├── software-learning/
+│   ├── index.html
+│   ├── lesson.html
+│   ├── exam.html
+│   ├── progress.html
+│   ├── app.js
+│   ├── styles.css
+│   └── data/courses.js
 ├── bomb-topic/
 ├── guess-number/
 ├── two-types-people/
@@ -71,6 +83,14 @@ npm run dev
 ├── vercel.json
 └── package.json
 ```
+
+## 軟體工程學習模組
+
+- 課程資料集中在 `software-learning/data/courses.js`，畫面與課程內容分離。
+- 每章可以設定教材區塊、單選題與程式填空題。
+- 章節考試達 80 分即標記通過，並保存最高分、作答次數與閱讀狀態。
+- 第一階段不需要帳號、API 或資料庫，全部紀錄存在瀏覽器 LocalStorage。
+- 後續可以直接擴充更多課程資料，再加入 AI 問答功能。
 
 ## 新增遊戲操作
 
