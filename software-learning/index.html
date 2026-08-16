@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0d0d14" />
+    <title>軟體工程學習</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="dashboard">
+    <header class="topbar">
+        <a class="brand" href="index.html">💻 軟體工程學習</a>
+        <nav class="topnav">
+            <a href="index.html">課程</a>
+            <a href="progress.html">進度</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <div>
+                <div class="eyebrow">Software Engineering Roadmap</div>
+                <h1>學一章，考一章。</h1>
+                <p>前端、後端、Python、C# 與系統設計都拆成短章節。你可以自由選課，章節考試達 80 分就記錄為通過。</p>
+            </div>
+            <aside class="overall-card">
+                <span class="muted">總進度</span>
+                <span class="big-number"><span id="overallPercent">0</span>%</span>
+                <span class="muted">已通過 <span id="overallPassed">0</span> / <span id="overallTotal">0</span> 章</span>
+            </aside>
+        </section>
+
+        <div id="courseList" class="course-grid"></div>
+    </main>
+
+    <script src="data/courses.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
