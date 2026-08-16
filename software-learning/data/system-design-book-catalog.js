@@ -15,9 +15,9 @@ window.SYSTEM_DESIGN_BOOK = {
     { id: 'sd-book-10', order: 10, title: '設計通知系統', status: 'ready', dataFiles: ['system-design-book-ch10-part1.js','system-design-book-ch10-part2.js','system-design-book-ch10-final.js'] },
     { id: 'sd-book-11', order: 11, title: '設計動態訊息系統', status: 'ready', dataFiles: ['system-design-book-ch11-part1.js','system-design-book-ch11-part2.js','system-design-book-ch11-final.js'] },
     { id: 'sd-book-12', order: 12, title: '設計聊天系統', status: 'ready', dataFiles: ['system-design-book-ch12-part1.js','system-design-book-ch12-part2.js','system-design-book-ch12-final.js'] },
-    { id: 'sd-book-13', order: 13, title: '設計搜尋文字自動補全系統', status: 'planned', dataFiles: [] },
-    { id: 'sd-book-14', order: 14, title: '設計 YouTube', status: 'planned', dataFiles: [] },
-    { id: 'sd-book-15', order: 15, title: '設計 Google Drive', status: 'planned', dataFiles: [] },
-    { id: 'sd-book-16', order: 16, title: '持續學習', status: 'planned', dataFiles: [] }
+    { id: 'sd-book-13', order: 13, title: '設計搜尋文字自動補全系統', status: 'ready', dataFiles: ['system-design-book-ch13-part1.js','system-design-book-ch13-part2.js','system-design-book-ch13-final.js'] },
+    { id: 'sd-book-14', order: 14, title: '設計 YouTube', status: 'ready', dataFiles: ['system-design-book-ch14-part1.js','system-design-book-ch14-part2.js','system-design-book-ch14-final.js'] },
+    { id: 'sd-book-15', order: 15, title: '設計 Google Drive', status: 'ready', dataFiles: ['system-design-book-ch15-part1.js','system-design-book-ch15-part2.js','system-design-book-ch15-final.js'] },
+    { id: 'sd-book-16', order: 16, title: '持續學習：System Design Interview Playbook', status: 'ready', dataFiles: ['system-design-book-ch16-part1.js','system-design-book-ch16-part2.js','system-design-book-ch16-final.js'] }
   ]
 };
