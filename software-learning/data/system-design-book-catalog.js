@@ -4,7 +4,7 @@ window.SYSTEM_DESIGN_BOOK = {
   sourceNote: '章節架構依 Alex Xu / ByteByteGo Volume 1；教材內容以公開官方技術文件重新研究、整理與教學化，不逐字重製書籍內容。',
   chapters: [
     { id: 'sd-book-01', order: 1, title: '使用者人數——從零到百萬規模', status: 'ready', dataFiles: ['system-design-book-ch01-part1.js','system-design-book-ch01-part2.js','system-design-book-ch01-part3.js'] },
-    { id: 'sd-book-02', order: 2, title: '粗略的估算', status: 'planned', dataFiles: [] },
+    { id: 'sd-book-02', order: 2, title: '粗略的估算', status: 'ready', dataFiles: ['system-design-book-ch02-part1.js','system-design-book-ch02-part2.js','system-design-book-ch02-part3.js'] },
     { id: 'sd-book-03', order: 3, title: '系統設計面試的框架', status: 'planned', dataFiles: [] },
     { id: 'sd-book-04', order: 4, title: '設計網路限速器', status: 'planned', dataFiles: [] },
     { id: 'sd-book-05', order: 5, title: '設計具有一致性的雜湊做法', status: 'planned', dataFiles: [] },
