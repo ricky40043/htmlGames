@@ -13,7 +13,7 @@
 
 ### 學習工具
 
-- 💻 **軟體工程學習** - 前端、後端、Python、C# 與系統設計短課程，支援章節考試、80 分通過與 LocalStorage 學習紀錄
+- 💻 **軟體工程學習** - Python 演算法 + 系統設計互動課程；系統設計依 Alex Xu / ByteByteGo Volume 1 的 16 Chapter 架構逐章製作，目前完成 Chapter 1–12。每章拆成多個小節、小節練習與 30 題章末考，支援錯題診斷、回教材複習與 LocalStorage 學習紀錄。
 
 ### 聚會與靜態遊戲
 
@@ -65,12 +65,19 @@ npm run dev
 ├── trivia-quiz/
 ├── software-learning/
 │   ├── index.html
+│   ├── system-design.html
+│   ├── system-design-chapter.html
+│   ├── system-design-exam.html
 │   ├── lesson.html
 │   ├── exam.html
 │   ├── progress.html
 │   ├── app.js
+│   ├── system-design-book.js
 │   ├── styles.css
-│   └── data/courses.js
+│   └── data/
+│       ├── courses.js
+│       ├── system-design-book-catalog.js
+│       └── system-design-book-ch*.js
 ├── bomb-topic/
 ├── guess-number/
 ├── two-types-people/
@@ -86,11 +93,13 @@ npm run dev
 
 ## 軟體工程學習模組
 
-- 課程資料集中在 `software-learning/data/courses.js`，畫面與課程內容分離。
-- 每章可以設定教材區塊、單選題與程式填空題。
-- 章節考試達 80 分即標記通過，並保存最高分、作答次數與閱讀狀態。
-- 第一階段不需要帳號、API 或資料庫，全部紀錄存在瀏覽器 LocalStorage。
-- 後續可以直接擴充更多課程資料，再加入 AI 問答功能。
+- **System Design 書本模式**：依 Alex Xu / ByteByteGo Volume 1 的 16 Chapter 結構逐章製作，目前完成 Chapter 1–12。
+- 每個 System Design Chapter 拆成多個小節，每小節有教材頁與 3–5 題練習，最後再進行 30 題章末考。
+- 章末考分為基礎、應用、進階三個層級；題目與選項每次重新洗牌。
+- 錯題會顯示錯誤選項背後的 misconception、正確判斷與指定教材頁的複習連結。
+- System Design 目前已完成：從零到百萬、粗略估算、面試框架、Rate Limiter、Consistent Hashing、Key-Value Store、Distributed ID、URL Shortener、Web Crawler、Notification、News Feed、Chat System。
+- Python 演算法維持獨立課程路線。
+- 第一階段不需要帳號、API 或資料庫；學習進度與成績保存在瀏覽器 LocalStorage，資料模型已預留未來後端/資料庫遷移空間。
 
 ## 新增遊戲操作
 
