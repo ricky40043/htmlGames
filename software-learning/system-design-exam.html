@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0d0d14" />
+  <title>Chapter Exam｜系統設計</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="system-design-book.css" />
+</head>
+<body data-book-page="exam">
+  <header class="topbar">
+    <a class="brand" href="system-design.html">🏗️ 系統設計逐章課程</a>
+    <nav class="topnav"><a href="system-design.html">章節</a><a href="index.html">全部課程</a></nav>
+  </header>
+  <main id="bookExamRoot" class="book-exam-shell">
+    <header class="book-exam-header">
+      <div class="eyebrow">CHAPTER EXAM</div>
+      <h1 id="bookExamTitle"></h1>
+      <p id="bookExamInfo"></p>
+    </header>
+    <form id="bookExamForm" onsubmit="return false;"></form>
+    <div class="exam-actions"><button id="bookExamSubmit" class="button" type="button">送出 30 題章末測驗</button></div>
+    <section id="bookExamResult" class="book-quiz-result" hidden></section>
+  </main>
+  <script src="data/system-design-book-catalog.js"></script>
+  <script src="data/system-design-book-ch01-part1.js"></script>
+  <script src="data/system-design-book-ch01-part2.js"></script>
+  <script src="data/system-design-book-ch01-part3.js"></script>
+  <script src="system-design-book.js"></script>
+</body>
+</html>
