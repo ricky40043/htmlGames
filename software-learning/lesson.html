@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0d0d14" />
     <title>課程｜軟體工程學習</title>
+    <script>
+        (() => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('course') !== 'system-design') return;
+            const legacyLesson = params.get('lesson') || '';
+            const chapterOneLegacy = new Set(['sd-01', 'sd-02', 'sd-03', 'sd-04', 'sd-05', 'sd-06', 'sd-07']);
+            const target = chapterOneLegacy.has(legacyLesson)
+                ? 'system-design-chapter.html?chapter=sd-book-01'
+                : 'system-design.html';
+            window.location.replace(target);
+        })();
+    </script>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="interactive.css" />
     <link rel="stylesheet" href="review-navigation.css" />
@@ -34,13 +46,9 @@
         </article>
     </main>
     <script src="data/courses.js"></script>
-    <script src="data/system-design-06-10.js"></script>
     <script src="data/algorithm-python-06-10.js"></script>
-    <script src="data/system-design-11-15.js"></script>
     <script src="data/algorithm-python-11-15.js"></script>
-    <script src="data/system-design-16-20.js"></script>
     <script src="data/algorithm-python-16-20.js"></script>
-    <script src="data/question-specs-system-design.js"></script>
     <script src="data/question-specs-algorithm.js"></script>
     <script src="question-bank-engine.js"></script>
     <script src="lesson-v2.js"></script>
