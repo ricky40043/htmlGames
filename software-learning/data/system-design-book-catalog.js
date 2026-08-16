@@ -5,9 +5,9 @@ window.SYSTEM_DESIGN_BOOK = {
   chapters: [
     { id: 'sd-book-01', order: 1, title: '使用者人數——從零到百萬規模', status: 'ready', dataFiles: ['system-design-book-ch01-part1.js','system-design-book-ch01-part2.js','system-design-book-ch01-part3.js'] },
     { id: 'sd-book-02', order: 2, title: '粗略的估算', status: 'ready', dataFiles: ['system-design-book-ch02-part1.js','system-design-book-ch02-part2.js','system-design-book-ch02-part3.js'] },
-    { id: 'sd-book-03', order: 3, title: '系統設計面試的框架', status: 'planned', dataFiles: [] },
-    { id: 'sd-book-04', order: 4, title: '設計網路限速器', status: 'planned', dataFiles: [] },
-    { id: 'sd-book-05', order: 5, title: '設計具有一致性的雜湊做法', status: 'planned', dataFiles: [] },
+    { id: 'sd-book-03', order: 3, title: '系統設計面試的框架', status: 'ready', dataFiles: ['system-design-book-ch03-part1.js','system-design-book-ch03-part2.js','system-design-book-ch03-part3.js'] },
+    { id: 'sd-book-04', order: 4, title: '設計網路限速器', status: 'ready', dataFiles: ['system-design-book-ch04-part1.js','system-design-book-ch04-part2.js','system-design-book-ch04-part3.js'] },
+    { id: 'sd-book-05', order: 5, title: '設計具有一致性的雜湊做法', status: 'ready', dataFiles: ['system-design-book-ch05-part1.js','system-design-book-ch05-part2.js'] },
     { id: 'sd-book-06', order: 6, title: '設計鍵值儲存系統', status: 'planned', dataFiles: [] },
     { id: 'sd-book-07', order: 7, title: '設計可用於分散式系統的唯一 ID 生成器', status: 'planned', dataFiles: [] },
     { id: 'sd-book-08', order: 8, title: '設計短網址生成器', status: 'planned', dataFiles: [] },
