@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#0d0d14" />
     <title>課程｜軟體工程學習</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="interactive.css" />
 </head>
 <body data-page="lesson">
     <header class="topbar">
@@ -15,7 +16,6 @@
             <a href="progress.html">進度</a>
         </nav>
     </header>
-
     <main id="lessonRoot" class="container narrow">
         <article class="lesson-shell">
             <header class="lesson-header">
@@ -24,17 +24,15 @@
                 <div id="lessonMeta" class="lesson-meta-line"></div>
                 <p id="lessonSummary" class="lesson-summary"></p>
             </header>
-
             <div id="lessonContent" class="lesson-content"></div>
-
             <footer class="lesson-footer">
                 <div id="lessonStatus"></div>
                 <a id="examButton" class="button" href="#">開始本章考試</a>
             </footer>
+            <nav id="chapterNav" class="chapter-nav" aria-label="章節導覽"></nav>
         </article>
     </main>
-
     <script src="data/courses.js"></script>
-    <script src="app.js"></script>
+    <script src="lesson-v2.js"></script>
 </body>
 </html>
