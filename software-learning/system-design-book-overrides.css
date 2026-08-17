@@ -1,0 +1,83 @@
+.book-page-controls {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(56px, 1fr) minmax(0, auto) minmax(0, auto);
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.book-page-controls-top {
+  margin: 0 0 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.book-page-controls .button {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 42px;
+  padding: 10px 16px;
+  overflow: hidden;
+  border-radius: 11px;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.book-page-controls .book-page-dots {
+  justify-content: center;
+  min-width: 48px;
+}
+
+.book-chapter-back {
+  grid-column: auto;
+  justify-self: end;
+  min-height: 38px;
+  padding: 9px 13px;
+  font-size: 0.78rem;
+}
+
+/* Short pages should feel intentional instead of leaving a large dead zone. */
+.book-page {
+  min-height: 300px;
+}
+
+@media (max-width: 760px) {
+  .book-page-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .book-page-controls .book-page-dots {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .book-page-controls > :first-child {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .book-page-controls > :nth-child(3) {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: stretch;
+  }
+
+  .book-page-controls > :nth-child(3).button {
+    width: 100%;
+  }
+
+  .book-chapter-back {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: center;
+    width: auto !important;
+  }
+
+  .book-page-controls-top {
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+  }
+}

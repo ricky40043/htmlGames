@@ -75,6 +75,21 @@
 
   function chapterMeta(id) { return catalog().find(c => c.id === id); }
 
+  function shortSectionTitle(section) {
+    const title = String(section?.title || '').trim();
+    const short = title.split(/\s*[：:]\s*|\s*——\s*|\s+—\s+/)[0].trim();
+    if (!short || short.length <= 24) return short || title;
+    const compact = short.split(/\s+(?:vs|and)\s+|\s+與\s+|、/i)[0].trim();
+    return compact || short;
+  }
+
+  function chapterHref(chapterId, sectionId, pageId = '') {
+    const params = new URLSearchParams({ chapter: chapterId });
+    if (sectionId) params.set('section', sectionId);
+    if (pageId) params.set('page', pageId);
+    return `system-design-chapter.html?${params.toString()}`;
+  }
+
   function pageIndexMap(chapter) {
     const map = new Map();
     let n = 1;
@@ -195,7 +210,7 @@
     const page = section.pages[pageIdx];
     const progress = chapterProgress(chapter);
 
-    document.title = `Chapter ${chapter.order}｜${section.title}`;
+    document.title = `Chapter ${chapter.order}｜${shortSectionTitle(section)}`;
     document.querySelector('#bookChapterTitle').textContent = `Chapter ${chapter.order}｜${chapter.title}`;
     document.querySelector('#bookChapterSummary').textContent = chapter.subtitle;
     document.querySelector('#bookProgressText').textContent = `已完成 ${progress.completed}/${progress.total} 小節`;
@@ -203,20 +218,43 @@
 
     document.querySelector('#bookSectionNav').innerHTML = chapter.sections.map(s => {
       const done = progress.state.sections[s.id]?.completed;
-      return `<a class="${s.id === section.id ? 'active' : ''}" href="system-design-chapter.html?chapter=${chapter.id}&section=${s.id}"><span>${done ? '✓' : s.order}</span><div><b>${esc(s.title)}</b><small>${done ? '已完成' : '未完成'}</small></div></a>`;
+      return `<a class="${s.id === section.id ? 'active' : ''}" href="${chapterHref(chapter.id, s.id)}"><span>${done ? '✓' : s.order}</span><div><b>${esc(shortSectionTitle(s))}</b><small>${done ? '已完成' : '未完成'}</small></div></a>`;
     }).join('');
 
     document.querySelector('#bookSectionMeta').innerHTML = `<span>小節 ${section.order}/${chapter.sections.length}</span><span>${esc(section.duration)}</span><span>小節練習 ${section.quiz.length} 題</span>`;
-    document.querySelector('#bookSectionTitle').textContent = section.title;
+    document.querySelector('#bookSectionTitle').textContent = shortSectionTitle(section);
     document.querySelector('#bookSectionSummary').textContent = section.summary;
 
     const pInfo = map.get(page.id);
     document.querySelector('#bookPageCounter').textContent = `Chapter ${chapter.order} 教材第 ${pInfo.number} 頁 · 本小節 ${pageIdx + 1}/${section.pages.length}`;
     document.querySelector('#bookPageStage').innerHTML = `<article class="book-page ${params.get('review') ? 'review-highlight' : ''}" id="${esc(page.id)}"><h2>${esc(page.title)}</h2>${page.blocks.map(blockHtml).join('')}</article>`;
 
+    const sectionIdx = chapter.sections.findIndex(s => s.id === section.id);
+    const previousSection = sectionIdx > 0 ? chapter.sections[sectionIdx - 1] : null;
+    const nextSection = sectionIdx < chapter.sections.length - 1 ? chapter.sections[sectionIdx + 1] : null;
+    const previousChapter = catalog().find(c => c.order === chapter.order - 1 && chapterData(c.id));
+    const nextChapter = catalog().find(c => c.order === chapter.order + 1 && chapterData(c.id));
     const prev = pageIdx > 0 ? section.pages[pageIdx - 1] : null;
     const next = pageIdx < section.pages.length - 1 ? section.pages[pageIdx + 1] : null;
-    document.querySelector('#bookPageControls').innerHTML = `${prev ? `<a class="button secondary" href="?chapter=${chapter.id}&section=${section.id}&page=${prev.id}">← 上一頁</a>` : '<span></span>'}<div class="book-page-dots">${section.pages.map((p, i) => `<a class="${i === pageIdx ? 'active' : ''}" href="?chapter=${chapter.id}&section=${section.id}&page=${p.id}" aria-label="第 ${i + 1} 頁"></a>`).join('')}</div>${next ? `<a class="button" href="?chapter=${chapter.id}&section=${section.id}&page=${next.id}">下一頁 →</a>` : '<span></span>'}`;
+    const previousTarget = prev
+      ? { href: chapterHref(chapter.id, section.id, prev.id), label: '← 上一頁' }
+      : previousSection
+        ? { href: chapterHref(chapter.id, previousSection.id, previousSection.pages[previousSection.pages.length - 1]?.id), label: `← 上一小節 · ${shortSectionTitle(previousSection)}` }
+        : previousChapter
+          ? { href: chapterHref(previousChapter.id, previousChapter.sections[previousChapter.sections.length - 1]?.id, previousChapter.sections[previousChapter.sections.length - 1]?.pages[previousChapter.sections[previousChapter.sections.length - 1].pages.length - 1]?.id), label: `← 上一章 · Chapter ${previousChapter.order}` }
+          : null;
+    const nextTarget = next
+      ? { href: chapterHref(chapter.id, section.id, next.id), label: '下一頁 →' }
+      : nextSection
+        ? { href: chapterHref(chapter.id, nextSection.id, nextSection.pages[0]?.id), label: `下一小節 · ${shortSectionTitle(nextSection)} →` }
+        : nextChapter
+          ? { href: chapterHref(nextChapter.id, nextChapter.sections[0]?.id, nextChapter.sections[0]?.pages[0]?.id), label: `下一章 · Chapter ${nextChapter.order} →` }
+          : { href: `system-design-exam.html?chapter=${encodeURIComponent(chapter.id)}`, label: '進入章末考 →' };
+    const pageDots = `<div class="book-page-dots">${section.pages.map((p, i) => `<a class="${i === pageIdx ? 'active' : ''}" href="${chapterHref(chapter.id, section.id, p.id)}" aria-label="第 ${i + 1} 頁"></a>`).join('')}</div>`;
+    const chapterBack = '<a class="button secondary book-chapter-back" href="system-design.html" aria-label="回到章節">↩ 回到章節</a>';
+    const renderPageControls = () => `${previousTarget ? `<a class="button secondary" href="${previousTarget.href}">${esc(previousTarget.label)}</a>` : '<span></span>'}${pageDots}${nextTarget ? `<a class="button" href="${nextTarget.href}">${esc(nextTarget.label)}</a>` : '<span></span>'}`;
+    document.querySelector('#bookTopControls').innerHTML = `${renderPageControls()}${chapterBack}`;
+    document.querySelector('#bookPageControls').innerHTML = `${renderPageControls()}${chapterBack}`;
 
     document.querySelector('#bookResearch').innerHTML = `<details><summary>本小節研究依據</summary>${(section.research || []).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noreferrer">${esc(s.label)}</a>`).join('')}</details>`;
 
@@ -227,7 +265,7 @@
 
   function renderSectionQuiz(chapter, section, root, map) {
     const questions = shuffle(section.quiz).map(prepareQuestion);
-    root.innerHTML = `<header><span>SECTION CHECK</span><h2>${esc(section.title)}｜小節練習</h2><p>${questions.length} 題。送出後會逐題診斷錯誤思路，並指出應回 Chapter ${chapter.order} 教材第幾頁複習。</p></header><div class="book-quiz-list">${questions.map((q, i) => renderQuestion(q, i)).join('')}</div><button class="button book-submit" type="button">送出小節練習</button><div class="book-quiz-result" hidden></div>`;
+    root.innerHTML = `<header><span>SECTION CHECK</span><h2>${esc(shortSectionTitle(section))}｜小節練習</h2><p>${questions.length} 題。送出後會逐題診斷錯誤思路，並指出應回 Chapter ${chapter.order} 教材第幾頁複習。</p></header><div class="book-quiz-list">${questions.map((q, i) => renderQuestion(q, i)).join('')}</div><button class="button book-submit" type="button">送出小節練習</button><div class="book-quiz-result" hidden></div>`;
 
     root.querySelector('.book-submit').onclick = () => {
       let correct = 0;
@@ -243,7 +281,7 @@
       const nextSection = chapter.sections[idx + 1];
       const result = root.querySelector('.book-quiz-result');
       result.hidden = false;
-      result.innerHTML = `<div class="book-result-score">${score} 分</div><p>答對 ${correct}/${questions.length} · 本小節最高 ${saved.bestScore} 分</p><div class="result-actions">${nextSection ? `<a class="button" href="system-design-chapter.html?chapter=${chapter.id}&section=${nextSection.id}">進入下一小節：${nextSection.order}. ${esc(nextSection.title)} →</a>` : `<a class="button" href="system-design-exam.html?chapter=${chapter.id}">所有小節完成，進入 ${chapter.finalExam.length} 題 Chapter Exam →</a>`}<button class="button secondary" onclick="location.reload()">重新練習</button></div>`;
+      result.innerHTML = `<div class="book-result-score">${score} 分</div><p>答對 ${correct}/${questions.length} · 本小節最高 ${saved.bestScore} 分</p><div class="result-actions">${nextSection ? `<a class="button" href="${chapterHref(chapter.id, nextSection.id)}">進入下一小節：${nextSection.order}. ${esc(shortSectionTitle(nextSection))} →</a>` : `<a class="button" href="system-design-exam.html?chapter=${chapter.id}">所有小節完成，進入 ${chapter.finalExam.length} 題 Chapter Exam →</a>`}<button class="button secondary" onclick="location.reload()">重新練習</button></div>`;
       root.querySelector('.book-submit').disabled = true;
       result.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };

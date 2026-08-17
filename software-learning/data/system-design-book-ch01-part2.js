@@ -3,7 +3,7 @@ const chapter=window.SYSTEM_DESIGN_CHAPTER_01;if(!chapter)return;
 const O=(id,text,correct,misconception='')=>({id,text,correct,misconception});
 chapter.sections.push(
 {
- id:'sd1-s06',order:6,title:'Cache Tier：降低延遲、保護下游，但別製造新的事故',duration:'28–38 分鐘',summary:'從 Cache-Aside、TTL、Hit Rate、Eviction、Cold Start 到一致性與故障模式，建立真正可操作的快取判斷。',
+ id:'sd1-s06',order:6,title:'快取層：降低延遲、保護下游，但別製造新的事故',duration:'28–38 分鐘',summary:'從旁路快取、存留時間、命中率、淘汰、冷啟動到一致性與故障模式，建立真正可操作的快取判斷。',
  research:[{label:'ByteByteGo — Cache section',url:'https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users'},{label:'AWS Builders’ Library — Caching challenges and strategies',url:'https://aws.amazon.com/builders-library/caching-challenges-and-strategies'}],
  pages:[
   {id:'sd1-s06-p01',title:'什麼資料值得 Cache？先看重複使用率',blocks:[
@@ -11,10 +11,10 @@ chapter.sections.push(
    {type:'diagram',nodes:[['Request','GET product:42'],['Cache','Hit?'],['Database','Miss 才查'],['Cache Fill','存結果 + TTL']],caption:'常見 side-cache / cache-aside 思路：先查 cache；miss 時回源，再把結果寫回 cache。'},
    {type:'bullets',items:['適合：熱門商品、設定檔、權限結果、計算昂貴且更新不頻繁的資料。','不適合：每個 Request 都不同、資料極度即時、不能接受 stale 的關鍵交易狀態。','要量測：Hit Rate、Miss Rate、downstream QPS、cache CPU/memory、eviction count。']}
   ]},
-  {id:'sd1-s06-p02',title:'TTL 與 Eviction：快取不是「放進去就好」',blocks:[
-   {type:'compare',items:[['TTL 太短','Hit Rate 下降、回源增加，尖峰時可能把 DB 壓垮。'],['TTL 太長','資料更容易 stale，修改後舊資料存在更久。'],['容量不足','必須 eviction；LRU/LFU/FIFO 等策略決定誰先被淘汰。']]},
-   {type:'p',text:'TTL 應由資料更新頻率與「可接受舊多久」決定，不該拍腦袋填 3600。快取容量與 TTL 也必須用真實 traffic distribution 驗證。'},
-   {type:'callout',title:'Cold Start',text:'新節點或整批 cache flush 後，大量 miss 會同時打回 downstream。部署與故障恢復時尤其危險，因此要考慮 warm-up、request coalescing、rate limiting 或 load shedding。'}
+  {id:'sd1-s06-p02',title:'存留時間與快取淘汰：不是資料放進去就好',blocks:[
+   {type:'compare',items:[['存留時間太短','命中率下降、回源請求增加，尖峰時可能把資料庫壓垮。'],['存留時間太長','資料可能過期，修改後的舊版本會留在快取裡更久。'],['容量不足','必須設定淘汰策略，例如最近最少使用、最不常使用或先進先出，決定哪些資料先被移除。']]},
+   {type:'p',text:'存留時間應由資料更新頻率，以及產品能接受資料過期多久來決定；不要憑感覺填 3600 秒。快取容量與存留時間也要用真實流量分布驗證。'},
+   {type:'callout',title:'冷啟動',text:'新節點或整批快取清空後，大量請求會同時回源，可能讓下游服務瞬間承受壓力。部署與故障恢復時尤其危險，因此要考慮快取預熱、請求合併、限流或負載卸除。'}
   ]},
   {id:'sd1-s06-p03',title:'Cache 一致性與故障：快不代表正確',blocks:[
    {type:'stepper',steps:[['Write DB','資料先成功寫入 source of truth。'],['Invalidate / Update Cache','依策略刪除或更新對應 key。'],['Race Condition','若 DB 與 Cache 不是同一交易，並發下可能短暫不一致。'],['Failure Mode','Cache 掛掉時，要決定 fail-open 回源、serve stale、限流或降級。']]},

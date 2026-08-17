@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const TERMS = [
+  const BUILTIN_TERMS = [
     ['web-app-tier','網站／應用程式層','Web / App Tier',['Web/App Tier','Web / App Tier','Web Tier','App Tier'],'負責接收請求、執行商業邏輯並存取資料。','https://developer.mozilla.org/zh-TW/docs/Learn_web_development/Extensions/Server-side/First_steps/Introduction'],
     ['database-tier','資料庫層','Database Tier',['Database Tier','Data Tier'],'負責持久保存、查詢與更新應用程式資料。','https://developer.mozilla.org/zh-TW/docs/Glossary/Database'],
     ['web-server','網頁伺服器','Web Server',['Web Server'],'接收網路請求並回傳內容或執行後端程式。','https://developer.mozilla.org/zh-TW/docs/Learn_web_development/Howto/Web_mechanics/What_is_a_web_server'],
@@ -71,6 +71,17 @@
     ['hotspot','熱點問題','Hotspot',['Hotspot','hotspot','hot key'],'少數資料或節點承受過多流量的失衡現象。','https://www.mongodb.com/docs/manual/core/sharding-choose-a-shard-key/']
   ].map(([id, zh, en, aliases, note, url]) => ({ id, zh, en, aliases, note, url }));
 
+  const glossaryTerms = (window.SYSTEM_DESIGN_GLOSSARY || []).map(term => ({
+    ...term,
+    en: term.abbr ? `${term.en}／${term.abbr}` : term.en,
+    aliases: [...new Set([...(term.aliases || []), term.en, term.abbr].filter(Boolean))]
+  }));
+  const termsById = new Map();
+  [...glossaryTerms, ...BUILTIN_TERMS].forEach(term => {
+    if (!termsById.has(term.id)) termsById.set(term.id, term);
+  });
+  const TERMS = [...termsById.values()];
+
   const entries = TERMS.flatMap(term => term.aliases.map(alias => ({ term, alias })))
     .sort((a, b) => b.alias.length - a.alias.length);
 
@@ -108,25 +119,10 @@
       const first = !seen.has(term.id);
       seen.add(term.id);
       const label = `${term.zh}（${term.en}）`;
-      if (first && allowLinks) {
-        const a = document.createElement('a');
-        a.className = 'book-term-link';
-        a.href = term.url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.textContent = label;
-        a.title = `${term.note}｜點擊開啟外部說明`;
-        const sup = document.createElement('sup');
-        sup.textContent = '↗';
-        a.appendChild(sup);
-        frag.appendChild(a);
-      } else {
-        const span = document.createElement('span');
-        span.className = 'book-term-plain';
-        span.textContent = first ? label : term.zh;
-        span.title = `${label}：${term.note}`;
-        frag.appendChild(span);
-      }
+      const span = document.createElement('span');
+      span.className = 'book-term-plain';
+      span.textContent = first ? label : term.zh;
+      frag.appendChild(span);
       cursor = found.index + alias.length;
     }
 
@@ -137,10 +133,11 @@
 
   function process(root, seen, allowLinks) {
     if (!root) return;
+    const skipAnchors = !root.classList?.contains('book-section-nav') && !root.classList?.contains('book-page-controls');
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const el = node.parentElement;
-        if (!el || el.closest('script,style,pre,code,a,.book-term-link')) return NodeFilter.FILTER_REJECT;
+        if (!el || el.closest(`script,style,pre,code${skipAnchors ? ',a' : ''}`)) return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       }
     });
@@ -151,19 +148,14 @@
 
   function run() {
     const page = document.querySelector('.book-page');
-    if (!page) return;
-
-    if (!document.querySelector('.book-term-legend')) {
-      const legend = document.createElement('div');
-      legend.className = 'book-term-legend';
-      legend.innerHTML = '<strong>📘 專有名詞閱讀方式</strong><span>第一次出現會顯示「中文（English／縮寫）」；看到 <b>↗</b> 可開啟外部說明。之後重複出現時以中文為主。</span>';
-      page.insertBefore(legend, page.firstElementChild ? page.firstElementChild.nextSibling : null);
-    }
+    const exam = document.querySelector('.book-exam-shell');
+    if (!page && !exam) return;
 
     const seen = new Set();
-    const panel = document.querySelector('.book-content-panel') || page;
+    const panel = document.querySelector('.book-content-panel') || exam || page;
     process(panel, seen, true);
     process(document.querySelector('.book-section-nav'), new Set(), false);
+    document.querySelectorAll('.book-page-controls').forEach(control => process(control, new Set(), false));
     process(document.querySelector('.book-course-header'), new Set(), false);
   }
 
