@@ -40,6 +40,7 @@ jobs:
 
             echo "== Force sync tracked files from GitHub main =="
             echo "Repo: $REPO_DIR"
+            git -C "$REPO_DIR" remote set-url origin https://github.com/ricky40043/htmlGames.git
             git -C "$REPO_DIR" fetch origin main
             git -C "$REPO_DIR" reset --hard origin/main
             echo "== Status before deploy =="
