@@ -1,3 +1,28 @@
 .book-term-plain {
+  display: inline;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+
+/* The step number is also a span; translated terms inside it must stay inline. */
+.book-stepper span.book-term-plain {
+  display: inline;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
 }
