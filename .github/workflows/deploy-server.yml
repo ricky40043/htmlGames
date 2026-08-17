@@ -49,3 +49,9 @@ jobs:
             git -C "$REPO_DIR" rev-parse --short HEAD
 
             /home/ricky/deployments/scripts/deploy-app.sh htmlGames
+
+            echo "== Smoke test deployed terminology assets =="
+            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-terms.js?v=fe1eb98'
+            curl -fsS 'http://127.0.0.1:20600/software-learning/system-design-terms.js?v=fe1eb98' | grep -F '資料庫層' >/dev/null
+            curl -fsS 'http://127.0.0.1:20600/software-learning/system-design-terms.js?v=fe1eb98' | grep -F '網站／應用程式層' >/dev/null
+            echo "Terminology assets verified from running container."
