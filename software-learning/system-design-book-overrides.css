@@ -6,6 +6,35 @@
   margin-top: 16px;
 }
 
+.book-completion-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.book-completion-toggle {
+  border-color: rgba(110, 168, 254, 0.35);
+  color: #dfe8ff;
+}
+
+.book-completion-toggle[aria-pressed="true"] {
+  border-color: rgba(74, 222, 128, 0.5);
+  background: rgba(74, 222, 128, 0.12);
+  color: #b8f5c9;
+}
+
+.book-completion-toggle:disabled {
+  cursor: default;
+  opacity: 0.82;
+}
+
+.book-completion-actions small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .book-page-controls-top {
   margin: 0 0 16px;
   padding-bottom: 16px;

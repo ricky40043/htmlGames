@@ -48,6 +48,29 @@
     return c.sections[sectionId];
   }
 
+  function saveSectionCompletion(chapterId, sectionId, completed) {
+    const d = load();
+    d.chapters[chapterId] ??= emptyChapterState();
+    const c = d.chapters[chapterId];
+    const old = c.sections[sectionId] || { attempts: 0, bestScore: 0, lastScore: 0, completed: false };
+    c.sections[sectionId] = {
+      ...old,
+      completed: !!completed,
+      updatedAt: new Date().toISOString()
+    };
+    save(d);
+    return c.sections[sectionId];
+  }
+
+  function saveChapterCompletion(chapterId, completed) {
+    const d = load();
+    d.chapters[chapterId] ??= emptyChapterState();
+    d.chapters[chapterId].completed = !!completed;
+    d.chapters[chapterId].updatedAt = new Date().toISOString();
+    save(d);
+    return d.chapters[chapterId];
+  }
+
   function saveExam(chapterId, score, detail) {
     const d = load();
     d.chapters[chapterId] ??= emptyChapterState();
@@ -149,19 +172,40 @@
         <b>❌ ${selected ? `你選了：${esc(selected.text)}` : '未作答'}</b>
         <p><strong>可能的思考誤區：</strong>${esc(reason)}</p>
         <p><strong>正確判斷：</strong>${esc(q.explanation)}</p>
-        ${review ? `<a class="book-review-link" href="system-design-chapter.html?chapter=${encodeURIComponent(chapter.id)}&section=${encodeURIComponent(review.sectionId)}&page=${encodeURIComponent(q.reviewPageId)}&review=1">回到第 ${chapter.order} 章教材第 ${review.number} 頁：${esc(review.title)}</a>` : ''}`;
+        ${review ? `<a class="book-review-link" href="system-design-chapter.html?chapter=${encodeURIComponent(chapter.id)}&section=${encodeURIComponent(review.sectionId)}&page=${encodeURIComponent(q.reviewPageId)}&question=${encodeURIComponent(q.id)}&review=1">回到第 ${chapter.order} 章教材第 ${review.number} 頁，重做這一題：${esc(review.title)}</a>` : ''}`;
     }
     return { correct, selectedId: selected?.id || '' };
   }
 
   function chapterProgress(chapter) {
     const state = chapterState(chapter.id);
-    const completed = chapter.sections.filter(s => state.sections[s.id]?.completed).length;
+    const chapterCompleted = state.completed === true;
+    const completed = chapterCompleted ? chapter.sections.length : chapter.sections.filter(s => state.sections[s.id]?.completed).length;
     return {
       state,
+      chapterCompleted,
       completed,
       total: chapter.sections.length,
       percent: chapter.sections.length ? Math.round(completed / chapter.sections.length * 100) : 0
+    };
+  }
+
+  function renderCompletionControls(chapter, section, progress) {
+    const chapterActions = document.querySelector('#bookChapterActions');
+    const sectionActions = document.querySelector('#bookSectionActions');
+    const chapterDone = progress.chapterCompleted;
+    const sectionDone = chapterDone || !!progress.state.sections[section.id]?.completed;
+
+    chapterActions.innerHTML = `<button id="bookChapterComplete" class="button secondary book-completion-toggle" type="button" aria-pressed="${chapterDone}">${chapterDone ? '☑ 本章已完成' : '□ 標記本章全部完成'}</button>`;
+    sectionActions.innerHTML = `<button id="bookSectionComplete" class="button secondary book-completion-toggle" type="button" aria-pressed="${sectionDone}" ${chapterDone ? 'disabled' : ''}>${sectionDone ? '☑ 本小節已完成' : '□ 標記本小節完成'}</button>${chapterDone ? '<small>已由本章完成狀態一併標記</small>' : ''}`;
+
+    chapterActions.querySelector('#bookChapterComplete').onclick = () => {
+      saveChapterCompletion(chapter.id, !chapterDone);
+      renderChapter();
+    };
+    sectionActions.querySelector('#bookSectionComplete').onclick = () => {
+      saveSectionCompletion(chapter.id, section.id, !sectionDone);
+      renderChapter();
     };
   }
 
@@ -175,7 +219,7 @@
       let cls = 'planned';
       if (data) {
         const p = chapterProgress(data);
-        status = p.state.exam?.passed ? '✅ 已通過' : p.completed ? `📖 ${p.completed}/${p.total} 小節` : '可開始';
+        status = p.state.exam?.passed ? '✅ 已通過' : p.chapterCompleted ? '☑ 本章已完成' : p.completed ? `📖 ${p.completed}/${p.total} 小節` : '可開始';
         detail = `${data.sections.length} 小節 · ${data.sections.reduce((n, s) => n + s.quiz.length, 0)} 題小節練習 · ${data.finalExam.length} 題章末考`;
         cls = 'ready';
       }
@@ -216,9 +260,10 @@
     document.querySelector('#bookChapterSummary').textContent = chapter.subtitle;
     document.querySelector('#bookProgressText').textContent = `已完成 ${progress.completed}/${progress.total} 小節`;
     document.querySelector('#bookProgressFill').style.width = `${progress.percent}%`;
+    renderCompletionControls(chapter, section, progress);
 
     document.querySelector('#bookSectionNav').innerHTML = chapter.sections.map(s => {
-      const done = progress.state.sections[s.id]?.completed;
+      const done = progress.chapterCompleted || progress.state.sections[s.id]?.completed;
       return `<a class="${s.id === section.id ? 'active' : ''}" href="${chapterHref(chapter.id, s.id)}"><span>${done ? '✓' : s.order}</span><div><b>${esc(shortSectionTitle(s))}</b><small>${done ? '已完成' : '未完成'}</small></div></a>`;
     }).join('');
 
@@ -260,13 +305,22 @@
     document.querySelector('#bookResearch').innerHTML = `<details><summary>本小節研究依據</summary>${(section.research || []).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noreferrer">${esc(s.label)}</a>`).join('')}</details>`;
 
     const quizRoot = document.querySelector('#bookSectionQuiz');
-    if (pageIdx === section.pages.length - 1) renderSectionQuiz(chapter, section, quizRoot, map);
+    const requestedQuestion = params.get('question');
+    if (pageIdx === section.pages.length - 1 || requestedQuestion) renderSectionQuiz(chapter, section, quizRoot, map, requestedQuestion);
     else quizRoot.innerHTML = '<div class="book-next-hint">讀完本小節最後一頁後，會出現 3–5 題小節練習。</div>';
   }
 
-  function renderSectionQuiz(chapter, section, root, map) {
-    const questions = shuffle(section.quiz).map(prepareQuestion);
-    root.innerHTML = `<header><span>小節練習</span><h2>${esc(shortSectionTitle(section))}</h2><p>${questions.length} 題。送出後會逐題診斷錯誤思路，並指出應回第 ${chapter.order} 章教材第幾頁複習。</p></header><div class="book-quiz-list">${questions.map((q, i) => renderQuestion(q, i)).join('')}</div><button class="button book-submit" type="button">送出小節練習</button><div class="book-quiz-result" hidden></div>`;
+  function renderSectionQuiz(chapter, section, root, map, requestedQuestionId = '') {
+    const requestedQuestion = section.quiz.find(q => q.id === requestedQuestionId) || chapter.finalExam.find(q => q.id === requestedQuestionId);
+    const singleReview = !!requestedQuestion;
+    const examReview = singleReview && chapter.finalExam.some(q => q.id === requestedQuestion.id);
+    const questions = shuffle(singleReview ? [requestedQuestion] : section.quiz).map(prepareQuestion);
+    const quizTitle = singleReview ? `${examReview ? '章末考' : ''}錯題複習` : '小節練習';
+    const quizDescription = singleReview
+      ? '這裡只重做你剛才答錯的這一題，不會重新要求你完成整個小節。'
+      : `${questions.length} 題。送出後會逐題診斷錯誤思路，並指出應回第 ${chapter.order} 章教材第幾頁複習。`;
+    const submitLabel = singleReview ? '送出這一題' : '送出小節練習';
+    root.innerHTML = `<header><span>${quizTitle}</span><h2>${esc(shortSectionTitle(section))}</h2><p>${quizDescription}</p></header><div class="book-quiz-list">${questions.map((q, i) => renderQuestion(q, i)).join('')}</div><button class="button book-submit" type="button">${submitLabel}</button><div class="book-quiz-result" hidden></div>`;
 
     root.querySelector('.book-submit').onclick = () => {
       let correct = 0;
@@ -277,12 +331,18 @@
         else wrong.push(q.id);
       });
       const score = Math.round(correct / questions.length * 100);
-      const saved = saveSection(chapter.id, section.id, score, wrong);
+      const saved = singleReview ? null : saveSection(chapter.id, section.id, score, wrong);
+      if (!singleReview) renderCompletionControls(chapter, section, chapterProgress(chapter));
       const idx = chapter.sections.findIndex(s => s.id === section.id);
       const nextSection = chapter.sections[idx + 1];
       const result = root.querySelector('.book-quiz-result');
       result.hidden = false;
-      result.innerHTML = `<div class="book-result-score">${score} 分</div><p>答對 ${correct}/${questions.length} · 本小節最高 ${saved.bestScore} 分</p><div class="result-actions">${nextSection ? `<a class="button" href="${chapterHref(chapter.id, nextSection.id)}">進入下一小節</a>` : `<a class="button" href="system-design-exam.html?chapter=${chapter.id}">進入章末考</a>`}<button class="button secondary" onclick="location.reload()">重新練習</button></div>`;
+      const fullQuizHref = examReview
+        ? `system-design-exam.html?chapter=${encodeURIComponent(chapter.id)}`
+        : chapterHref(chapter.id, section.id, section.pages[section.pages.length - 1]?.id);
+      result.innerHTML = singleReview
+        ? `<div class="book-result-score">${score === 100 ? '答對了' : '再想一下'}</div><p>${score === 100 ? '這題已答對，可以繼續閱讀教材。' : '這次仍未答對，可以再試一次或回到教材。'}</p><div class="result-actions"><a class="button secondary" href="${fullQuizHref}">${examReview ? '回到章末考全部題目' : '回到本小節全部題目'}</a><button class="button" onclick="location.reload()">再答一次</button></div>`
+        : `<div class="book-result-score">${score} 分</div><p>答對 ${correct}/${questions.length} · 本小節最高 ${saved.bestScore} 分</p><div class="result-actions">${nextSection ? `<a class="button" href="${chapterHref(chapter.id, nextSection.id)}">進入下一小節</a>` : `<a class="button" href="system-design-exam.html?chapter=${chapter.id}">進入章末考</a>`}<button class="button secondary" onclick="location.reload()">重新練習</button></div>`;
       root.querySelector('.book-submit').disabled = true;
       result.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
