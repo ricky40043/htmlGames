@@ -52,7 +52,8 @@ jobs:
 
             echo "== Smoke test deployed terminology assets =="
             curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-terms.js?v=terms-clean-20260818-readability2'
-            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book-translation-overrides.js?v=readability-20260818'
+            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book-translation-overrides.js?v=readability-20260819'
+            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book.js?v=readability-20260819'
             curl -fsS -o /dev/null 'http://127.0.0.1:20600/software-learning/system-design-terms.js?v=terms-clean-20260818-readability2'
-            curl -fsS -o /dev/null 'http://127.0.0.1:20600/software-learning/data/system-design-book-translation-overrides.js?v=readability-20260818'
+            curl -fsS -o /dev/null 'http://127.0.0.1:20600/software-learning/data/system-design-book-translation-overrides.js?v=readability-20260819'
             echo "Terminology and readability assets served from running container."

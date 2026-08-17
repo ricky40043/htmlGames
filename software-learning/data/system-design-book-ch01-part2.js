@@ -69,24 +69,24 @@ chapter.sections.push(
  ]
 },
 {
- id:'sd1-s09',order:9,title:'Multi-Data Center：Geo Routing、Failover 與跨區資料同步',duration:'28–38 分鐘',summary:'理解多機房不是多畫兩個框，而是多了一整組 traffic routing、data sync、deployment 與 failure-domain 問題。',
+ id:'sd1-s09',order:9,title:'跨機房與區域：流量切換、資料複寫與備援',duration:'28–38 分鐘',summary:'理解多機房不是多畫兩個框，而是要同時處理流量導向、資料同步、部署一致性與故障復原。',
  research:[{label:'ByteByteGo — Data centers section',url:'https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users'},{label:'AWS Well-Architected — Deploy workload to multiple locations',url:'https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_fault_isolation_multiaz_region_system.html'},{label:'AWS Well-Architected — Fail over to healthy resources',url:'https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_withstand_component_failures_failover2good.html'}],
  pages:[
-  {id:'sd1-s09-p01',title:'為什麼要跨 Data Center / Region？',blocks:[
-   {type:'compare',items:[['Latency','把使用者導向較近 Region，降低跨洲 RTT。'],['Availability','單一機房或 Region 故障時可把流量轉到健康位置。'],['Disaster Recovery','把基礎設施與資料複製到隔離 failure domain，降低區域性災難風險。']]},
-   {type:'diagram',nodes:[['Global User','Geo / latency signal'],['Global Routing','DNS / Anycast / Accelerator'],['Region A','App + Data'],['Region B','App + Data']],caption:'Global routing 只是第一步；真正困難通常在 data locality 與 consistency。'}
+  {id:'sd1-s09-p01',title:'為什麼要跨機房與區域？',blocks:[
+   {type:'compare',items:[['降低延遲','把使用者導向較近的區域，減少跨洲往返時間。'],['提高可用性','單一機房或區域故障時，可以把流量切到健康的區域。'],['災難復原','把基礎設施與資料複製到彼此隔離的故障範圍，降低區域性災難風險。']]},
+   {type:'diagram',nodes:[['全球使用者','依地理位置與延遲'],['全球流量分派','DNS、Anycast 或加速器'],['區域 A','應用程式與資料'],['區域 B','應用程式與資料']],caption:'全球流量分派只是第一步；真正困難的是資料放在哪裡，以及不同區域如何保持一致。'}
   ]},
-  {id:'sd1-s09-p02',title:'Traffic Failover 成功，不代表資料也準備好了',blocks:[
-   {type:'stepper',steps:[['Detect','判斷 Region/endpoint 是否真的 unhealthy，避免過度敏感造成 flap。'],['Route','把新流量切到健康 Region。'],['Data','確認目標 Region 有足夠新鮮、完整、可寫入的資料。'],['Capacity','備援 Region 必須有足夠 capacity 承接突增流量。'],['Recover','原 Region 恢復後，還要定義 failback 與資料重新同步流程。']]},
-   {type:'bullets',items:['Cross-region replication 常比同 AZ 有更高延遲，需決定同步或非同步策略。','若 Active-Active 可同時寫多區，要面對 conflict resolution。','若 Active-Passive，切換時要考慮 replica promotion 與 write endpoint。','Infrastructure as Code / automated deployment 能降低兩地設定漂移。']},
-   {type:'callout',title:'面試陷阱',text:'「多 Region = 99.999%」不是答案。你必須說明 failure detection、routing、data replication、capacity、RPO/RTO 與 failback。'}
+  {id:'sd1-s09-p02',title:'流量切換成功，不代表資料已準備好',blocks:[
+   {type:'stepper',steps:[['偵測','判斷區域或服務端點是否真的故障，避免過度敏感造成反覆切換。'],['切換流量','把新請求導向健康的區域。'],['確認資料','確認目標區域有足夠新鮮、完整，而且可以寫入的資料。'],['確認容量','備援區域必須有足夠容量承接突然增加的流量。'],['恢復與切回','原區域恢復後，還要定義切回時機，以及資料重新同步的流程。']]},
+   {type:'bullets',items:['跨區資料複寫通常比同一可用區更慢，必須決定要同步複寫還是非同步複寫。','如果多個區域同時接受寫入，就必須處理不同區域的資料衝突。','如果只有一個區域接受寫入，切換時要確認備援資料庫能升級接手，並更新寫入端點。','基礎設施即程式碼與自動化部署，可以降低不同區域的設定漂移。']},
+   {type:'callout',title:'面試陷阱',text:'「多個區域就等於五個九的可用性」不是完整答案。你還要說明故障偵測、流量切換、資料複寫、容量、可接受的資料遺失量與恢復時間，以及如何切回。'}
   ]}],
- quiz:[
-  {id:'sd1-s09-q1',question:'Multi-Region Failover 時，只把 DNS/流量切過去還不夠，最重要還要確認？',reviewPageId:'sd1-s09-p02',explanation:'備援 Region 必須有可用且足夠新鮮的資料與 capacity，否則 traffic redirect 只會把錯誤移到另一區。',options:[O('a','目標 Region 的資料與容量是否可承接',true),O('b','CSS class 名稱是否相同',false,'不是核心 failover correctness。'),O('c','Browser Cache 是否全部清空',false,'不等於後端可承接 failover。'),O('d','所有 User 是否使用同型號手機',false,'與 Region failover 無關。')]},
-  {id:'sd1-s09-q2',question:'Geo Routing 的主要目的之一？',reviewPageId:'sd1-s09-p01',explanation:'依位置/latency/health 等訊號把使用者導向合適 Region，可改善延遲並支援區域故障切換。',options:[O('a','把使用者導向較合適的 Region',true),O('b','讓 Database 不再需要備份',false,'Routing 不取代 backup。'),O('c','保證跨區資料零延遲一致',false,'跨區 replication 仍有延遲與一致性 trade-off。'),O('d','取代所有 Load Balancer',false,'Global routing 與區內 LB 可同時存在。')]},
-  {id:'sd1-s09-q3',question:'Active-Active 多 Region 同時接受寫入時，比較容易增加哪種問題？',reviewPageId:'sd1-s09-p02',explanation:'多地同時寫入可能產生 concurrent updates，需要 conflict detection/resolution 與 consistency 策略。',options:[O('a','Write conflict / consistency',true),O('b','HTML tag 數量',false,'不是多區寫入的核心問題。'),O('c','DNS 不再解析',false,'Active-Active 仍可用 global routing。'),O('d','CPU 一定變 0%',false,'沒有這種必然效果。')]},
-  {id:'sd1-s09-q4',question:'為什麼要自動化跨 Region Deployment / IaC？',reviewPageId:'sd1-s09-p02',explanation:'降低不同 Region 設定漂移，讓備援環境真的能在事故時啟用。',options:[O('a','降低環境設定漂移與人工錯誤',true),O('b','讓所有資料自動強一致',false,'IaC 管 infrastructure，不直接解決 data consistency。'),O('c','讓 Queue 不需要 Consumer',false,'不同問題。'),O('d','讓 CDN 永遠不會失效',false,'部署自動化無法保證第三方 CDN 零故障。')]}
- ]
+quiz:[
+  {id:'sd1-s09-q1',question:'跨區故障切換時，只把 DNS 或流量切過去還不夠，最重要還要確認什麼？',reviewPageId:'sd1-s09-p02',explanation:'備援區域必須有足夠新鮮且完整的資料，也要有容量接住流量；否則只是把故障移到另一區。',options:[O('a','目標區域的資料與容量能否承接流量',true),O('b','網頁樣式名稱是否相同',false,'這不會決定後端能否承接故障切換。'),O('c','是否清空所有瀏覽器快取',false,'清空瀏覽器快取無法補足後端資料與容量。'),O('d','所有使用者的手機型號是否相同',false,'與跨區故障切換無關。')]},
+  {id:'sd1-s09-q2',question:'依使用者位置把流量導向不同區域，主要目的之一是什麼？',reviewPageId:'sd1-s09-p01',explanation:'可以讓使用者連到較近、較健康的區域，降低延遲，也支援區域故障切換。',options:[O('a','把使用者導向較合適的區域',true),O('b','讓資料庫不再需要備份',false,'流量導向不能取代資料備份。'),O('c','保證跨區資料完全沒有延遲地一致',false,'跨區複寫仍有延遲與一致性取捨。'),O('d','取代所有區域內的負載平衡器',false,'全球流量分派與區域內負載平衡可以同時存在。')]},
+  {id:'sd1-s09-q3',question:'多個區域同時接受寫入時，比較容易增加哪種問題？',reviewPageId:'sd1-s09-p02',explanation:'不同區域可能同時修改同一筆資料，因此需要偵測衝突、決定哪個版本有效，並設計一致性規則。',options:[O('a','不同區域同時寫入造成資料衝突與一致性問題',true),O('b','網頁標籤數量增加',false,'與跨區寫入無關。'),O('c','網域名稱一定無法解析',false,'跨區寫入不會讓網域名稱自動失效。'),O('d','CPU 一定變成 0%',false,'沒有這種必然結果。')]},
+  {id:'sd1-s09-q4',question:'為什麼要自動化跨區部署與基礎設施設定？',reviewPageId:'sd1-s09-p02',explanation:'自動化可以降低不同區域的設定漂移與人工錯誤，讓備援環境在事故時真的能啟用。',options:[O('a','降低不同區域的設定漂移與人工錯誤',true),O('b','讓所有資料自動保持即時一致',false,'自動化部署能同步設定，不會自動解決資料一致性。'),O('c','讓訊息佇列不需要消費者',false,'佇列仍需要服務取出並處理訊息。'),O('d','保證內容傳遞網路永遠不會故障',false,'自動化部署無法保證外部服務永不故障。')]}
+]
 }
 );
 })();
