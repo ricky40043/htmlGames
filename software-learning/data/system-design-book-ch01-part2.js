@@ -6,25 +6,25 @@ chapter.sections.push(
  id:'sd1-s06',order:6,title:'快取層：降低延遲、保護下游，但別製造新的事故',duration:'28–38 分鐘',summary:'從旁路快取、存留時間、命中率、淘汰、冷啟動到一致性與故障模式，建立真正可操作的快取判斷。',
  research:[{label:'ByteByteGo — Cache section',url:'https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users'},{label:'AWS Builders’ Library — Caching challenges and strategies',url:'https://aws.amazon.com/builders-library/caching-challenges-and-strategies'}],
  pages:[
-  {id:'sd1-s06-p01',title:'什麼資料值得 Cache？先看重複使用率',blocks:[
-   {type:'lead',text:'Cache 的價值來自「同一份結果會被很多 Request 重複使用」。如果每次查詢都高度唯一，Hit Rate 很低，Cache 只會增加複雜度。'},
-   {type:'diagram',nodes:[['Request','GET product:42'],['Cache','Hit?'],['Database','Miss 才查'],['Cache Fill','存結果 + TTL']],caption:'常見 side-cache / cache-aside 思路：先查 cache；miss 時回源，再把結果寫回 cache。'},
-   {type:'bullets',items:['適合：熱門商品、設定檔、權限結果、計算昂貴且更新不頻繁的資料。','不適合：每個 Request 都不同、資料極度即時、不能接受 stale 的關鍵交易狀態。','要量測：Hit Rate、Miss Rate、downstream QPS、cache CPU/memory、eviction count。']}
+  {id:'sd1-s06-p01',title:'什麼資料值得快取？先看重複使用率',blocks:[
+   {type:'lead',text:'快取的價值來自「同一份結果會被很多請求重複使用」。如果每次查詢都不同，命中率會很低，加入快取只會增加複雜度。'},
+   {type:'diagram',nodes:[['請求','取得商品 42'],['快取','有命中嗎？'],['資料庫','沒命中才查'],['回填快取','儲存結果與存留時間']],caption:'常見的旁路快取流程：先查快取；沒命中時回到資料來源，再把結果寫回快取。'},
+   {type:'bullets',items:['適合：熱門商品、設定檔、權限結果，以及計算昂貴但更新不頻繁的資料。','不適合：每次請求都不同、必須即時反映，或不能接受短暫舊資料的關鍵交易狀態。','要量測：命中率、未命中率、下游請求量、快取 CPU／記憶體使用量與淘汰次數。']}
   ]},
   {id:'sd1-s06-p02',title:'存留時間與快取淘汰：不是資料放進去就好',blocks:[
    {type:'compare',items:[['存留時間太短','命中率下降、回源請求增加，尖峰時可能把資料庫壓垮。'],['存留時間太長','資料可能過期，修改後的舊版本會留在快取裡更久。'],['容量不足','必須設定淘汰策略，例如最近最少使用、最不常使用或先進先出，決定哪些資料先被移除。']]},
    {type:'p',text:'存留時間應由資料更新頻率，以及產品能接受資料過期多久來決定；不要憑感覺填 3600 秒。快取容量與存留時間也要用真實流量分布驗證。'},
    {type:'callout',title:'冷啟動',text:'新節點或整批快取清空後，大量請求會同時回源，可能讓下游服務瞬間承受壓力。部署與故障恢復時尤其危險，因此要考慮快取預熱、請求合併、限流或負載卸除。'}
   ]},
-  {id:'sd1-s06-p03',title:'Cache 一致性與故障：快不代表正確',blocks:[
-   {type:'stepper',steps:[['Write DB','資料先成功寫入 source of truth。'],['Invalidate / Update Cache','依策略刪除或更新對應 key。'],['Race Condition','若 DB 與 Cache 不是同一交易，並發下可能短暫不一致。'],['Failure Mode','Cache 掛掉時，要決定 fail-open 回源、serve stale、限流或降級。']]},
-   {type:'bullets',items:['Cache 不應是唯一資料來源，除非產品本身就是用 cache-like store 作 authoritative store 且有明確 durability 設計。','Cache fleet outage 時，所有 Request 同時回 DB 可能造成二次事故。','熱門 Key 失效可造成 stampede；可用 jitter TTL、locking/request coalescing、stale-while-revalidate 類策略降低衝擊。']}
+  {id:'sd1-s06-p03',title:'快取一致性與故障：快不代表正確',blocks:[
+   {type:'stepper',steps:[['寫入資料庫','資料先成功寫入真正的資料來源。'],['刪除或更新快取','依策略刪除或更新對應的鍵值。'],['並行競爭','資料庫與快取不在同一個交易中時，同時操作可能造成短暫不一致。'],['故障處理','快取掛掉時，要決定是否回源、提供舊資料、限流或降級。']]},
+   {type:'bullets',items:['除非產品本身就是具備明確持久性的快取型資料庫，否則快取不應是唯一資料來源；真正的資料來源必須能在快取遺失後重建資料。','整個快取叢集故障時，所有請求同時回到資料庫，可能造成第二次事故。','熱門鍵值失效會造成大量請求同時回源；可用存留時間隨機抖動、請求鎖／合併，以及「提供舊資料、背景重新驗證」等策略降低衝擊。']}
   ]}],
  quiz:[
-  {id:'sd1-s06-q1',question:'哪種資料最適合優先評估 Cache？',reviewPageId:'sd1-s06-p01',explanation:'高重複讀取、更新相對少、可接受短暫 stale 的資料通常最能獲得高 Hit Rate。',options:[O('a','每次 Request 都完全不同且只查一次的資料',false,'這類資料重複使用率低，cache hit rate 可能很差。'),O('b','高頻讀取、低頻更新的熱門資料',true),O('c','唯一 authoritative 的付款扣款紀錄且不能 stale',false,'你忽略了 cache stale 與 durability 風險；付款真實狀態應由可靠 source of truth 保證。'),O('d','只因為 Redis 很快所以所有資料都放',false,'技術選擇要由 access pattern 與一致性需求驅動。')]},
-  {id:'sd1-s06-q2',question:'TTL 設得過短最直接的風險？',reviewPageId:'sd1-s06-p02',explanation:'資料更頻繁過期，Miss 增加，downstream/DB QPS 上升。',options:[O('a','Hit Rate 下降、回源增加',true),O('b','資料永遠不更新',false,'TTL 短反而更常重新取得資料。'),O('c','所有 Cache 永遠塞滿',false,'短 TTL 通常會更快淘汰到期資料。'),O('d','DNS 解析失效',false,'DNS 與 application cache TTL 是不同層。')]},
-  {id:'sd1-s06-q3',question:'整個 Cache Fleet 突然清空，最值得警戒的次生問題？',reviewPageId:'sd1-s06-p02',explanation:'Cold cache 會讓大量請求同時 Miss 並回源，可能把 DB/下游打掛。',options:[O('a','大量 Cache Miss 同時打 downstream',true),O('b','HTTP method 會全部變 POST',false,'Cache 狀態不會改變 HTTP method。'),O('c','Load Balancer 自動變 Database',false,'元件責任不會因 cache flush 改變。'),O('d','所有使用者 IP 改變',false,'與 cache cold start 無關。')]},
-  {id:'sd1-s06-q4',question:'Cache 掛掉時直接讓全部流量無限制回 DB，為什麼危險？',reviewPageId:'sd1-s06-p03',explanation:'原本由 Cache 吸收的讀流量瞬間落到 DB，可能把下游壓垮，形成 cascading failure。',options:[O('a','可能造成 Cascading Failure',true),O('b','因為 DB 不支援任何讀取',false,'DB 當然支援讀，但未必能承受失去 cache 後的尖峰。'),O('c','因為 Cache 掛掉等於 DNS 掛掉',false,'是不同 failure domain。'),O('d','因為每個 Request 都會自動變成 write',false,'回源讀取仍可能是 read。')]}
+  {id:'sd1-s06-q1',question:'哪種資料最適合優先評估快取？',reviewPageId:'sd1-s06-p01',explanation:'高頻讀取、低頻更新，而且能接受短暫舊資料的資料，最容易得到高命中率。',options:[O('a','每次請求都不同，而且只會查一次的資料',false,'這類資料幾乎沒有重複讀取，快取命中率通常很低。'),O('b','高頻讀取、低頻更新，而且能接受短暫過期的熱門資料',true),O('c','唯一的付款真實紀錄，而且不能接受舊資料',false,'付款狀態需要可靠的真實來源；快取短暫過期可能造成錯誤判斷。'),O('d','只因為 Redis 很快，就把所有資料都放進去',false,'應先看資料的讀取模式、一致性與成本，不能只看工具速度。')]},
+  {id:'sd1-s06-q2',question:'存留時間設得太短，最直接的風險是什麼？',reviewPageId:'sd1-s06-p02',explanation:'資料更快過期，快取未命中增加，更多請求會回到資料庫或下游服務。',options:[O('a','命中率下降、回源請求增加',true),O('b','資料永遠不會更新',false,'存留時間越短，反而越常重新取得新資料。'),O('c','所有快取永遠塞滿',false,'存留時間短會讓資料更快到期，不是更容易永久占滿。'),O('d','網域名稱系統解析失效',false,'網域名稱系統的存留時間與應用程式快取的存留時間是不同問題。')]},
+  {id:'sd1-s06-q3',question:'整個快取叢集突然被清空，最需要警戒的次生問題是什麼？',reviewPageId:'sd1-s06-p02',explanation:'快取變冷後，大量請求同時未命中並回源，可能把資料庫或下游服務壓垮。',options:[O('a','大量快取未命中，同時回源打下游服務',true),O('b','所有請求方法都變成 POST',false,'快取狀態不會改變 HTTP 請求方法。'),O('c','負載平衡器自動變成資料庫',false,'元件的責任不會因快取清空而改變。'),O('d','所有使用者的 IP 都改變',false,'這與快取清空沒有關係。')]},
+  {id:'sd1-s06-q4',question:'快取掛掉時，直接讓全部流量無限制回到資料庫，為什麼危險？',reviewPageId:'sd1-s06-p03',explanation:'原本由快取吸收的讀取流量會瞬間落到資料庫，可能把下游壓垮，形成連鎖故障。',options:[O('a','可能造成連鎖故障',true),O('b','因為資料庫不支援任何讀取',false,'資料庫可以讀取，但未必能承受失去快取後的尖峰流量。'),O('c','因為快取掛掉等於網域名稱系統掛掉',false,'快取與網域名稱系統是不同的故障範圍。'),O('d','因為每個請求都會自動變成寫入',false,'回源通常仍是讀取，不會自動變成寫入。')]}
  ]
 },
 {

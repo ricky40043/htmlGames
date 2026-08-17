@@ -93,6 +93,13 @@
     return true;
   };
 
+  // Editorial content may already contain a deliberate form such as
+  // 「存留時間（TTL）」 or 「資料庫（Database）」。Do not wrap that alias again.
+  const alreadyLocalized = (text, index, term) => {
+    const before = text.slice(0, index).replace(/\s+$/, '');
+    return before.endsWith(`${term.zh}（`) || before.endsWith(`${term.zh}(`);
+  };
+
   function nextMatch(text, from) {
     let best = null;
     for (const entry of entries) {
@@ -104,7 +111,7 @@
     return best;
   }
 
-  function replaceTextNode(node, seen, allowLinks) {
+  function replaceTextNode(node, seen, showEnglish) {
     const text = node.nodeValue || '';
     if (!text.trim()) return;
     const frag = document.createDocumentFragment();
@@ -113,15 +120,21 @@
     while (cursor < text.length) {
       const found = nextMatch(text, cursor);
       if (!found) break;
+      const { term, alias } = found.entry;
+      if (alreadyLocalized(text, found.index, term)) {
+        if (found.index > cursor) frag.append(document.createTextNode(text.slice(cursor, found.index)));
+        frag.append(document.createTextNode(text.slice(found.index, found.index + alias.length)));
+        cursor = found.index + alias.length;
+        continue;
+      }
       changed = true;
       if (found.index > cursor) frag.append(document.createTextNode(text.slice(cursor, found.index)));
-      const { term, alias } = found.entry;
       const first = !seen.has(term.id);
       seen.add(term.id);
       const label = `${term.zh}（${term.en}）`;
       const span = document.createElement('span');
       span.className = 'book-term-plain';
-      span.textContent = first ? label : term.zh;
+      span.textContent = showEnglish && first ? label : term.zh;
       frag.appendChild(span);
       cursor = found.index + alias.length;
     }
@@ -131,19 +144,19 @@
     node.replaceWith(frag);
   }
 
-  function process(root, seen, allowLinks) {
+  function process(root, seen, showEnglish, skipQuiz = false) {
     if (!root) return;
     const skipAnchors = !root.classList?.contains('book-section-nav') && !root.classList?.contains('book-page-controls');
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const el = node.parentElement;
-        if (!el || el.closest(`script,style,pre,code${skipAnchors ? ',a' : ''}`)) return NodeFilter.FILTER_REJECT;
+        if (!el || el.closest(`script,style,pre,code${skipAnchors ? ',a' : ''}`) || (skipQuiz && el.closest('.book-section-quiz'))) return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       }
     });
     const nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
-    nodes.forEach(node => replaceTextNode(node, seen, allowLinks));
+    nodes.forEach(node => replaceTextNode(node, seen, showEnglish));
   }
 
   function run() {
@@ -153,7 +166,8 @@
 
     const seen = new Set();
     const panel = document.querySelector('.book-content-panel') || exam || page;
-    process(panel, seen, true);
+    process(panel, seen, !exam, true);
+    document.querySelectorAll('.book-section-quiz').forEach(quiz => process(quiz, new Set(), false));
     process(document.querySelector('.book-section-nav'), new Set(), false);
     document.querySelectorAll('.book-page-controls').forEach(control => process(control, new Set(), false));
     process(document.querySelector('.book-course-header'), new Set(), false);
