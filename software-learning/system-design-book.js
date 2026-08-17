@@ -101,10 +101,81 @@
   function shortSectionTitle(section) {
     const title = String(section?.title || '').trim();
     const localized = title.replace(/\s*[（(][^）)]*[）)]/g, '').trim();
-    const short = localized.split(/\s*[：:]\s*|\s*——\s*|\s+—\s+/)[0].trim();
+    const parts = localized.split(/\s*[：:]\s*|\s*——\s*|\s+—\s+/).map(part => part.trim()).filter(Boolean);
+    const generic = /^(?:step\s*\d+|requirements?|rehashing problem|question definition|先拆\s+requirements|問題定義|需求與|需求、規模)/i;
+    const short = parts.length > 1 && generic.test(parts[0]) ? parts[1] : (parts[0] || title);
     if (!short || short.length <= 24) return short || title;
     const compact = short.split(/\s+(?:vs|and)\s+|\s+與\s+|、/i)[0].trim();
     return compact || short;
+  }
+
+  function shortChapterTitle(chapter) {
+    const labels = {
+      1: '使用者規模', 2: '粗略估算', 3: '面試框架', 4: '網路限速器',
+      5: '一致性雜湊', 6: '鍵值儲存', 7: '唯一 ID', 8: '短網址',
+      9: '網路爬蟲', 10: '通知系統', 11: '動態訊息', 12: '聊天系統',
+      13: '搜尋自動補全', 14: '影片平台', 15: '雲端檔案同步', 16: '持續學習'
+    };
+    if (labels[chapter?.order]) return labels[chapter.order];
+    const title = String(chapter?.title || '').trim();
+    const short = title.split(/\s*——\s*|\s*：\s*|\s*:\s*/)[0].trim();
+    return short && short.length <= 14 ? short : title;
+  }
+
+  function teachingGuide(chapter) {
+    return window.SYSTEM_DESIGN_TEACHING_GUIDES?.[chapter?.id] || {};
+  }
+
+  function firstReadableBlock(page) {
+    const block = (page?.blocks || []).find(item => item.type === 'lead' || item.type === 'p' || item.type === 'callout');
+    if (!block) return '';
+    return String(block.text || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function pageTakeaway(page) {
+    const text = firstReadableBlock(page);
+    if (text.length <= 190) return text;
+    return `${text.slice(0, 187).replace(/[，。；、\s]+$/, '')}…`;
+  }
+
+  function renderChapterTeachingGuide(chapter) {
+    const guide = teachingGuide(chapter);
+    const target = document.querySelector('#bookChapterGuide');
+    if (!target) return;
+    target.innerHTML = guide.purpose ? `
+      <section class="book-teaching-guide book-chapter-teaching-guide">
+        <div class="book-guide-kicker">這章要怎麼學</div>
+        <h2>${esc(guide.title || '先理解問題，再記住元件')}</h2>
+        <p class="book-guide-purpose">${esc(guide.purpose)}</p>
+        <div class="book-guide-columns">
+          <div><strong>閱讀順序</strong><ol>${(guide.steps || []).map(step => `<li>${esc(step)}</li>`).join('')}</ol></div>
+          <div><strong>學完的判斷標準</strong><p>${esc(guide.outcome || '')}</p></div>
+        </div>
+      </section>` : '';
+  }
+
+  function renderSectionTeachingGuide(chapter, section, pageIdx) {
+    const target = document.querySelector('#bookLearningGuide');
+    if (!target) return;
+    const guide = teachingGuide(chapter);
+    const pages = section.pages || [];
+    const current = pages[pageIdx];
+    const firstQuestion = section.quiz?.[0]?.question || '這一節的元件要解決什麼問題？';
+    target.innerHTML = `
+      <section class="book-teaching-guide book-section-teaching-guide">
+        <div class="book-guide-kicker">本節學習路線</div>
+        <p><strong>先理解：</strong>${esc(section.summary || guide.purpose || '')}</p>
+        <div class="book-section-roadmap">
+          <div class="book-roadmap-list">
+            ${pages.map((item, index) => `<a class="${index === pageIdx ? 'active' : ''}" href="${chapterHref(chapter.id, section.id, item.id)}"><span>${index + 1}</span><div><strong>${esc(item.title)}</strong><small>${index === pageIdx ? '你正在這一步' : '前往這一步'}</small></div></a>`).join('')}
+          </div>
+          <div class="book-guide-check">
+            <strong>讀完先不要急著背</strong>
+            <p>先用自己的話回答：${esc(firstQuestion)}</p>
+            <small>目前：第 ${pageIdx + 1}/${pages.length} 步${current ? ` · ${esc(current.title)}` : ''}</small>
+          </div>
+        </div>
+      </section>`;
   }
 
   function chapterHref(chapterId, sectionId, pageId = '') {
@@ -112,6 +183,15 @@
     if (sectionId) params.set('section', sectionId);
     if (pageId) params.set('page', pageId);
     return `system-design-chapter.html?${params.toString()}`;
+  }
+
+  function chapterEdgeHref(meta, edge = 'first') {
+    const data = chapterData(meta?.id);
+    const sections = data?.sections || [];
+    const section = edge === 'last' ? sections[sections.length - 1] : sections[0];
+    const pages = section?.pages || [];
+    const page = edge === 'last' ? pages[pages.length - 1] : pages[0];
+    return section && page ? chapterHref(meta.id, section.id, page.id) : `system-design-chapter.html?chapter=${encodeURIComponent(meta?.id || '')}`;
   }
 
   function pageIndexMap(chapter) {
@@ -256,10 +336,11 @@
     const progress = chapterProgress(chapter);
 
     document.title = `第 ${chapter.order} 章｜${shortSectionTitle(section)}`;
-    document.querySelector('#bookChapterTitle').textContent = `第 ${chapter.order} 章｜${chapter.title}`;
+    document.querySelector('#bookChapterTitle').textContent = `第 ${chapter.order} 章｜${shortChapterTitle(chapter)}`;
     document.querySelector('#bookChapterSummary').textContent = chapter.subtitle;
     document.querySelector('#bookProgressText').textContent = `已完成 ${progress.completed}/${progress.total} 小節`;
     document.querySelector('#bookProgressFill').style.width = `${progress.percent}%`;
+    renderChapterTeachingGuide(chapter);
     renderCompletionControls(chapter, section, progress);
 
     document.querySelector('#bookSectionNav').innerHTML = chapter.sections.map(s => {
@@ -270,10 +351,12 @@
     document.querySelector('#bookSectionMeta').innerHTML = `<span>小節 ${section.order}/${chapter.sections.length}</span><span>${esc(section.duration)}</span><span>小節練習 ${section.quiz.length} 題</span>`;
     document.querySelector('#bookSectionTitle').textContent = shortSectionTitle(section);
     document.querySelector('#bookSectionSummary').textContent = section.summary;
+    renderSectionTeachingGuide(chapter, section, pageIdx);
 
     const pInfo = map.get(page.id);
     document.querySelector('#bookPageCounter').textContent = `第 ${chapter.order} 章教材第 ${pInfo.number} 頁 · 本小節 ${pageIdx + 1}/${section.pages.length}`;
-    document.querySelector('#bookPageStage').innerHTML = `<article class="book-page ${params.get('review') ? 'review-highlight' : ''}" id="${esc(page.id)}"><h2>${esc(page.title)}</h2>${page.blocks.map(blockHtml).join('')}</article>`;
+    const takeaway = pageTakeaway(page);
+    document.querySelector('#bookPageStage').innerHTML = `<article class="book-page ${params.get('review') ? 'review-highlight' : ''}" id="${esc(page.id)}"><h2>${esc(page.title)}</h2><div class="book-page-purpose"><strong>這頁只先回答一件事</strong><p>先找出這個做法要解決的問題，再看它怎麼運作，以及它會帶來什麼代價。</p></div>${page.blocks.map(blockHtml).join('')}${takeaway ? `<aside class="book-page-takeaway"><strong>這頁先記住</strong><p>${esc(takeaway)}</p></aside>` : ''}</article>`;
 
     const sectionIdx = chapter.sections.findIndex(s => s.id === section.id);
     const previousSection = sectionIdx > 0 ? chapter.sections[sectionIdx - 1] : null;
@@ -283,24 +366,24 @@
     const prev = pageIdx > 0 ? section.pages[pageIdx - 1] : null;
     const next = pageIdx < section.pages.length - 1 ? section.pages[pageIdx + 1] : null;
     const previousTarget = prev
-      ? { href: chapterHref(chapter.id, section.id, prev.id), label: '上一頁' }
+        ? { href: chapterHref(chapter.id, section.id, prev.id), label: '上一頁' }
       : previousSection
         ? { href: chapterHref(chapter.id, previousSection.id, previousSection.pages[previousSection.pages.length - 1]?.id), label: '上一小節' }
         : previousChapter
-          ? { href: chapterHref(previousChapter.id, previousChapter.sections[previousChapter.sections.length - 1]?.id, previousChapter.sections[previousChapter.sections.length - 1]?.pages[previousChapter.sections[previousChapter.sections.length - 1].pages.length - 1]?.id), label: '上一章' }
+          ? { href: chapterEdgeHref(previousChapter, 'last'), label: '上一章' }
           : null;
     const nextTarget = next
-      ? { href: chapterHref(chapter.id, section.id, next.id), label: '下一頁' }
+        ? { href: chapterHref(chapter.id, section.id, next.id), label: '下一頁' }
       : nextSection
         ? { href: chapterHref(chapter.id, nextSection.id, nextSection.pages[0]?.id), label: '下一小節' }
-        : nextChapter
-          ? { href: chapterHref(nextChapter.id, nextChapter.sections[0]?.id, nextChapter.sections[0]?.pages[0]?.id), label: '下一章' }
+      : nextChapter
+          ? { href: chapterEdgeHref(nextChapter, 'first'), label: '下一章' }
           : { href: `system-design-exam.html?chapter=${encodeURIComponent(chapter.id)}`, label: '進入章末考' };
     const pageDots = `<div class="book-page-dots">${section.pages.map((p, i) => `<a class="${i === pageIdx ? 'active' : ''}" href="${chapterHref(chapter.id, section.id, p.id)}" aria-label="第 ${i + 1} 頁"></a>`).join('')}</div>`;
-    const chapterBack = '<a class="button secondary book-chapter-back" href="system-design.html" aria-label="回到章節">回到章節</a>';
-    const renderPageControls = () => `${previousTarget ? `<a class="button secondary" href="${previousTarget.href}">${esc(previousTarget.label)}</a>` : '<span></span>'}${pageDots}${nextTarget ? `<a class="button" href="${nextTarget.href}">${esc(nextTarget.label)}</a>` : '<span></span>'}`;
-    document.querySelector('#bookTopControls').innerHTML = `${renderPageControls()}${chapterBack}`;
-    document.querySelector('#bookPageControls').innerHTML = `${renderPageControls()}${chapterBack}`;
+    const chapterBack = '<a class="button secondary book-chapter-back" href="system-design.html" aria-label="回到章節目錄">回到章節目錄</a>';
+    const renderPageControls = () => `<div class="book-page-control-side">${previousTarget ? `<a class="button secondary" href="${previousTarget.href}">${esc(previousTarget.label)}</a>` : '<span></span>'}</div>${pageDots}<div class="book-page-control-actions">${nextTarget ? `<a class="button" href="${nextTarget.href}">${esc(nextTarget.label)}</a>` : '<span></span>'}${chapterBack}</div>`;
+    document.querySelector('#bookTopControls').innerHTML = renderPageControls();
+    document.querySelector('#bookPageControls').innerHTML = renderPageControls();
 
     document.querySelector('#bookResearch').innerHTML = `<details><summary>本小節研究依據</summary>${(section.research || []).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noreferrer">${esc(s.label)}</a>`).join('')}</details>`;
 
@@ -317,10 +400,11 @@
     const questions = shuffle(singleReview ? [requestedQuestion] : section.quiz).map(prepareQuestion);
     const quizTitle = singleReview ? `${examReview ? '章末考' : ''}錯題複習` : '小節練習';
     const quizDescription = singleReview
-      ? '這裡只重做你剛才答錯的這一題，不會重新要求你完成整個小節。'
-      : `${questions.length} 題。送出後會逐題診斷錯誤思路，並指出應回第 ${chapter.order} 章教材第幾頁複習。`;
+      ? '這裡只重做你剛才答錯的這一題；不會重新要求你完成整個小節。'
+      : `先回想本節的因果關係，再作答 ${questions.length} 題。送出後會逐題說明錯在哪裡，並提供回教材複習的頁面。`;
     const submitLabel = singleReview ? '送出這一題' : '送出小節練習';
-    root.innerHTML = `<header><span>${quizTitle}</span><h2>${esc(shortSectionTitle(section))}</h2><p>${quizDescription}</p></header><div class="book-quiz-list">${questions.map((q, i) => renderQuestion(q, i)).join('')}</div><button class="button book-submit" type="button">${submitLabel}</button><div class="book-quiz-result" hidden></div>`;
+    const quizBridge = singleReview ? '' : `<div class="book-quiz-bridge"><strong>開始前的小結</strong><p>如果你還不能用一句話說明「這一節解決什麼問題、為什麼不能只用原本的方法」，先回到上方學習路線重看，不用急著猜。</p></div>`;
+    root.innerHTML = `<header><span>${quizTitle}</span><h2>${esc(shortSectionTitle(section))}</h2><p>${quizDescription}</p></header>${quizBridge}<div class="book-quiz-list">${questions.map((q, i) => renderQuestion(q, i)).join('')}</div><button class="button book-submit" type="button">${submitLabel}</button><div class="book-quiz-result" hidden></div>`;
 
     root.querySelector('.book-submit').onclick = () => {
       let correct = 0;
@@ -330,6 +414,7 @@
         if (r.correct) correct++;
         else wrong.push(q.id);
       });
+      window.refreshBookTerms?.();
       const score = Math.round(correct / questions.length * 100);
       const saved = singleReview ? null : saveSection(chapter.id, section.id, score, wrong);
       if (!singleReview) renderCompletionControls(chapter, section, chapterProgress(chapter));
@@ -384,6 +469,7 @@
           stats[q.difficulty].correct++;
         } else wrong.push(q.id);
       });
+      window.refreshBookTerms?.();
 
       const score = Math.round(correct / questions.length * 100);
       const saved = saveExam(chapter.id, score, { wrongQuestionIds: wrong, difficultyStats: stats });

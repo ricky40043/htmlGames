@@ -110,3 +110,241 @@
     padding-bottom: 14px;
   }
 }
+
+/* 教學導讀：每章先交代目的，每節先交代閱讀順序。 */
+.book-teaching-guide {
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(110, 168, 254, 0.25);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(110, 168, 254, 0.09), rgba(22, 22, 31, 0.72));
+}
+
+.book-guide-kicker {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.book-teaching-guide h2 {
+  margin: 6px 0 8px;
+  font-size: 1.14rem;
+}
+
+.book-teaching-guide p {
+  margin: 0;
+  color: #d7d7e2;
+  line-height: 1.75;
+}
+
+.book-guide-purpose {
+  max-width: 78ch;
+}
+
+.book-guide-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(220px, 0.7fr);
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.book-guide-columns > div {
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.book-guide-columns strong,
+.book-guide-check strong {
+  display: block;
+  margin-bottom: 7px;
+  color: #f3f3f7;
+}
+
+.book-guide-columns ol {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 22px;
+  color: #d7d7e2;
+  line-height: 1.6;
+}
+
+.book-section-teaching-guide {
+  margin-top: 16px;
+  padding: 15px;
+}
+
+.book-section-roadmap {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(210px, 0.65fr);
+  gap: 14px;
+  margin-top: 13px;
+}
+
+.book-roadmap-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 8px;
+}
+
+.book-roadmap-list a {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 11px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.book-roadmap-list a:hover,
+.book-roadmap-list a.active {
+  border-color: rgba(110, 168, 254, 0.42);
+  background: rgba(110, 168, 254, 0.1);
+}
+
+.book-roadmap-list a > span {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 999px;
+  background: rgba(110, 168, 254, 0.16);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.book-roadmap-list strong {
+  display: block;
+  overflow: hidden;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+}
+
+.book-roadmap-list small,
+.book-guide-check small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.book-guide-check {
+  padding: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(8, 8, 14, 0.28);
+}
+
+.book-page-purpose {
+  margin: -4px 0 21px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  background: rgba(110, 168, 254, 0.075);
+}
+
+.book-page-purpose strong,
+.book-page-takeaway strong {
+  display: block;
+  color: #eef3ff;
+  font-size: 0.82rem;
+}
+
+.book-page-purpose p,
+.book-page-takeaway p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+.book-page-takeaway {
+  margin-top: 24px;
+  padding: 14px 16px;
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  border-radius: 12px;
+  background: rgba(74, 222, 128, 0.06);
+}
+
+.book-quiz-bridge {
+  margin: 16px 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  border-radius: 12px;
+  background: rgba(251, 191, 36, 0.06);
+}
+
+.book-quiz-bridge strong {
+  color: #fde68a;
+}
+
+.book-quiz-bridge p {
+  margin: 5px 0 0;
+  color: #d7d7e2;
+  line-height: 1.65;
+}
+
+/* 上下導覽共用同一個穩定三欄，不再讓下一頁按鈕被撐成整條長條。 */
+.book-page-controls {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.book-page-control-side,
+.book-page-control-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.book-page-control-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.book-page-control-actions .book-chapter-back {
+  margin-left: 0;
+}
+
+.book-page-controls .book-page-control-actions .button {
+  flex: 0 0 auto;
+  width: auto !important;
+}
+
+@media (max-width: 760px) {
+  .book-guide-columns,
+  .book-section-roadmap {
+    grid-template-columns: 1fr;
+  }
+
+  .book-page-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .book-page-controls .book-page-dots {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .book-page-control-side {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .book-page-control-actions {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .book-page-control-actions .button {
+    width: 100% !important;
+  }
+}
