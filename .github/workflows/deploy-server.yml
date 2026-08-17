@@ -24,4 +24,27 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            set -e
+
+            REPO_DIR="$(find /home/ricky -maxdepth 6 -type d -name htmlGames 2>/dev/null | while read -r dir; do
+              if [ -d "$dir/.git" ]; then
+                echo "$dir"
+                break
+              fi
+            done)"
+
+            if [ -z "$REPO_DIR" ]; then
+              echo "htmlGames git repository not found under /home/ricky"
+              exit 1
+            fi
+
+            echo "== Force sync tracked files from GitHub main =="
+            echo "Repo: $REPO_DIR"
+            git -C "$REPO_DIR" fetch origin main
+            git -C "$REPO_DIR" reset --hard origin/main
+            echo "== Status before deploy =="
+            git -C "$REPO_DIR" status --short
+            echo "== Commit before deploy =="
+            git -C "$REPO_DIR" rev-parse --short HEAD
+
             /home/ricky/deployments/scripts/deploy-app.sh htmlGames
