@@ -127,6 +127,8 @@
     <button id="landscape-button" type="button">↔ 打橫顯示</button>
     <div id="status" aria-live="polite">防黑屏啟動中…</div>
 
+    <!-- 舊版 iOS / 不支援 Screen Wake Lock 的瀏覽器使用影片播放相容模式。 -->
+    <script src="https://cdn.jsdelivr.net/npm/nosleep.js@0.12.0/dist/NoSleep.min.js"></script>
     <script>
         const hoursDisplay = document.getElementById('hours');
         const minutesDisplay = document.getElementById('minutes');
@@ -138,7 +140,10 @@
         const landscapeButton = document.getElementById('landscape-button');
         const bodyElem = document.body;
 
+        const supportsNativeWakeLock = 'wakeLock' in navigator;
         let wakeLock = null;
+        let legacyNoSleep = null;
+        let legacyNoSleepEnabled = false;
         let clockTimer = null;
         let colonTimer = null;
         const BEAT_MS = 750;
@@ -191,14 +196,82 @@
 
         // 時鐘數字與冒號節拍都以目前時間重新計算，不累積 setInterval 漂移。
         scheduleClockUpdate();
-
         updateColonBeat();
 
-        // --- 2. 防休眠 (Wake Lock) 邏輯 ---
-        async function requestWakeLock(showStatus = true) {
-            if (!('wakeLock' in navigator)) {
-                if (showStatus) statusDisplay.textContent = '此瀏覽器不支援防黑屏';
+        // --- 2. 防休眠邏輯 ---
+        // 新瀏覽器：Screen Wake Lock API
+        // 舊 iOS / 舊瀏覽器：NoSleep.js 影片播放相容模式
+        function getLegacyNoSleep() {
+            if (legacyNoSleep) return legacyNoSleep;
+            if (typeof NoSleep !== 'function') return null;
+
+            legacyNoSleep = new NoSleep();
+
+            // NoSleep.js 的影片預設不必放進 DOM；但舊版 iOS 對背景媒體較挑剔，
+            // 保留一個幾乎不可見、仍位於 viewport 內的 1px 影片可提高相容性。
+            if (legacyNoSleep.noSleepVideo && !legacyNoSleep.noSleepVideo.isConnected) {
+                const video = legacyNoSleep.noSleepVideo;
+                video.setAttribute('playsinline', '');
+                video.setAttribute('webkit-playsinline', '');
+                video.style.position = 'fixed';
+                video.style.left = '0';
+                video.style.bottom = '0';
+                video.style.width = '1px';
+                video.style.height = '1px';
+                video.style.opacity = '0.01';
+                video.style.pointerEvents = 'none';
+                video.style.zIndex = '-1';
+                document.body.appendChild(video);
+            }
+
+            return legacyNoSleep;
+        }
+
+        async function enableLegacyNoSleep(showStatus = true) {
+            const noSleep = getLegacyNoSleep();
+
+            if (!noSleep) {
+                legacyNoSleepEnabled = false;
+                if (showStatus) statusDisplay.textContent = '相容模式載入失敗，請重新整理後再試';
                 return false;
+            }
+
+            try {
+                // 這一行必須直接由 click/touch 事件觸發；舊 iOS 不允許網頁載入後自動播放。
+                await noSleep.enable();
+                legacyNoSleepEnabled = true;
+                if (showStatus) statusDisplay.textContent = '防黑屏已啟動（相容模式）';
+                return true;
+            } catch (err) {
+                legacyNoSleepEnabled = false;
+                if (showStatus) statusDisplay.textContent = '相容模式啟動失敗，請再點一下畫面';
+                console.error('Legacy no-sleep failed:', err);
+                return false;
+            }
+        }
+
+        function isLegacyNoSleepActive() {
+            if (!legacyNoSleepEnabled || !legacyNoSleep) return false;
+
+            if (legacyNoSleep.noSleepVideo) {
+                return !legacyNoSleep.noSleepVideo.paused;
+            }
+
+            return legacyNoSleep.isEnabled === true;
+        }
+
+        async function requestWakeLock(showStatus = true, fromUserGesture = false) {
+            if (!supportsNativeWakeLock) {
+                if (!fromUserGesture) {
+                    if (showStatus) {
+                        statusDisplay.textContent = isLegacyNoSleepActive()
+                            ? '防黑屏已啟動（相容模式）'
+                            : '點一下畫面啟動防黑屏（相容模式）';
+                    }
+                    return isLegacyNoSleepActive();
+                }
+
+                return enableLegacyNoSleep(showStatus);
             }
 
             try {
@@ -246,6 +319,12 @@
         }
 
         async function activateLandscapeMode() {
+            // 舊 iOS 的影片播放必須保留「使用者點擊」權限，因此先啟動相容模式，
+            // 再執行 fullscreen / orientation 等可能消耗 user activation 的 await。
+            const legacyNoSleepPromise = supportsNativeWakeLock
+                ? null
+                : enableLegacyNoSleep(false);
+
             try {
                 if (!isDocumentFullscreen()) await enterFullscreen();
             } catch (err) {
@@ -253,10 +332,17 @@
             }
 
             const landscapeLocked = await lockLandscape();
-            const wakeLockEnabled = await requestWakeLock(false);
+            const wakeLockEnabled = supportsNativeWakeLock
+                ? await requestWakeLock(false, true)
+                : await legacyNoSleepPromise;
+
+            const wakeLockLabel = wakeLockEnabled
+                ? (supportsNativeWakeLock ? ' · 防黑屏已啟動' : ' · 防黑屏相容模式已啟動')
+                : '';
+
             statusDisplay.textContent = landscapeLocked
-                ? `已打橫顯示${wakeLockEnabled ? ' · 防黑屏已啟動' : ''}`
-                : `無法自動打橫，請手動旋轉${wakeLockEnabled ? ' · 防黑屏已啟動' : ''}`;
+                ? `已打橫顯示${wakeLockLabel}`
+                : `無法自動打橫，請手動旋轉${wakeLockLabel}`;
         }
 
         // 點擊空白處可切換全螢幕，並同時嘗試打橫及防黑屏。
@@ -274,17 +360,22 @@
             await activateLandscapeMode();
         });
 
-        // 預設先申請防黑屏；若瀏覽器限制自動啟動，使用者可再點按畫面或打橫按鈕。
+        // 新瀏覽器可以直接申請 Wake Lock；舊 iOS 必須等第一次使用者點擊。
         requestWakeLock();
 
-        // 回到此頁時，重新申請防黑屏。
+        // 回到此頁時同步時間。原生 Wake Lock 可重新申請；舊 iOS 若影片被系統暫停，要求再點一下。
         document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState === 'visible') {
-                // 手機背景暫停計時器後，回到頁面立即重新同步畫面。
                 scheduleClockUpdate();
                 updateColonBeat();
-                if (wakeLock === null) {
-                    await requestWakeLock();
+
+                if (supportsNativeWakeLock) {
+                    if (wakeLock === null) {
+                        await requestWakeLock();
+                    }
+                } else if (!isLegacyNoSleepActive()) {
+                    legacyNoSleepEnabled = false;
+                    statusDisplay.textContent = '點一下畫面重新啟動防黑屏（相容模式）';
                 }
             }
         });
