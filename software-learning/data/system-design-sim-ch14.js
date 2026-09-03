@@ -14,6 +14,7 @@
     ],
     months: 12,
     viewersLabel: '目前尖峰同時觀看人數估計',
+    demoLabels: { watch: '▶ 模擬觀眾看一部影片', upload: '⬆ 模擬上傳一部影片' },
     viewersAtMonth: m => Math.round(5000 * Math.pow(1.62, m)),
     components: [
       {
@@ -65,12 +66,43 @@
         ...ref('sd14-s04-p03')
       }
     ],
+    topology: {
+      viewBox: '0 0 900 460',
+      nodes: [
+        { id: 'users', kind: 'user', label: '觀眾', x: 80, y: 250 },
+        { id: 'cdn', kind: 'component', componentId: 'cdnShield', label: 'CDN Edge', x: 300, y: 120 },
+        { id: 'origin', kind: 'fixed', label: 'Origin / API', x: 300, y: 250 },
+        { id: 'transcode', kind: 'component', componentId: 'elasticTranscode', label: '轉檔 Worker Pool', x: 520, y: 250 },
+        { id: 'storage', kind: 'fixed', label: 'Storage', x: 740, y: 250 },
+        { id: 'regionB', kind: 'component', componentId: 'multiRegion', label: '備援機房', x: 740, y: 120, region: '備援區域' },
+        { id: 'retryBadge', kind: 'component', componentId: 'retryBudget', label: '重試／DLQ', x: 420, y: 400, size: 'small' },
+        { id: 'publishBadge', kind: 'component', componentId: 'idempotentPublish', label: '冪等發布', x: 620, y: 400, size: 'small' },
+        { id: 'hotColdBadge', kind: 'component', componentId: 'hotColdTier', label: '冷熱分層', x: 800, y: 340, size: 'small' }
+      ],
+      edges: [
+        { from: 'users', to: 'cdn' },
+        { from: 'cdn', to: 'origin' },
+        { from: 'origin', to: 'transcode' },
+        { from: 'transcode', to: 'storage' },
+        { from: 'storage', to: 'cdn' },
+        { from: 'origin', to: 'regionB', requiresComponent: 'multiRegion' },
+        { from: 'origin', to: 'retryBadge', kind: 'stub', requiresComponent: 'retryBudget' },
+        { from: 'transcode', to: 'publishBadge', kind: 'stub', requiresComponent: 'idempotentPublish' },
+        { from: 'storage', to: 'hotColdBadge', kind: 'stub', requiresComponent: 'hotColdTier' }
+      ],
+      computeFlow: (kind, active) => {
+        if (kind === 'upload') return ['users', 'origin', 'transcode', 'storage'];
+        if (active.has('cdnShield')) return ['users', 'cdn', 'users'];
+        return ['users', 'cdn', 'origin', 'storage', 'cdn', 'users'];
+      }
+    },
     events: [
       {
         month: 2,
         id: 'uploadSpike',
         title: '開學／連假上傳潮',
         relevantComponents: ['elasticTranscode'],
+        demoFlow: ['users', 'origin', 'transcode'],
         narrative: '大量使用者同時上傳影片，轉檔佇列瞬間堆了平常 8 倍的工作。',
         resolve: active => {
           if (active.has('elasticTranscode')) {
@@ -84,6 +116,7 @@
         id: 'viralHit',
         title: '一支影片被大帳號轉發',
         relevantComponents: ['cdnShield', 'retryBudget'],
+        demoFlow: ['users', 'cdn', 'origin', 'retryBadge'],
         narrative: '一支平常一天幾百次觀看的影片，一小時內被轉發到瞬間 60 倍流量。',
         resolve: active => {
           if (active.has('cdnShield')) {
@@ -105,6 +138,7 @@
         id: 'regionOutage',
         title: '機房停電 30 分鐘',
         relevantComponents: ['multiRegion'],
+        demoFlow: ['users', 'origin', 'regionB'],
         narrative: '其中一個資料中心因電力設施故障離線，所有服務瞬間中斷。',
         resolve: active => {
           if (active.has('multiRegion')) {
@@ -118,6 +152,7 @@
         id: 'costAudit',
         title: '投資人要求砍 20% 儲存成本',
         relevantComponents: ['hotColdTier'],
+        severity: 'cost',
         narrative: '影片庫已經累積大量早期熱門、現在幾乎沒人看的舊影片，儲存帳單越來越高。',
         resolve: active => {
           if (active.has('hotColdTier')) {
@@ -131,6 +166,7 @@
         id: 'duplicateEvent',
         title: '佇列重送轉檔完成事件',
         relevantComponents: ['idempotentPublish'],
+        demoFlow: ['users', 'origin', 'transcode', 'publishBadge'],
         narrative: '訊息佇列在網路抖動後重送了一批「轉檔完成」事件。',
         resolve: active => {
           if (active.has('idempotentPublish')) {
@@ -144,6 +180,7 @@
         id: 'finale',
         title: '跨年直播倒數＋上傳尖峰同時發生',
         relevantComponents: ['cdnShield', 'elasticTranscode', 'multiRegion'],
+        demoFlow: ['users', 'cdn', 'origin', 'transcode', 'regionB'],
         narrative: '跨年夜：全站最大流量的直播式觀看，加上大量使用者同時上傳跨年影片，任何一個環節撐不住都會被放大。',
         resolve: active => {
           const shields = ['cdnShield', 'elasticTranscode', 'multiRegion'].filter(id => active.has(id)).length;

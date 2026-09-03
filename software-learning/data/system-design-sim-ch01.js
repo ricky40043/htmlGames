@@ -16,6 +16,7 @@
     uptimeLabel: '可用率 Uptime',
     qoeLabel: '使用者體驗 UX',
     viewersLabel: '目前尖峰同時上線人數估計',
+    demoLabels: { watch: '▶ 模擬使用者瀏覽商品', upload: '🛒 模擬下單結帳' },
     viewersAtMonth: m => Math.round(1000 * Math.pow(1.85, m)),
     components: [
       {
@@ -67,12 +68,42 @@
         ...ref('sd1-s09-p01')
       }
     ],
+    topology: {
+      viewBox: '0 0 900 460',
+      nodes: [
+        { id: 'users', kind: 'user', label: '顧客', x: 80, y: 250 },
+        { id: 'cdn', kind: 'component', componentId: 'cdn', label: 'CDN', x: 280, y: 110 },
+        { id: 'loadBalancer', kind: 'component', componentId: 'loadBalancer', label: 'Load Balancer', x: 280, y: 250 },
+        { id: 'multiRegion', kind: 'component', componentId: 'multiRegion', label: '備援機房', x: 280, y: 400, region: '備援區域' },
+        { id: 'appServer', kind: 'fixed', label: 'App Server 群', x: 500, y: 250 },
+        { id: 'appCache', kind: 'component', componentId: 'appCache', label: '應用快取', x: 500, y: 110 },
+        { id: 'statelessSession', kind: 'component', componentId: 'statelessSession', label: '共用 Session Store', x: 500, y: 400 },
+        { id: 'dbPrimary', kind: 'fixed', label: '主資料庫', x: 720, y: 250 },
+        { id: 'dbReplica', kind: 'component', componentId: 'dbReplica', label: 'DB 讀取複本', x: 720, y: 110 }
+      ],
+      edges: [
+        { from: 'users', to: 'cdn' },
+        { from: 'cdn', to: 'loadBalancer' },
+        { from: 'loadBalancer', to: 'appServer' },
+        { from: 'loadBalancer', to: 'multiRegion', requiresComponent: 'multiRegion' },
+        { from: 'appServer', to: 'appCache', kind: 'stub', requiresComponent: 'appCache' },
+        { from: 'appServer', to: 'statelessSession', kind: 'stub', requiresComponent: 'statelessSession' },
+        { from: 'appServer', to: 'dbPrimary' },
+        { from: 'dbPrimary', to: 'dbReplica', requiresComponent: 'dbReplica' }
+      ],
+      computeFlow: (kind, active) => {
+        if (kind === 'upload') return ['users', 'cdn', 'loadBalancer', 'appServer', 'dbPrimary'];
+        if (active.has('appCache')) return ['users', 'cdn', 'loadBalancer', 'appServer'];
+        return ['users', 'cdn', 'loadBalancer', 'appServer', 'dbPrimary', 'appServer'];
+      }
+    },
     events: [
       {
         month: 2,
         id: 'flashSale',
         title: '週年慶促銷開賣，流量瞬間暴增',
         relevantComponents: ['loadBalancer'],
+        demoFlow: ['users', 'cdn', 'loadBalancer', 'appServer'],
         narrative: '促銷一開賣，同時湧入的使用者是平常的 10 倍，全部打在同一台 App Server 上。',
         resolve: active => {
           if (active.has('loadBalancer')) {
@@ -85,7 +116,8 @@
         month: 4,
         id: 'hotProduct',
         title: '爆款商品頁被瘋狂重複查詢',
-        relevantComponents: ['dbReplica', 'appCache'],
+        relevantComponents: ['appCache', 'dbReplica'],
+        demoFlow: ['users', 'cdn', 'loadBalancer', 'appServer', 'appCache'],
         narrative: '一支影片帶貨讓同一個商品頁被數十萬次重複查詢，資料庫的讀取壓力瞬間暴增。',
         resolve: active => {
           const hasReplica = active.has('dbReplica');
@@ -103,7 +135,8 @@
         month: 6,
         id: 'powerOutage',
         title: '機房電力設施故障，壞了 3 台伺服器',
-        relevantComponents: ['loadBalancer', 'multiRegion'],
+        relevantComponents: ['multiRegion', 'loadBalancer'],
+        demoFlow: ['users', 'loadBalancer', 'multiRegion'],
         narrative: '機房的電力設施半夜故障，同時有 3 台 App Server 直接離線，且在天亮前都無法修復。',
         resolve: active => {
           const hasLB = active.has('loadBalancer');
@@ -122,6 +155,7 @@
         id: 'sessionDrop',
         title: '擴容時使用者被強制登出',
         relevantComponents: ['statelessSession'],
+        demoFlow: ['users', 'loadBalancer', 'appServer', 'statelessSession'],
         narrative: '為了應付成長中的流量而加開新的 App Server 並重新調整部署，過程中有伺服器被替換掉。',
         resolve: active => {
           if (active.has('statelessSession')) {
@@ -135,6 +169,7 @@
         id: 'bandwidthSpike',
         title: '行銷活動帶來大量圖片與影片流量',
         relevantComponents: ['cdn'],
+        demoFlow: ['users', 'cdn'],
         narrative: '新一波行銷活動大量使用商品影片與高解析圖片，Origin 的頻寬帳單與延遲同時飆高。',
         resolve: active => {
           if (active.has('cdn')) {
@@ -148,6 +183,7 @@
         id: 'finale',
         title: '雙 11：促銷、直播帶貨、機房電力不穩三重疊加',
         relevantComponents: ['loadBalancer', 'dbReplica', 'cdn'],
+        demoFlow: ['users', 'cdn', 'loadBalancer', 'appServer', 'dbReplica'],
         narrative: '全年最大檔期：促銷流量、直播帶貨的商品頁查詢、加上機房電力還沒完全修好，三個壓力同時出現在同一個晚上。',
         resolve: active => {
           const shields = ['loadBalancer', 'dbReplica', 'cdn'].filter(id => active.has(id)).length;

@@ -15,6 +15,7 @@
     months: 12,
     qoeLabel: '資料完整度 Integrity',
     viewersLabel: '目前同步中的裝置數估計',
+    demoLabels: { watch: '▶ 模擬裝置同步變更', upload: '⬆ 模擬上傳一個檔案' },
     viewersAtMonth: m => Math.round(2000 * Math.pow(1.55, m)),
     components: [
       {
@@ -66,12 +67,42 @@
         ...ref('sd15-s12-p01')
       }
     ],
+    topology: {
+      viewBox: '0 0 900 500',
+      nodes: [
+        { id: 'users', kind: 'user', label: '裝置', x: 80, y: 270 },
+        { id: 'uploadGateway', kind: 'component', componentId: 'resumableUpload', label: '上傳閘道', x: 280, y: 150 },
+        { id: 'blockSyncBadge', kind: 'component', componentId: 'blockSync', label: '區塊同步', x: 280, y: 400, size: 'small' },
+        { id: 'syncEngine', kind: 'fixed', label: '同步服務', x: 500, y: 270 },
+        { id: 'changeCursorBadge', kind: 'component', componentId: 'changeCursor', label: '變更游標', x: 500, y: 120, size: 'small' },
+        { id: 'aclBadge', kind: 'component', componentId: 'aclEnforcement', label: '權限強制檢查', x: 500, y: 420, size: 'small' },
+        { id: 'metadataStore', kind: 'fixed', label: 'Metadata Store', x: 720, y: 270 },
+        { id: 'conflictBadge', kind: 'component', componentId: 'conflictResolution', label: '衝突偵測', x: 720, y: 120, size: 'small' },
+        { id: 'regionB', kind: 'component', componentId: 'multiRegionDurable', label: '備援機房', x: 720, y: 420, region: '備援區域' }
+      ],
+      edges: [
+        { from: 'users', to: 'uploadGateway' },
+        { from: 'uploadGateway', to: 'blockSyncBadge', kind: 'stub', requiresComponent: 'blockSync' },
+        { from: 'uploadGateway', to: 'syncEngine' },
+        { from: 'syncEngine', to: 'changeCursorBadge', kind: 'stub', requiresComponent: 'changeCursor' },
+        { from: 'syncEngine', to: 'aclBadge', kind: 'stub', requiresComponent: 'aclEnforcement' },
+        { from: 'syncEngine', to: 'metadataStore' },
+        { from: 'metadataStore', to: 'conflictBadge', kind: 'stub', requiresComponent: 'conflictResolution' },
+        { from: 'metadataStore', to: 'regionB', requiresComponent: 'multiRegionDurable' }
+      ],
+      computeFlow: (kind, active) => {
+        if (kind === 'upload') return ['users', 'uploadGateway', 'syncEngine', 'metadataStore'];
+        if (active.has('changeCursor')) return ['users', 'syncEngine', 'users'];
+        return ['users', 'syncEngine', 'metadataStore', 'syncEngine', 'users'];
+      }
+    },
     events: [
       {
         month: 2,
         id: 'uploadRush',
         title: '學期報告與工作截止日同時湧入',
         relevantComponents: ['resumableUpload'],
+        demoFlow: ['users', 'uploadGateway', 'syncEngine'],
         narrative: '大量使用者在同一週上傳大型簡報與影片檔，行動網路環境下斷線頻繁。',
         resolve: active => {
           if (active.has('resumableUpload')) {
@@ -85,6 +116,7 @@
         id: 'storageBill',
         title: '儲存與頻寬帳單暴增',
         relevantComponents: ['blockSync'],
+        severity: 'cost',
         narrative: '設計師與工程團隊習慣對同一個大檔案做小幅修改後儲存，例如編輯 8GB 的影片專案檔。',
         resolve: active => {
           if (active.has('blockSync')) {
@@ -98,6 +130,7 @@
         id: 'pushOutage',
         title: '推播通知服務中斷 6 小時',
         relevantComponents: ['changeCursor'],
+        demoFlow: ['users', 'syncEngine', 'changeCursorBadge'],
         narrative: '第三方推播服務大規模中斷，裝置收不到「有新變更」的訊號。',
         resolve: active => {
           if (active.has('changeCursor')) {
@@ -111,6 +144,7 @@
         id: 'offlineConflict',
         title: '兩位主管離線同時修改同一份合約',
         relevantComponents: ['conflictResolution'],
+        demoFlow: ['users', 'syncEngine', 'metadataStore', 'conflictBadge'],
         narrative: '業務與法務各自在飛機上離線編輯同一份重要合約，落地後同時恢復連線同步。',
         resolve: active => {
           if (active.has('conflictResolution')) {
@@ -124,6 +158,7 @@
         id: 'linkLeak',
         title: '離職員工的分享連結沒有立即失效',
         relevantComponents: ['aclEnforcement'],
+        demoFlow: ['users', 'syncEngine', 'aclBadge'],
         narrative: '一名離職員工的個人資料夾分享連結被意外轉發，管理員在事後才嘗試撤銷權限。',
         resolve: active => {
           if (active.has('aclEnforcement')) {
@@ -137,6 +172,7 @@
         id: 'finale',
         title: '區域機房故障＋數萬台裝置同時重新連線',
         relevantComponents: ['multiRegionDurable', 'changeCursor'],
+        demoFlow: ['users', 'syncEngine', 'regionB', 'changeCursorBadge'],
         narrative: '主要區域機房因網路設施故障離線，數萬台原本連線中的裝置同時嘗試重新連線並要求同步最新狀態。',
         resolve: active => {
           const hasRegion = active.has('multiRegionDurable');
