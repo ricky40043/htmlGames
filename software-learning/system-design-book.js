@@ -303,7 +303,11 @@
         detail = `${data.sections.length} 小節 · ${data.sections.reduce((n, s) => n + s.quiz.length, 0)} 題小節練習 · ${data.finalExam.length} 題章末考`;
         cls = 'ready';
       }
-      return `<a class="book-chapter-card ${cls}" href="system-design-chapter.html?chapter=${encodeURIComponent(meta.id)}"><div class="chapter-number">第 ${meta.order} 章</div><div><h2>${esc(meta.title)}</h2><p>${esc(detail)}</p></div><span>${esc(status)}</span></a>`;
+      const simBadge = meta.simulator ? `<a class="book-sim-badge" href="${esc(meta.simulator)}">🎮 模擬關卡</a>` : '';
+      return `<div class="book-chapter-row">
+        <a class="book-chapter-card ${cls}" href="system-design-chapter.html?chapter=${encodeURIComponent(meta.id)}"><div class="chapter-number">第 ${meta.order} 章</div><div><h2>${esc(meta.title)}</h2><p>${esc(detail)}</p></div><span>${esc(status)}</span></a>
+        ${simBadge}
+      </div>`;
     }).join('');
   }
 
@@ -476,8 +480,10 @@
       const result = document.querySelector('#bookExamResult');
       result.hidden = false;
       const nextMeta = catalog().find(c => c.order === chapter.order + 1);
+      const currentMeta = chapterMeta(chapter.id);
+      const simCta = score >= PASS_SCORE && currentMeta?.simulator ? `<a class="button" href="${esc(currentMeta.simulator)}">🎮 挑戰本章模擬關卡</a>` : '';
       const statHtml = groups.map(d => `<div><small>${DIFF_LABEL[d]}</small><strong>${stats[d].correct}/${stats[d].total} · ${stats[d].total ? Math.round(stats[d].correct / stats[d].total * 100) : 0}%</strong></div>`).join('');
-      result.innerHTML = `<div class="book-result-score">${score} 分</div><p>${score >= PASS_SCORE ? `✅ 第 ${chapter.order} 章通過` : `尚未通過第 ${chapter.order} 章；先依錯題連結回教材複習。`}</p><div class="difficulty-result-grid">${statHtml}</div><p>答對 ${correct}/${questions.length} · 章末考 ${saved.attempts} 次 · 最高 ${saved.bestScore} 分</p><div class="result-actions"><a class="button secondary" href="system-design-chapter.html?chapter=${chapter.id}">回到第 ${chapter.order} 章</a>${nextMeta ? `<a class="button" href="system-design-chapter.html?chapter=${nextMeta.id}">進入下一章</a>` : `<a class="button" href="system-design.html">完成全書</a>`}<button class="button secondary" type="button" onclick="location.reload()">重新抽題再考</button></div>`;
+      result.innerHTML = `<div class="book-result-score">${score} 分</div><p>${score >= PASS_SCORE ? `✅ 第 ${chapter.order} 章通過` : `尚未通過第 ${chapter.order} 章；先依錯題連結回教材複習。`}</p><div class="difficulty-result-grid">${statHtml}</div><p>答對 ${correct}/${questions.length} · 章末考 ${saved.attempts} 次 · 最高 ${saved.bestScore} 分</p><div class="result-actions">${simCta}<a class="button secondary" href="system-design-chapter.html?chapter=${chapter.id}">回到第 ${chapter.order} 章</a>${nextMeta ? `<a class="button" href="system-design-chapter.html?chapter=${nextMeta.id}">進入下一章</a>` : `<a class="button" href="system-design.html">完成全書</a>`}<button class="button secondary" type="button" onclick="location.reload()">重新抽題再考</button></div>`;
       document.querySelector('#bookExamSubmit').disabled = true;
       result.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
