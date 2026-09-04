@@ -33,9 +33,9 @@
         desc: 'API 伺服器是無狀態的，單台當機時負載平衡器能把流量導到其他伺服器——差別在於備援容量是「隨時待命」還是「當下才開」。',
         ...ref('sd14-s02-p01'),
         options: [
-          OFF,
-          { id: 'autoScale', label: '自動擴縮容（觸發後約 3–5 分鐘生效）', cost: 1, desc: '負載升高時自動開新機器，成本較低，但生效前這幾分鐘容量會偏緊。' },
-          { id: 'warmStandby', label: '熱備援（固定多開 2 台待命）', cost: 3, desc: '隨時有備援容量可以立即接手，幾乎無感，但平常就要多付這些機器的錢。' }
+          { ...OFF, instances: 1 },
+          { id: 'autoScale', label: '自動擴縮容（觸發後約 3–5 分鐘生效）', cost: 1, instances: 2, desc: '負載升高時自動開新機器，成本較低，但生效前這幾分鐘容量會偏緊。' },
+          { id: 'warmStandby', label: '熱備援（固定多開 2 台待命）', cost: 3, instances: 3, desc: '隨時有備援容量可以立即接手，幾乎無感，但平常就要多付這些機器的錢。' }
         ]
       },
       {
@@ -69,9 +69,9 @@
         desc: '任務工作程序當機時，任務排程器可以把工作重新指派給其他工作程序——差別在於重派後是「從頭重轉」還是「接著中斷點繼續」。',
         ...ref('sd14-s09-p01'),
         options: [
-          OFF,
-          { id: 'reassign', label: '偵測＋重新指派（從頭重轉）', cost: 2, desc: '換一個工作程序處理，但沒有進度紀錄，只能整個任務重來。' },
-          { id: 'checkpointResume', label: '重新指派＋定期 Checkpoint', cost: 4, desc: '額外維護處理進度快照，換人接手後可以從中斷點繼續，幾乎不浪費已完成的工作。' }
+          { ...OFF, instances: 1 },
+          { id: 'reassign', label: '偵測＋重新指派（從頭重轉）', cost: 2, instances: 2, desc: '換一個工作程序處理，但沒有進度紀錄，只能整個任務重來。' },
+          { id: 'checkpointResume', label: '重新指派＋定期 Checkpoint', cost: 4, instances: 3, desc: '額外維護處理進度快照，換人接手後可以從中斷點繼續，幾乎不浪費已完成的工作。' }
         ]
       },
       {
@@ -100,21 +100,23 @@
       }
     ],
     topology: {
-      viewBox: '0 0 900 460',
+      viewBox: '0 0 1000 460',
       nodes: [
         { id: 'users', kind: 'user', label: '觀眾', x: 80, y: 250, arriveLabel: '使用者裝置收到回應' },
         { id: 'cdn', kind: 'component', componentId: 'cdnPopularOnly', label: 'CDN', x: 300, y: 120, arriveLabel: '檢查熱門內容是否命中 Edge 快取' },
-        { id: 'apiServer', kind: 'component', componentId: 'apiRedundancy', label: 'API 伺服器', x: 300, y: 250, arriveLabel: '驗證請求並決定下一步路由' },
-        { id: 'transcodeArch', kind: 'component', componentId: 'transcodeResilience', label: '轉碼架構', x: 520, y: 250, arriveLabel: 'DAG 排程器指派任務給工作程序' },
-        { id: 'storage', kind: 'fixed', label: '儲存系統', x: 740, y: 250, arriveLabel: '寫入或讀取原始／已轉碼影片' },
-        { id: 'metadataCache', kind: 'component', componentId: 'cacheReplica', label: 'Metadata 快取', x: 740, y: 120, arriveLabel: '從 Metadata 快取節點取得資料' },
+        { id: 'loadBalancer', kind: 'fixed', label: 'Load Balancer', x: 300, y: 250, arriveLabel: '健康檢查後把請求導向其中一台 API 伺服器' },
+        { id: 'apiServer', kind: 'component', componentId: 'apiRedundancy', label: 'API 伺服器', x: 500, y: 250, pool: true, arriveLabel: '驗證請求並決定下一步路由' },
+        { id: 'transcodeArch', kind: 'component', componentId: 'transcodeResilience', label: '轉碼架構', x: 700, y: 250, pool: true, arriveLabel: 'DAG 排程器指派任務給某一台工作程序' },
+        { id: 'storage', kind: 'fixed', label: '儲存系統', x: 900, y: 250, arriveLabel: '寫入或讀取原始／已轉碼影片' },
+        { id: 'metadataCache', kind: 'component', componentId: 'cacheReplica', label: 'Metadata 快取', x: 700, y: 120, arriveLabel: '從 Metadata 快取節點取得資料' },
         { id: 'preSignedBadge', kind: 'component', componentId: 'preSignedUpload', label: '預簽名直傳', x: 420, y: 400, size: 'small', arriveLabel: '直接對原始儲存系統上傳，略過 API 伺服器' },
-        { id: 'metadataDB', kind: 'component', componentId: 'dbMasterSlave', label: 'Metadata 資料庫', x: 620, y: 400, size: 'small', arriveLabel: '讀取或寫入 Metadata 資料庫' },
-        { id: 'uploadBadge', kind: 'component', componentId: 'resumableUpload', label: '斷點續傳', x: 800, y: 340, size: 'small', arriveLabel: '檢查已成功的位元組位置' }
+        { id: 'metadataDB', kind: 'component', componentId: 'dbMasterSlave', label: 'Metadata 資料庫', x: 600, y: 400, size: 'small', arriveLabel: '讀取或寫入 Metadata 資料庫' },
+        { id: 'uploadBadge', kind: 'component', componentId: 'resumableUpload', label: '斷點續傳', x: 900, y: 340, size: 'small', arriveLabel: '檢查已成功的位元組位置' }
       ],
       edges: [
         { from: 'users', to: 'cdn' },
-        { from: 'cdn', to: 'apiServer' },
+        { from: 'cdn', to: 'loadBalancer' },
+        { from: 'loadBalancer', to: 'apiServer' },
         { from: 'apiServer', to: 'transcodeArch' },
         { from: 'transcodeArch', to: 'storage' },
         { from: 'storage', to: 'cdn' },
@@ -127,7 +129,7 @@
         if (kind === 'upload') {
           return ctx.has('preSignedUpload')
             ? ['users', 'storage', 'transcodeArch', 'storage']
-            : ['users', 'apiServer', 'storage', 'transcodeArch', 'storage'];
+            : ['users', 'loadBalancer', 'apiServer', 'storage', 'transcodeArch', 'storage'];
         }
         return ['users', 'cdn', 'storage', 'cdn', 'users'];
       }
@@ -145,7 +147,7 @@
         id: 'dbMasterDown',
         title: 'Metadata 主資料庫（Master）當機',
         relevantComponents: ['dbMasterSlave'],
-        demoFlow: ['users', 'apiServer', 'metadataDB'],
+        demoFlow: ['users', 'loadBalancer', 'apiServer', 'metadataDB'],
         narrative: '負責寫入的 Metadata 資料庫 Master 節點突然離線，所有需要更新資料的操作都指向它。',
         resolve: ctx => {
           const choice = ctx.get('dbMasterSlave');
@@ -159,7 +161,7 @@
         id: 'apiServerDown',
         title: '一台 API 伺服器當機',
         relevantComponents: ['apiRedundancy'],
-        demoFlow: ['users', 'apiServer'],
+        demoFlow: ['users', 'loadBalancer', 'apiServer'],
         narrative: '其中一台 API 伺服器硬體故障離線，這台伺服器原本承擔的請求全部需要別人接手。',
         resolve: ctx => {
           const choice = ctx.get('apiRedundancy');
@@ -173,7 +175,7 @@
         id: 'workerStuck',
         title: '轉碼工作程序當機，任務卡死',
         relevantComponents: ['transcodeResilience'],
-        demoFlow: ['users', 'apiServer', 'storage', 'transcodeArch'],
+        demoFlow: ['users', 'loadBalancer', 'apiServer', 'storage', 'transcodeArch'],
         narrative: '一批影片正在轉碼時，負責處理的任務工作程序當機，任務原本應該要有人接手。',
         resolve: ctx => {
           const choice = ctx.get('transcodeResilience');
@@ -201,7 +203,7 @@
         id: 'cacheNodeDown',
         title: 'Metadata 快取節點當機',
         relevantComponents: ['cacheReplica'],
-        demoFlow: ['users', 'apiServer', 'metadataCache'],
+        demoFlow: ['users', 'loadBalancer', 'apiServer', 'metadataCache'],
         narrative: '其中一個 Metadata 快取節點硬體故障，這個節點原本保存的熱門資料瞬間消失。',
         resolve: ctx => {
           const choice = ctx.get('cacheReplica');
@@ -215,7 +217,7 @@
         id: 'finale',
         title: '跨年夜：流量暴增＋快取不穩＋轉碼工作程序同時出狀況',
         relevantComponents: ['apiRedundancy', 'cacheReplica', 'transcodeResilience'],
-        demoFlow: ['users', 'apiServer', 'metadataCache', 'storage', 'transcodeArch'],
+        demoFlow: ['users', 'loadBalancer', 'apiServer', 'metadataCache', 'storage', 'transcodeArch'],
         narrative: '跨年夜：全站最大流量同時考驗 API 容量、Metadata 快取穩定性與轉碼管線，任何一環撐不住都會被放大。',
         resolve: ctx => {
           const shields = ['apiRedundancy', 'cacheReplica', 'transcodeResilience'].filter(id => ctx.has(id)).length;

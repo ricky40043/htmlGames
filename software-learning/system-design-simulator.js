@@ -193,24 +193,46 @@
     }).join('');
   }
 
+  // A node whose current option represents "N instances behind this point" (e.g. an API
+  // server pool: off = one fragile server, a richer option = several) is laid out as a small
+  // horizontal cluster instead of one circle — this is what makes "I added another server"
+  // visible, and lets a token land on a specific, randomly-picked instance instead of an
+  // abstract single dot.
+  function clusterPositions(sim, state, node) {
+    if (!node.pool) return [{ x: node.x, y: node.y }];
+    const opt = currentOption(sim, node.componentId, state);
+    const count = Math.max(1, opt.instances || 1);
+    const spacing = 26;
+    const startX = node.x - (spacing * (count - 1)) / 2;
+    return Array.from({ length: count }, (_, i) => ({ x: startX + i * spacing, y: node.y }));
+  }
+
+  function nodeInnerSvg(sim, state, n, interactive) {
+    const isComponent = n.kind === 'component';
+    const on = nodeIsOn(sim, state, n);
+    const r = n.pool ? 13 : n.size === 'small' ? 15 : n.kind === 'user' ? 25 : 23;
+    const labelOffset = n.size === 'small' ? 15 : n.kind === 'user' ? 25 : 23;
+    const positions = clusterPositions(sim, state, n);
+    const opt = isComponent ? currentOption(sim, n.componentId, state) : null;
+    const countNote = n.pool ? `（${positions.length} 台）` : '';
+    const costText = opt ? `${opt.cost > 0 ? '+' : ''}${opt.cost}/月 · ${opt.label}${countNote}` : '';
+    const badge = n.kind === 'user' ? `<text class="sim-topo-badge" x="${n.x}" y="${n.y + labelOffset + 16}">已服務 ${numFmt(state.usersServed || 0)} 人</text>` : '';
+    const circles = positions.map(p => `<circle cx="${p.x}" cy="${p.y}" r="${r}"/>`).join('');
+    const marks = isComponent ? positions.map(p => `<text class="sim-topo-mark" x="${p.x}" y="${p.y + 5}">${on ? '✓' : '✕'}</text>`).join('') : '';
+    return `${circles}${marks}
+        <text class="sim-topo-label" x="${n.x}" y="${n.y + labelOffset + 14}">${esc(n.label)}</text>
+        ${costText ? `<text class="sim-topo-cost" x="${n.x}" y="${n.y - labelOffset - 6}">${esc(costText)}</text>` : ''}
+        ${badge}`;
+  }
+
   function nodesSvg(sim, state, interactive) {
     const topo = sim.topology;
     return topo.nodes.map(n => {
       const isComponent = n.kind === 'component';
       const on = nodeIsOn(sim, state, n);
-      const r = n.size === 'small' ? 15 : n.kind === 'user' ? 25 : 23;
-      const cls = ['sim-topo-node', n.kind, on ? 'on' : 'off', isComponent && interactive ? 'clickable' : ''].filter(Boolean).join(' ');
-      const opt = isComponent ? currentOption(sim, n.componentId, state) : null;
-      const costText = opt ? `${opt.cost > 0 ? '+' : ''}${opt.cost}/月 · ${opt.label}` : '';
-      const badge = n.kind === 'user' ? `<text class="sim-topo-badge" x="${n.x}" y="${n.y + r + 16}">已服務 ${numFmt(state.usersServed || 0)} 人</text>` : '';
+      const cls = ['sim-topo-node', n.kind, on ? 'on' : 'off', isComponent && interactive ? 'clickable' : '', n.pool ? 'pool' : ''].filter(Boolean).join(' ');
       const attrs = isComponent && interactive ? `role="button" tabindex="0" data-toggle="${esc(n.componentId)}"` : '';
-      return `<g class="${cls}" data-node="${esc(n.id)}" ${attrs}>
-        <circle cx="${n.x}" cy="${n.y}" r="${r}"/>
-        <text class="sim-topo-mark" x="${n.x}" y="${n.y + 5}">${isComponent ? (on ? '✓' : '✕') : ''}</text>
-        <text class="sim-topo-label" x="${n.x}" y="${n.y + r + 14}">${esc(n.label)}</text>
-        ${costText ? `<text class="sim-topo-cost" x="${n.x}" y="${n.y - r - 6}">${esc(costText)}</text>` : ''}
-        ${badge}
-      </g>`;
+      return `<g class="${cls}" data-node="${esc(n.id)}" ${attrs}>${nodeInnerSvg(sim, state, n, interactive)}</g>`;
     }).join('');
   }
 
@@ -322,13 +344,21 @@
     return { circle, stop: () => clearInterval(timer) };
   }
 
-  function waypointsFor(topo, nodeIds) {
-    return nodeIds.map(id => findNode(topo, id)).filter(Boolean).map(n => ({ x: n.x, y: n.y }));
+  // Picks ONE instance position per pool node the flow passes through (a different random
+  // server each time), so a token visibly lands on a specific box instead of an abstract point.
+  function waypointsFor(sim, state, nodeIds) {
+    const topo = sim.topology;
+    return nodeIds.map(id => findNode(topo, id)).filter(Boolean).map(n => {
+      const positions = clusterPositions(sim, state, n);
+      return positions[Math.floor(Math.random() * positions.length)];
+    });
   }
 
   // Cycling a capability's option used to trigger a full render() — that wiped the trace log,
   // killed any in-flight token animation, and flashed the whole screen on every click. This
-  // updates only the node, its edges, and its legend row in place.
+  // updates only the node, its edges, and its legend row in place. For pool nodes the instance
+  // *count* can change between options, so the node's inner markup is rebuilt (still scoped to
+  // just this one <g>, not the whole screen) rather than patched field-by-field.
   function updateComponentVisual(root, sim, state, componentId) {
     const topo = sim.topology;
     const g = topo.nodes.find(n => n.componentId === componentId);
@@ -339,10 +369,8 @@
     if (nodeEl) {
       nodeEl.classList.toggle('on', on);
       nodeEl.classList.toggle('off', !on);
-      const mark = nodeEl.querySelector('.sim-topo-mark');
-      if (mark) mark.textContent = on ? '✓' : '✕';
-      const costEl = nodeEl.querySelector('.sim-topo-cost');
-      if (costEl) costEl.textContent = `${opt.cost > 0 ? '+' : ''}${opt.cost}/月 · ${opt.label}`;
+      const interactive = nodeEl.hasAttribute('data-toggle');
+      nodeEl.innerHTML = nodeInnerSvg(sim, state, g, interactive);
     }
     // Only edges that explicitly require this component ever change state when it's toggled —
     // every other edge is a static structural connection (see the note in edgesSvg above).
@@ -389,11 +417,13 @@
     if (!topo?.computeFlow) return;
     const ctx = makeChoiceCtx(sim, state);
     const flowIds = topo.computeFlow('watch', ctx);
-    const waypoints = waypointsFor(topo, flowIds);
-    if (waypoints.length < 2) return;
+    if (flowIds.length < 2) return;
     const count = clamp(Math.round(batchSize / 40), 1, 4);
     for (let i = 0; i < count; i++) {
       setTimeout(() => {
+        // Recomputed per token (not hoisted) so each simulated viewer that lands on a pool
+        // node (e.g. the API server pool) can be routed to a different random instance.
+        const waypoints = waypointsFor(sim, state, flowIds);
         spawnToken(svgEl, waypoints, {
           className: 'ambient',
           tokenClass: 'sim-token-ambient',
@@ -429,7 +459,7 @@
         const kind = btn.dataset.kind;
         const ctx = makeChoiceCtx(sim, state);
         const flowIds = sim.topology.computeFlow(kind, ctx);
-        const waypoints = waypointsFor(sim.topology, flowIds);
+        const waypoints = waypointsFor(sim, state, flowIds);
         svgEl.querySelector('.sim-token-demo')?.remove();
         traceLine(root, `— 開始模擬：${btn.textContent.trim()} —`, 'head');
         spawnToken(svgEl, waypoints, {
@@ -484,7 +514,7 @@
       const idx = flowIds.indexOf(missingNode.id);
       if (idx >= 0) travelIds = flowIds.slice(0, idx + 1);
     }
-    const waypoints = waypointsFor(topo, travelIds);
+    const waypoints = waypointsFor(sim, state, travelIds);
     traceLine(root, `— 事件發生：${event.title} —`, 'head');
     spawnToken(svgEl, waypoints, {
       className: outcome.ok ? 'ok' : 'bad',
@@ -805,7 +835,7 @@
 
   // Exposed only for the automated test harness (jsdom can't fast-forward real timers, so the
   // pure geometry used by the token animation needs to be reachable and testable in isolation).
-  window.__simTestHooks = { pointAlongPath };
+  window.__simTestHooks = { pointAlongPath, waypointsFor, clusterPositions };
 
   boot();
 })();
