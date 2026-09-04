@@ -490,7 +490,17 @@
     const countNote = n.pool ? `（${aliveCount}/${positions.length} 台運作中）` : '';
     // The strategy label is its own hit target on pool nodes: clicking a MACHINE pulls that one
     // machine's plug, so the "which strategy" decision needs somewhere else to live.
-    const costText = opt ? `${opt.cost > 0 ? '+' : ''}${opt.cost}/月 · ${opt.label}${countNote}` : '';
+    //
+    // The price shown here has to be the price of what is ACTUALLY on screen. Machines the
+    // player added by hand cost `extraInstanceCost` each every month (weeklyCostPenalty already
+    // charges for them), so a node showing three machines while its label says "0/月" was simply
+    // lying about the bill.
+    const extraHere = n.pool ? Math.max(0, state.extraInstances?.[n.id] || 0) : 0;
+    const nodeCost = (opt?.cost || 0) + extraHere * (n.extraInstanceCost ?? 1);
+    const extraNote = extraHere ? `＋自行加開 ${extraHere} 台` : '';
+    const costText = opt
+      ? `${nodeCost > 0 ? '+' : ''}${nodeCost}/月 · ${opt.label}${extraNote}${countNote}`
+      : '';
     // One line BELOW the node label, not two pixels under it — at +16 against the label's +14
     // the two strings printed on top of each other and rendered the users node unreadable.
     const headText = n.kind === 'user'
@@ -501,7 +511,13 @@
     // machine whose plug you pulled. The old two-state ✓/✕ was the source of "the server is X,
     // so why is it still sending me data?" — a live server with no spare capacity is not a dead
     // server, and must not look like one.
-    const glyph = present ? (on ? '✓' : '⚠') : '✕';
+    //
+    // ⚠ means "壞一台就沒有人接手". On a POOL that has to be decided by how many machines are
+    // actually up, not by which strategy was picked: three machines drawn on screen ARE
+    // redundancy, however they got there, and marking them ⚠ contradicted the picture. Machines
+    // the player added by hand are real machines.
+    const redundant = n.pool ? aliveCount > 1 : on;
+    const glyph = present ? (redundant ? '✓' : '⚠') : '✕';
     // Each machine is its own <g> so it can be clicked, killed, labelled "#2" and targeted by a
     // token independently of its siblings.
     const machines = positions.map((p, i) => {
@@ -529,7 +545,11 @@
 
   function nodeClassName(sim, state, n, interactive) {
     const isComponent = n.kind === 'component';
-    const on = nodeIsOn(sim, state, n);
+    // Same rule as the glyph: on a pool, "protected" means more than one machine is actually up,
+    // no matter whether that came from the strategy or from the player pressing ＋.
+    const on = n.pool
+      ? nodeIsPresent(sim, state, n) && aliveInstanceIndexes(sim, state, n).length > 1
+      : nodeIsOn(sim, state, n);
     const present = nodeIsPresent(sim, state, n);
     const load = nodeLoad(sim, state, n);
     const allDown = n.pool && aliveInstanceIndexes(sim, state, n).length === 0;

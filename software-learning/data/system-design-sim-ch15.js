@@ -104,16 +104,31 @@
         ]
       },
       {
-        id: 'serverRedundancy',
-        name: '區塊／API 伺服器備援',
-        shortName: '伺服器備援',
+        // 區塊伺服器與 API 伺服器是兩台完全不同的機器，故障語意也不同，所以是兩個獨立的決定：
+        // 綁在同一個元件上會逼出「各一台」這種標籤，而且你永遠配不出「區塊 3 台、API 1 台」。
+        id: 'blockServerRedundancy',
+        name: '區塊伺服器備援（有狀態，掛掉要有人接手上傳工作）',
+        shortName: '區塊伺服器備援',
         presence: 'always',
-        desc: 'API 伺服器是無狀態的，故障時流量會被負載平衡器重定向。區塊伺服器比較麻煩——它故障時，其他伺服器必須接手那些未完成或待處理的工作，否則正在上傳的檔案就會卡住。',
+        desc: '區塊伺服器是這條路上最麻煩的一台：它身上有「正在切分、壓縮、加密、上傳到一半」的工作。它故障時，其他伺服器必須接手那些未完成或待處理的工作，否則使用者的上傳就會永遠卡住。這跟無狀態的 API 伺服器是兩回事，要分開決定。',
         ...ref('sd15-s12-p01'),
         options: [
-          { ...OFF_ALWAYS('各一台，壞掉沒有人接手'), instances: 1 },
-          { id: 'pair', label: '各兩台（可接手未完成工作）', cost: 1, instances: 2, desc: '一台掛掉時另一台接手待處理的上傳工作。' },
-          { id: 'pool', label: '各三台＋心跳偵測', cost: 3, instances: 3, desc: '負載平衡器之間用 heartbeat 相互監視，故障偵測與接手都更快。' }
+          { ...OFF_ALWAYS('只有一台，掛掉沒有人接手未完成的上傳'), instances: 1 },
+          { id: 'pair', label: '兩台，可接手未完成的上傳工作', cost: 2, instances: 2, desc: '一台掛掉時另一台接手待處理的上傳，正在傳的檔案不會永遠卡住。' },
+          { id: 'pool', label: '三台＋心跳偵測，快速接手', cost: 4, instances: 3, desc: '用 heartbeat 相互監視，偵測與接手都更快，尖峰時的中斷幾乎無感。' }
+        ]
+      },
+      {
+        id: 'apiRedundancy',
+        name: 'API 伺服器備援（無狀態，負載平衡器轉走就好）',
+        shortName: 'API 備援',
+        presence: 'always',
+        desc: 'API 伺服器提供的是一種無狀態的服務——它不持有任何上傳中的工作。故障時流量會被負載平衡器直接重定向到其他 API 伺服器，所以它需要的只是「還有別台可以轉」。便宜很多，但完全不能取代區塊伺服器的備援。',
+        ...ref('sd15-s12-p01'),
+        options: [
+          { ...OFF_ALWAYS('只有一台，掛掉就沒有地方可以轉'), instances: 1 },
+          { id: 'pair', label: '兩台，負載平衡器可轉走', cost: 1, instances: 2, desc: '一台掛掉時流量立刻被轉到另一台，使用者幾乎無感。' },
+          { id: 'pool', label: '三台，尖峰也有餘裕', cost: 2, instances: 3, desc: '除了故障轉移，也讓尖峰時段的 metadata 請求有足夠餘裕。' }
         ]
       },
       {
@@ -214,10 +229,10 @@
         { id: 'users', kind: 'user', label: '使用者（瀏覽器／App）', region: '客戶端', x: 90, y: 330, arriveLabel: '裝置收到同步結果' },
         { id: 'resumableBadge', kind: 'component', componentId: 'resumableUpload', label: '斷點續傳', region: '客戶端', x: 90, y: 500, size: 'small', arriveLabel: '查詢已成功寫入的位元組位置' },
 
-        { id: 'blockServer', kind: 'component', componentId: 'serverRedundancy', label: '區塊伺服器', region: '服務層', x: 320, y: 150, pool: true, extraInstanceCost: 2, arriveLabel: '切分成 4MB 區塊，逐塊壓縮與加密' },
+        { id: 'blockServer', kind: 'component', componentId: 'blockServerRedundancy', label: '區塊伺服器', region: '服務層', x: 320, y: 150, pool: true, extraInstanceCost: 2, arriveLabel: '切分成 4MB 區塊，逐塊壓縮與加密' },
         { id: 'deltaBadge', kind: 'component', componentId: 'blockSync', label: '差異同步', region: '服務層', x: 320, y: 40, size: 'small', arriveLabel: '比對雜湊，只挑出真正變動的區塊' },
         { id: 'loadBalancer', kind: 'fixed', label: 'Load Balancer', region: '服務層', x: 320, y: 330, arriveLabel: '在 API 伺服器之間平均分配請求' },
-        { id: 'apiServer', kind: 'component', componentId: 'serverRedundancy', label: 'API 伺服器', region: '服務層', x: 540, y: 330, pool: true, extraInstanceCost: 1, arriveLabel: '驗證身份、更新檔案的 metadata' },
+        { id: 'apiServer', kind: 'component', componentId: 'apiRedundancy', label: 'API 伺服器', region: '服務層', x: 540, y: 330, pool: true, extraInstanceCost: 1, arriveLabel: '驗證身份、更新檔案的 metadata' },
         { id: 'conflictBadge', kind: 'component', componentId: 'conflictResolution', label: '衝突偵測', region: '服務層', x: 540, y: 200, size: 'small', arriveLabel: '比對版本，偵測是否有並行修改' },
 
         { id: 'cloudStorage', kind: 'component', componentId: 'storageReplication', label: '雲端儲存系統', region: '儲存層', zone: '儲存層', x: 560, y: 40, arriveLabel: '把加密後的區塊寫入儲存桶' },
@@ -281,11 +296,11 @@
         month: 3,
         id: 'blockServerCrash',
         title: '區塊伺服器在尖峰時段當機，上百個檔案正在上傳中',
-        relevantComponents: ['serverRedundancy', 'resumableUpload'],
+        relevantComponents: ['blockServerRedundancy', 'resumableUpload'],
         demoFlow: ['users', 'blockServer', 'cloudStorage', 'apiServer'],
-        narrative: '一台區塊伺服器硬體故障離線，當下有上百個檔案正在被它切分、壓縮、加密與上傳。',
+        narrative: '一台區塊伺服器硬體故障離線，當下有上百個檔案正在被它切分、壓縮、加密與上傳。注意：這一台是有狀態的，多買 API 伺服器對它一點幫助都沒有。',
         resolve: ctx => {
-          const red = ctx.get('serverRedundancy');
+          const red = ctx.get('blockServerRedundancy');
           const resumable = ctx.has('resumableUpload');
           if (red === 'pool' && resumable) return { uptime: -1, qoe: 1, log: '心跳很快偵測到故障，其他區塊伺服器接手了那些未完成與待處理的工作；已經確實寫入雲端儲存的區塊完全不受影響，續傳從斷點接上。使用者只看到進度條停頓了幾秒。', ok: true };
           if (red !== 'off' && resumable) return { uptime: -3, qoe: -2, log: '有另一台可以接手，但偵測慢了一些；部分上傳中斷後從斷點恢復，少數使用者看到失敗訊息並手動重試。', ok: true };
@@ -305,6 +320,19 @@
           if (id === 'crossRegion') return { uptime: -2, qoe: 0, log: '檔案在兩個地理區域都有一份，讀取自動切到另一個區域。使用者感覺到稍微變慢，但沒有任何一個檔案讀不到。', ok: true };
           if (id === 'sameRegion') return { uptime: -14, qoe: -12, log: '同區域內有多副本，但整個區域一起出事——所有副本都在那裡。檔案在故障期間完全讀不到，寫入也全部失敗。', ok: false };
           return { uptime: -26, qoe: -24, log: '單一區域、單一副本。這次不只是讀不到——區域恢復後發現部分儲存節點的資料沒能救回來，有使用者永久失去了檔案。這正是第一條非功能需求說「不可接受」的那件事。', ok: false };
+        }
+      },
+      {
+        month: 5,
+        id: 'apiServerCrash',
+        title: '一台 API 伺服器當機（跟上次那台完全不同的問題）',
+        relevantComponents: ['apiRedundancy'],
+        demoFlow: ['users', 'loadBalancer', 'apiServer', 'metadataDB'],
+        narrative: '一台 API 伺服器離線。它不持有任何上傳中的工作——它只負責驗證身份、讀寫 metadata。所以這一次要問的不是「誰接手未完成的工作」，而是「還有沒有別台可以轉」。',
+        resolve: ctx => {
+          const id = ctx.get('apiRedundancy');
+          if (id !== 'off') return { uptime: 0, qoe: 0, log: 'API 伺服器是無狀態的，負載平衡器立刻把流量轉到其他台，沒有任何請求失敗。這種故障便宜得多——正因為它身上沒有狀態。', ok: true };
+          return { uptime: -11, qoe: -6, log: '只有一台 API 伺服器，沒有地方可以轉。所有 metadata 操作全部失敗：檔案清單載不出來、上傳完成的檔案也翻不成 uploaded。位元組其實都在，但整個服務看起來像掛了。', ok: false };
         }
       },
       {
@@ -371,11 +399,11 @@
         month: 11,
         id: 'finale',
         title: '年度大遷徙：全公司同時把本機檔案搬上雲端',
-        relevantComponents: ['resumableUpload', 'serverRedundancy', 'storageReplication', 'conflictResolution'],
+        relevantComponents: ['resumableUpload', 'blockServerRedundancy', 'storageReplication', 'conflictResolution'],
         demoFlow: ['users', 'blockServer', 'cloudStorage', 'apiServer', 'metadataDB', 'notifyService'],
         narrative: '一個大企業客戶決定在同一週把所有部門的檔案全部搬上來：幾十萬個檔案、大量超過 1 GB 的大檔、還有很多人同時編輯同一批共享資料夾。',
         resolve: ctx => {
-          const shields = ['resumableUpload', 'serverRedundancy', 'storageReplication', 'conflictResolution'].filter(id => ctx.has(id)).length;
+          const shields = ['resumableUpload', 'blockServerRedundancy', 'storageReplication', 'conflictResolution'].filter(id => ctx.has(id)).length;
           const table = {
             4: { uptime: 1, qoe: 2, log: '四道防線都到位：斷點續傳讓大檔案不怕中斷、備援伺服器接住尖峰、跨區複製保住耐久性、衝突偵測把同時編輯的檔案兩份都留下來。整週遷徙沒有丟失任何一個檔案。', ok: true },
             3: { uptime: -4, qoe: -4, log: '大部分都撐住了，但缺的那一環在尖峰時被放大——有一批檔案需要人工介入才救回來。', ok: false },
