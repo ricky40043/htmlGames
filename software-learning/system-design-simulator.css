@@ -93,6 +93,10 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-token-event.bad{fill:var(--sim-bad)}
 .sim-token-demo.upload{fill:var(--accent-2)}
 .sim-token-ambient{r:3.5px;fill:var(--accent);opacity:.55;stroke:none}
+.sim-token-segment{stroke:#0a0a10;stroke-width:1;opacity:.9}
+.sim-token-segment.q-720p{fill:var(--sim-good)}
+.sim-token-segment.q-480p{fill:var(--sim-warn)}
+.sim-token-segment.q-360p{fill:var(--sim-bad)}
 .sim-burst-dot{fill:var(--accent-2);animation:simBurst .85s ease-out forwards}
 .sim-topo-hint{margin:8px 0 14px;font-size:.78rem;color:var(--muted)}
 .sim-topo-controls{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 14px}

@@ -30,9 +30,21 @@
     components: [
       {
         id: 'apiRedundancy',
-        name: 'API 伺服器備援容量',
+        name: 'API 伺服器備援容量（搜尋／上架）',
         shortName: 'API 備援',
-        desc: '伺服器是無狀態的，單台當機時負載平衡器能把流量導到其他伺服器——差別在於備援容量是「隨時待命」還是「當下才開」。這個做法會同時套用到台灣、美國、日本三個地區、以及「API 伺服器」（搜尋／上架）與「串流伺服器」（觀看影片）兩層各自獨立的伺服器群組。',
+        desc: '伺服器是無狀態的，單台當機時負載平衡器能把流量導到其他伺服器——差別在於備援容量是「隨時待命」還是「當下才開」。這裡只管搜尋／上架影片這條線；觀看影片走的是另一組完全獨立的「串流伺服器」，備援策略要另外決定，兩邊不會互相牽動。',
+        ...ref('sd14-s02-p01'),
+        options: [
+          { ...OFF, instances: 1 },
+          { id: 'autoScale', label: '自動擴縮容（觸發後約 3–5 分鐘生效）', cost: 1, instances: 2, desc: '負載升高時自動開新機器，成本較低，但生效前這幾分鐘容量會偏緊。' },
+          { id: 'warmStandby', label: '熱備援（固定多開 2 台待命）', cost: 3, instances: 3, desc: '隨時有備援容量可以立即接手，幾乎無感，但平常就要多付這些機器的錢。' }
+        ]
+      },
+      {
+        id: 'streamRedundancy',
+        name: '串流伺服器備援容量（觀看影片）',
+        shortName: '串流備援',
+        desc: '串流伺服器只負責把影片位元組送到觀眾裝置，跟處理搜尋／上架的 API 伺服器是完全分開的一組機器、分開計費、分開故障——這裡的選擇不會影響 API 伺服器，反過來也一樣。',
         ...ref('sd14-s02-p01'),
         options: [
           { ...OFF, instances: 1 },
@@ -117,7 +129,7 @@
         { id: `users_${r}`, kind: 'user', label: `觀眾（${label}）`, region: label, x: 90, y: yCenter, arriveLabel: '使用者裝置收到回應' },
         { id: `cdn_${r}`, kind: 'component', componentId: 'cdnPopularOnly', label: `CDN（${label}）`, region: label, x: 280, y: yUpper, arriveLabel: '檢查熱門內容是否命中這個地區的 Edge 快取' },
         { id: `loadBalancer_${r}`, kind: 'fixed', label: `Load Balancer（${label}）`, region: label, x: 480, y: yCenter, arriveLabel: '健康檢查後依路徑把請求導向 API 或串流伺服器群組' },
-        { id: `streamServer_${r}`, kind: 'component', componentId: 'apiRedundancy', label: `串流伺服器（${label}）`, region: label, x: 680, y: yUpper, pool: true, arriveLabel: '從快取或原始儲存系統取得影片內容區塊' },
+        { id: `streamServer_${r}`, kind: 'component', componentId: 'streamRedundancy', label: `串流伺服器（${label}）`, region: label, x: 680, y: yUpper, pool: true, arriveLabel: '從快取或原始儲存系統取得影片內容區塊' },
         { id: `apiServer_${r}`, kind: 'component', componentId: 'apiRedundancy', label: `API 伺服器（${label}）`, region: label, x: 680, y: yLower, pool: true, arriveLabel: '驗證請求並決定下一步路由' }
       ];
       const regionEdges = r => [
@@ -230,12 +242,26 @@
         title: '一台 API（搜尋／上架）伺服器當機',
         relevantComponents: ['apiRedundancy'],
         demoFlow: ['users_us', 'loadBalancer_us', 'apiServer_us'],
-        narrative: '負責搜尋與上架的其中一台 API 伺服器硬體故障離線，這台伺服器原本承擔的請求全部需要別人接手（觀看影片走的是另一組串流伺服器，不受影響，但套用的是同一套備援策略）。',
+        narrative: '負責搜尋與上架的其中一台 API 伺服器硬體故障離線，這台伺服器原本承擔的請求全部需要別人接手（觀看影片走的是另一組完全獨立的串流伺服器，備援策略也是分開決定的，這次事件不受影響）。',
         resolve: ctx => {
           const choice = ctx.get('apiRedundancy');
           if (choice === 'warmStandby') return { uptime: 0, qoe: 0, log: '熱備援伺服器立即接手，容量足夠吸收這些流量，幾乎沒人感覺得到。', ok: true };
           if (choice === 'autoScale') return { uptime: -3, qoe: -3, log: 'Auto scaling 觸發後幾分鐘內開出新伺服器，這段等待期間容量偏緊，部分請求回應變慢。', ok: true };
           return { uptime: -9, qoe: -8, log: '沒有備援容量，剩餘伺服器瞬間過載，回應時間飆高，不少請求逾時失敗。', ok: false };
+        }
+      },
+      {
+        month: 5,
+        id: 'streamServerDown',
+        title: '一台串流伺服器當機',
+        relevantComponents: ['streamRedundancy'],
+        demoFlow: ['users_us', 'cdn_us', 'loadBalancer_us', 'streamServer_us'],
+        narrative: '負責影片播放的其中一台串流伺服器硬體故障離線——這組伺服器跟處理搜尋／上架的 API 伺服器是完全分開的機器，備援策略也要另外準備，不能靠 API 那邊的設定。',
+        resolve: ctx => {
+          const choice = ctx.get('streamRedundancy');
+          if (choice === 'warmStandby') return { uptime: 0, qoe: 0, log: '熱備援伺服器立即接手，容量足夠吸收這些流量，觀眾幾乎沒有感覺。', ok: true };
+          if (choice === 'autoScale') return { uptime: -2, qoe: -4, log: 'Auto scaling 觸發後幾分鐘內開出新伺服器，這段等待期間不少人畫面卡頓或緩衝變久。', ok: true };
+          return { uptime: -4, qoe: -12, log: '沒有備援容量，剩餘串流伺服器瞬間過載，大量觀眾的影片直接卡死或播放失敗。', ok: false };
         }
       },
       {

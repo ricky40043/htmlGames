@@ -167,6 +167,20 @@
 
   function findNode(topo, id) { return topo.nodes.find(n => n.id === id); }
 
+  // Picks whichever of the given node ids sits physically closest to (x, y) — used to decide
+  // which region's streaming server is "delivering" to a viewer who's been dragged to an
+  // arbitrary point on the canvas, rather than a fixed/arbitrary source.
+  function nearestNode(topo, ids, x, y) {
+    let best = null, bestDist = Infinity;
+    ids.forEach(id => {
+      const n = findNode(topo, id);
+      if (!n) return;
+      const d = (n.x - x) ** 2 + (n.y - y) ** 2;
+      if (d < bestDist) { bestDist = d; best = n; }
+    });
+    return best;
+  }
+
   function regionBoxesSvg(topo) {
     const groups = {};
     // `zone` groups nodes into a drawn box; `region` (used separately by hopWeights for travel
@@ -361,10 +375,10 @@
     return { x: a.x + (b.x - a.x) * localT, y: a.y + (b.y - a.y) * localT };
   }
 
-  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, weights, onDone, onHop } = {}) {
+  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, weights, radius = 7, onDone, onHop } = {}) {
     if (!svgEl || waypoints.length < 2) { onDone?.(null); return null; }
     const circle = document.createElementNS(SVG_NS, 'circle');
-    circle.setAttribute('r', '7');
+    circle.setAttribute('r', String(radius));
     circle.setAttribute('class', `${tokenClass} ${className}`.trim());
     circle.setAttribute('cx', waypoints[0].x);
     circle.setAttribute('cy', waypoints[0].y);
@@ -1033,6 +1047,8 @@
     const poorRange = cs.poorMbpsRange || sim.abrSim?.poorMbpsRange || [0.4, 1.6];
     const goodRange = cs.goodMbpsRange || sim.abrSim?.goodMbpsRange || [4.0, 7.5];
     const tickMs = cs.tickMs || sim.abrSim?.tickMs || 900;
+    const topo = sim.topology;
+    const streamIds = topo.regionIds?.map(r => `streamServer_${r}`) || [];
 
     const tick = () => {
       const [lo, hi] = state.dragViewer.inZone ? poorRange : goodRange;
@@ -1051,6 +1067,20 @@
         qualityText.textContent = ladder[nextIdx].label;
         qualityText.setAttribute('class', `sim-drag-viewer-quality q-${ladder[nextIdx].id}`);
         traceLine(root, `🙋 測試觀眾：量測頻寬 ${measured.toFixed(1)} Mbps，畫質${nextIdx < curIdx ? '降為' : '回升為'}「${ladder[nextIdx].label}」。`, nextIdx < curIdx ? 'bad' : 'ok');
+      }
+      // The actual point of this probe: a real packet, sized by the quality just decided,
+      // visibly traveling from the nearest region's streaming server to wherever the viewer
+      // currently sits — not just a text label next to them. Fires every tick regardless of
+      // whether quality changed, so playback reads as continuous, not just reactive.
+      const source = nearestNode(topo, streamIds, state.dragViewer.x, state.dragViewer.y);
+      if (source) {
+        spawnToken(svgEl, [{ x: source.x, y: source.y }, { x: state.dragViewer.x, y: state.dragViewer.y }], {
+          tokenClass: 'sim-token-segment',
+          className: `q-${ladder[nextIdx].id}`,
+          radius: 5 + nextIdx * 4,
+          durationMs: (tickMs * 0.85) / (state.speed || 1),
+          onDone: circle => circle?.remove()
+        });
       }
     };
 
