@@ -96,6 +96,11 @@
       month: 0, uptime: 100, qoe: 100, costEff: 100, choice: {}, usersServed: 0, speed: 1,
       chunk: null, chunkTimer: null,
       abr: null, abrTimer: null,
+      dragViewer: sim.dragViewerSim ? {
+        x: sim.dragViewerSim.start.x, y: sim.dragViewerSim.start.y, inZone: false,
+        qualityId: (sim.dragViewerSim.ladder || sim.abrSim?.ladder || []).slice(-1)[0]?.id
+      } : null,
+      dragViewerTimer: null,
       log: [], history: [{ month: 0, uptime: 100, qoe: 100 }], phase: 'briefing'
     };
   }
@@ -164,7 +169,11 @@
 
   function regionBoxesSvg(topo) {
     const groups = {};
-    topo.nodes.forEach(n => { if (n.region) { groups[n.region] ??= []; groups[n.region].push(n); } });
+    // `zone` groups nodes into a drawn box; `region` (used separately by hopWeights for travel
+    // speed) still governs whether two nodes count as "the same place" for latency purposes.
+    // They're usually identical, but a centralized backend that's physically same-region as one
+    // edge stack still wants its own box rather than merging into that edge stack's box.
+    topo.nodes.forEach(n => { const key = n.zone || n.region; if (key) { groups[key] ??= []; groups[key].push(n); } });
     return Object.entries(groups).map(([name, ns]) => {
       const pad = 36;
       const x0 = Math.min(...ns.map(n => n.x)) - pad, y0 = Math.min(...ns.map(n => n.y)) - pad;
@@ -239,6 +248,25 @@
 
   const SPEED_OPTIONS = [0.1, 0.5, 1, 2];
 
+  // A persistent, draggable "test viewer" avatar you can pull into a marked bad-network zone —
+  // its position always renders from `state.dragViewer`, never from the scenario's start-position
+  // config, so it survives a full renderPlay remount (month advance) exactly where you left it.
+  function dragViewerSvg(sim, state) {
+    const cs = sim.dragViewerSim;
+    const dv = state.dragViewer;
+    if (!cs || !dv) return '';
+    const ladder = cs.ladder || sim.abrSim?.ladder || [];
+    const qLabel = ladder.find(q => q.id === dv.qualityId)?.label || dv.qualityId || '--';
+    return `
+      <rect class="sim-drag-zone${dv.inZone ? ' active' : ''}" x="${cs.zone.x}" y="${cs.zone.y}" width="${cs.zone.width}" height="${cs.zone.height}" rx="10"/>
+      <text class="sim-drag-zone-label" x="${cs.zone.x + 10}" y="${cs.zone.y + 22}">${esc(cs.zone.label)}</text>
+      <g class="sim-drag-viewer${dv.inZone ? ' in-zone' : ''}" data-drag-viewer tabindex="0" role="button" aria-label="拖曳測試觀眾到訊號不良區，或按 Enter 切換">
+        <circle cx="${dv.x}" cy="${dv.y}" r="14"/>
+        <text class="sim-drag-viewer-emoji" x="${dv.x}" y="${dv.y + 5}">🙋</text>
+        <text class="sim-drag-viewer-quality q-${esc(dv.qualityId || '')}" x="${dv.x}" y="${dv.y + 30}">${esc(qLabel)}</text>
+      </g>`;
+  }
+
   function svgTopology(sim, state, { interactive = false, showControls = false } = {}) {
     const topo = sim.topology;
     if (!topo) return '<p class="sim-topo-missing">這個場景還沒有拓樸圖資料。</p>';
@@ -256,12 +284,15 @@
         ${regionBoxesSvg(topo)}
         ${edgesSvg(sim, state)}
         ${nodesSvg(sim, state, interactive)}
+        ${interactive && showControls ? dragViewerSvg(sim, state) : ''}
       </svg>
       ${interactive ? '<p class="sim-topo-hint">點節點可以循環切換這個能力的不同做法（關閉→做法一→做法二→…）；圓點連線代表目前流量會不會實際走這條路。</p>' : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法決定。</p>'}
       ${showControls ? `<div class="sim-topo-controls">
         <button class="button secondary sim-add-users" type="button" data-add="100">${esc(sim.addUsersLabel || '＋100 使用者')}</button>
         <button class="button secondary sim-demo" type="button" data-kind="watch">${esc(sim.demoLabels?.watch || '▶ 模擬一次讀取請求')}</button>
         <button class="button secondary sim-demo" type="button" data-kind="upload">${esc(sim.demoLabels?.upload || '⬆ 模擬一次寫入請求')}</button>
+        ${sim.demoLabels?.search ? `<button class="button secondary sim-demo" type="button" data-kind="search">${esc(sim.demoLabels.search)}</button>` : ''}
+        ${sim.concurrentViewersLabel ? `<button class="button secondary sim-demo-concurrent" type="button" data-count="10">${esc(sim.concurrentViewersLabel)}</button>` : ''}
       </div>` : ''}
       ${speedControls}
       <div class="sim-trace">
@@ -528,6 +559,35 @@
           },
           onDone: () => traceLine(root, '— 完成 —', 'done')
         });
+      };
+    });
+    // "N people watching the SAME video" is a different demonstration than the generic +users
+    // ambient traffic: waypoints (and therefore the picked region + picked pool instance) are
+    // resolved ONCE and shared by every spawned token, so they visibly all ride the identical
+    // path — this is the point being made (a popular video's viewers mostly hit the same CDN
+    // edge/streaming-server copy, not N independent origin trips).
+    root.querySelectorAll('.sim-demo-concurrent').forEach(btn => {
+      btn.onclick = () => {
+        const topo = sim.topology;
+        const ctx = makeChoiceCtx(sim, state);
+        const regionIds = topo.regionIds;
+        const regionId = regionIds?.length ? regionIds[Math.floor(Math.random() * regionIds.length)] : undefined;
+        const regionLabel = regionId && topo.regionLabel?.[regionId];
+        const flowIds = topo.computeFlow('watch', ctx, regionId);
+        const waypoints = waypointsFor(sim, state, flowIds);
+        const weights = hopWeights(topo, flowIds);
+        const count = Number(btn.dataset.count || 10);
+        traceLine(root, `— 模擬 ${count} 人同時觀看同一部影片${regionLabel ? `（${regionLabel}地區，共用同一份 CDN／串流伺服器路徑）` : ''} —`, 'head');
+        for (let i = 0; i < count; i++) {
+          setTimeout(() => {
+            spawnToken(svgEl, waypoints, {
+              className: 'concurrent', tokenClass: 'sim-token-ambient',
+              durationMs: (1400 + Math.random() * 400) / (state.speed || 1),
+              weights,
+              onDone: circle => setTimeout(() => circle?.remove(), 250 / (state.speed || 1))
+            });
+          }, i * 60 + Math.random() * 40);
+        }
       };
     });
     root.querySelectorAll('[data-speed]').forEach(btn => {
@@ -874,6 +934,130 @@
     }
   }
 
+  // Converts a pointer event's screen coordinates into the SVG's own viewBox coordinate space.
+  // Real browsers implement createSVGPoint/getScreenCTM for this; jsdom (this project's only
+  // available test environment) implements neither, so the fallback — treating clientX/clientY
+  // as already being in SVG space — isn't just a safety net, it's also the seam the automated
+  // tests drive through by dispatching pointer events with clientX/clientY pre-set to the
+  // desired SVG coordinates.
+  function svgCoordsFromEvent(svgEl, evt) {
+    if (typeof svgEl.createSVGPoint === 'function' && typeof svgEl.getScreenCTM === 'function') {
+      const ctm = svgEl.getScreenCTM();
+      if (ctm) {
+        const pt = svgEl.createSVGPoint();
+        pt.x = evt.clientX;
+        pt.y = evt.clientY;
+        const p = pt.matrixTransform(ctm.inverse());
+        return { x: p.x, y: p.y };
+      }
+    }
+    return { x: evt.clientX, y: evt.clientY };
+  }
+
+  // ---------- Draggable "drop a viewer into bad network" probe ----------
+  // A persistent avatar, separate from the scripted monthly events and the standalone ABR
+  // sandbox: drag it into the marked zone (or focus it and press Enter/Space, for keyboard
+  // users) and its own playback — ticking continuously in the background, independent of the
+  // ABR lab panel below — starts sampling the *poor* bandwidth range instead of the good one, so
+  // its next 5-second segment visibly drops quality right there on the topology, no separate
+  // panel required. Reuses the same throughput-based decision logic as the ABR lab (same ladder,
+  // same hysteresis) so the two stay consistent.
+
+  function wireDragViewer(root, sim, state) {
+    const cs = sim.dragViewerSim;
+    if (!cs || !state.dragViewer) return;
+    if (state.dragViewerTimer) { clearInterval(state.dragViewerTimer); state.dragViewerTimer = null; }
+
+    const svgEl = root.querySelector('svg.sim-topo');
+    const g = root.querySelector('[data-drag-viewer]');
+    if (!svgEl || !g) return;
+    const circle = g.querySelector('circle');
+    const emojiText = g.querySelector('.sim-drag-viewer-emoji');
+    const qualityText = g.querySelector('.sim-drag-viewer-quality');
+    const zoneRect = root.querySelector('.sim-drag-zone');
+
+    const inZone = (x, y) => x >= cs.zone.x && x <= cs.zone.x + cs.zone.width && y >= cs.zone.y && y <= cs.zone.y + cs.zone.height;
+
+    const setPos = (x, y) => {
+      state.dragViewer.x = x;
+      state.dragViewer.y = y;
+      circle.setAttribute('cx', x);
+      circle.setAttribute('cy', y);
+      emojiText.setAttribute('x', x);
+      emojiText.setAttribute('y', y + 5);
+      qualityText.setAttribute('x', x);
+      qualityText.setAttribute('y', y + 30);
+      const wasInZone = state.dragViewer.inZone;
+      state.dragViewer.inZone = inZone(x, y);
+      g.classList.toggle('in-zone', state.dragViewer.inZone);
+      zoneRect?.classList.toggle('active', state.dragViewer.inZone);
+      if (state.dragViewer.inZone !== wasInZone) {
+        traceLine(root, state.dragViewer.inZone
+          ? '🙋 測試觀眾被拖進了訊號不良區——之後的片段會照這裡量到的頻寬重新決定畫質。'
+          : '🙋 測試觀眾離開了訊號不良區，頻寬恢復正常。', state.dragViewer.inZone ? 'bad' : 'ok');
+      }
+    };
+
+    let dragging = false;
+    g.addEventListener('pointerdown', evt => {
+      dragging = true;
+      g.classList.add('dragging');
+      g.setPointerCapture?.(evt.pointerId);
+      evt.preventDefault();
+    });
+    const endDrag = evt => {
+      if (!dragging) return;
+      dragging = false;
+      g.classList.remove('dragging');
+      g.releasePointerCapture?.(evt.pointerId);
+    };
+    svgEl.addEventListener('pointermove', evt => {
+      if (!dragging) return;
+      const p = svgCoordsFromEvent(svgEl, evt);
+      setPos(p.x, p.y);
+    });
+    svgEl.addEventListener('pointerup', endDrag);
+    svgEl.addEventListener('pointerleave', endDrag);
+    // Keyboard equivalent of dragging: jump in and out of the zone. Also the path the automated
+    // tests drive through, since it needs no coordinate-space conversion to verify.
+    g.addEventListener('keydown', evt => {
+      if (evt.key !== 'Enter' && evt.key !== ' ') return;
+      evt.preventDefault();
+      const target = state.dragViewer.inZone
+        ? cs.start
+        : { x: cs.zone.x + cs.zone.width / 2, y: cs.zone.y + cs.zone.height / 2 };
+      setPos(target.x, target.y);
+    });
+
+    const ladder = cs.ladder || sim.abrSim?.ladder || [];
+    const poorRange = cs.poorMbpsRange || sim.abrSim?.poorMbpsRange || [0.4, 1.6];
+    const goodRange = cs.goodMbpsRange || sim.abrSim?.goodMbpsRange || [4.0, 7.5];
+    const tickMs = cs.tickMs || sim.abrSim?.tickMs || 900;
+
+    const tick = () => {
+      const [lo, hi] = state.dragViewer.inZone ? poorRange : goodRange;
+      const measured = lo + Math.random() * (hi - lo);
+      const curIdx = Math.max(0, ladder.findIndex(q => q.id === state.dragViewer.qualityId));
+      let sustainableIdx = 0;
+      for (let i = ladder.length - 1; i >= 0; i--) {
+        if (measured >= ladder[i].mbps * 0.9) { sustainableIdx = i; break; }
+      }
+      let nextIdx;
+      if (sustainableIdx < curIdx) nextIdx = sustainableIdx;
+      else if (curIdx < ladder.length - 1 && measured > ladder[curIdx + 1].mbps * 1.3) nextIdx = curIdx + 1;
+      else nextIdx = curIdx;
+      if (nextIdx !== curIdx) {
+        state.dragViewer.qualityId = ladder[nextIdx].id;
+        qualityText.textContent = ladder[nextIdx].label;
+        qualityText.setAttribute('class', `sim-drag-viewer-quality q-${ladder[nextIdx].id}`);
+        traceLine(root, `🙋 測試觀眾：量測頻寬 ${measured.toFixed(1)} Mbps，畫質${nextIdx < curIdx ? '降為' : '回升為'}「${ladder[nextIdx].label}」。`, nextIdx < curIdx ? 'bad' : 'ok');
+      }
+    };
+
+    qualityText.textContent = ladder.find(q => q.id === state.dragViewer.qualityId)?.label || state.dragViewer.qualityId || '--';
+    state.dragViewerTimer = setInterval(tick, tickMs / (state.speed || 1));
+  }
+
   // ---------- Screens ----------
 
   function render(root, sim, state) {
@@ -934,6 +1118,7 @@
     wireTraceClear(root);
     wireChunkLab(root, sim, state);
     wireAbrLab(root, sim, state);
+    wireDragViewer(root, sim, state);
 
     root.querySelector('.sim-advance').onclick = () => {
       if (state.month >= sim.months) {
@@ -1036,6 +1221,7 @@
     root.querySelector('.sim-restart').onclick = () => {
       if (state.chunkTimer) clearInterval(state.chunkTimer);
       if (state.abrTimer) clearInterval(state.abrTimer);
+      if (state.dragViewerTimer) clearInterval(state.dragViewerTimer);
       Object.assign(state, newState(sim));
       render(root, sim, state);
     };

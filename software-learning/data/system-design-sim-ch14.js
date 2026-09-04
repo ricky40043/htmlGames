@@ -20,18 +20,19 @@
       '每個能力不是只有開／關：點節點會循環切換不同做法，例如 Metadata 資料庫故障切換可以選「自動偵測＋選舉」或「人工手動切換」——做法不同，成本、復原時間、風險都不一樣。',
       '這些做法都對應書裡「錯誤處理」一節實際列出的情境，不是憑空發明的。',
       '每個月選的做法會持續消耗「營運效率」分數，但能在對應事件發生時保護「可用率」與「播放品質」；12 個月後會逐一列出每個事件「你當時選了哪個做法」。',
-      '拓樸圖上台灣、美國、日本各有自己獨立的 CDN、Load Balancer、API 伺服器——後端的儲存與轉碼系統則集中在美國主機房。從台灣或日本發出的請求要跨海才能碰到主機房，這段路程在動畫上會明顯變慢；從美國發出的請求則不用。'
+      '拓樸圖上台灣、美國、日本各有自己獨立的 CDN、Load Balancer——後面又分成兩條路：搜尋／上架影片打「API 伺服器」，觀看影片走「串流伺服器」，兩者是分開的伺服器群組，不會互相影響。後端的儲存與轉碼系統則集中在美國主機房。從台灣或日本發出的請求要跨海才能碰到主機房，這段路程在動畫上會明顯變慢；從美國發出的請求則不用。'
     ],
     months: 12,
     viewersLabel: '目前尖峰同時觀看人數估計',
-    demoLabels: { watch: '▶ 模擬觀眾看一部影片', upload: '⬆ 模擬上傳一部影片' },
+    demoLabels: { watch: '▶ 模擬觀眾看一部影片', upload: '⬆ 模擬上傳一部影片', search: '🔍 模擬搜尋影片' },
+    concurrentViewersLabel: '👥 模擬 10 人同時觀看同一部影片',
     viewersAtMonth: m => Math.round(5000 * Math.pow(1.62, m)),
     components: [
       {
         id: 'apiRedundancy',
         name: 'API 伺服器備援容量',
         shortName: 'API 備援',
-        desc: 'API 伺服器是無狀態的，單台當機時負載平衡器能把流量導到其他伺服器——差別在於備援容量是「隨時待命」還是「當下才開」。這個做法會同時套用到台灣、美國、日本三個地區自己的 API 伺服器群組。',
+        desc: '伺服器是無狀態的，單台當機時負載平衡器能把流量導到其他伺服器——差別在於備援容量是「隨時待命」還是「當下才開」。這個做法會同時套用到台灣、美國、日本三個地區、以及「API 伺服器」（搜尋／上架）與「串流伺服器」（觀看影片）兩層各自獨立的伺服器群組。',
         ...ref('sd14-s02-p01'),
         options: [
           { ...OFF, instances: 1 },
@@ -100,67 +101,78 @@
         options: [OFF, { id: 'on', label: '啟用斷點續傳', cost: 1, desc: '維護 upload session 狀態需要一點額外成本，但能大幅減少大檔案重傳的浪費。' }]
       }
     ],
-    // Three regions, each with its own genuinely independent edge/compute stack (CDN + Load
-    // Balancer + API pool) — this is the part that actually determines request latency, and is
-    // textbook CDN/regional-deployment territory, not an invented mechanic. The backend origin
+    // Three regions, each with its own genuinely independent edge stack — and, critically, TWO
+    // separate backend tiers, not one shared "API server" for everything: search and upload
+    // orchestration hit the (metadata) API server; watching a video never touches that server at
+    // all and instead flows through its own Streaming server pool, matching how a real
+    // video platform actually separates its control plane from its video-serving data plane
+    // (different scaling characteristics, different failure blast radius). The backend origin
     // (object storage, transcode pipeline, the Metadata DB and its cache) stays centralized in
     // the home region (USA), matching what the book itself actually diagrams — it describes
     // Master/Slave failover for *availability*, not a geo-distributed database, so this doesn't
     // invent content beyond what's grounded. A request from Taiwan or Japan has to cross an
     // ocean to reach that origin; a request from the US region doesn't — see crossRegionWeight.
-    topology: {
-      viewBox: '0 0 1200 700',
-      regionIds: ['tw', 'us', 'jp'],
-      regionLabel: { tw: '台灣', us: '美國', jp: '日本' },
-      crossRegionWeight: 3.4,
-      nodes: [
-        { id: 'users_tw', kind: 'user', label: '觀眾（台灣）', region: '台灣', x: 90, y: 110, arriveLabel: '使用者裝置收到回應' },
-        { id: 'cdn_tw', kind: 'component', componentId: 'cdnPopularOnly', label: 'CDN（台灣）', region: '台灣', x: 300, y: 110, arriveLabel: '檢查熱門內容是否命中這個地區的 Edge 快取' },
-        { id: 'loadBalancer_tw', kind: 'fixed', label: 'Load Balancer（台灣）', region: '台灣', x: 500, y: 110, arriveLabel: '健康檢查後把請求導向這個地區其中一台 API 伺服器' },
-        { id: 'apiServer_tw', kind: 'component', componentId: 'apiRedundancy', label: 'API 伺服器（台灣）', region: '台灣', x: 700, y: 110, pool: true, arriveLabel: '驗證請求並決定下一步路由' },
-
-        { id: 'users_us', kind: 'user', label: '觀眾（美國）', region: '美國（主機房）', x: 90, y: 340, arriveLabel: '使用者裝置收到回應' },
-        { id: 'cdn_us', kind: 'component', componentId: 'cdnPopularOnly', label: 'CDN（美國）', region: '美國（主機房）', x: 300, y: 340, arriveLabel: '檢查熱門內容是否命中這個地區的 Edge 快取' },
-        { id: 'loadBalancer_us', kind: 'fixed', label: 'Load Balancer（美國）', region: '美國（主機房）', x: 500, y: 340, arriveLabel: '健康檢查後把請求導向這個地區其中一台 API 伺服器' },
-        { id: 'apiServer_us', kind: 'component', componentId: 'apiRedundancy', label: 'API 伺服器（美國）', region: '美國（主機房）', x: 700, y: 340, pool: true, arriveLabel: '驗證請求並決定下一步路由' },
-        { id: 'metadataCache', kind: 'component', componentId: 'cacheReplica', label: 'Metadata 快取', region: '美國（主機房）', x: 900, y: 220, arriveLabel: '從 Metadata 快取節點取得資料' },
-        { id: 'transcodeArch', kind: 'component', componentId: 'transcodeResilience', label: '轉碼架構', region: '美國（主機房）', x: 900, y: 340, pool: true, arriveLabel: 'DAG 排程器指派任務給某一台工作程序' },
-        { id: 'storage', kind: 'fixed', label: '儲存系統', region: '美國（主機房）', x: 1100, y: 340, arriveLabel: '寫入或讀取原始／已轉碼影片' },
-        { id: 'metadataDB', kind: 'component', componentId: 'dbMasterSlave', label: 'Metadata 資料庫', region: '美國（主機房）', x: 900, y: 460, size: 'small', arriveLabel: '讀取或寫入 Metadata 資料庫' },
-
-        { id: 'users_jp', kind: 'user', label: '觀眾（日本）', region: '日本', x: 90, y: 570, arriveLabel: '使用者裝置收到回應' },
-        { id: 'cdn_jp', kind: 'component', componentId: 'cdnPopularOnly', label: 'CDN（日本）', region: '日本', x: 300, y: 570, arriveLabel: '檢查熱門內容是否命中這個地區的 Edge 快取' },
-        { id: 'loadBalancer_jp', kind: 'fixed', label: 'Load Balancer（日本）', region: '日本', x: 500, y: 570, arriveLabel: '健康檢查後把請求導向這個地區其中一台 API 伺服器' },
-        { id: 'apiServer_jp', kind: 'component', componentId: 'apiRedundancy', label: 'API 伺服器（日本）', region: '日本', x: 700, y: 570, pool: true, arriveLabel: '驗證請求並決定下一步路由' },
-
-        { id: 'preSignedBadge', kind: 'component', componentId: 'preSignedUpload', label: '預簽名直傳', x: 500, y: 660, size: 'small', arriveLabel: '直接對原始儲存系統上傳，略過 API 伺服器' },
-        { id: 'uploadBadge', kind: 'component', componentId: 'resumableUpload', label: '斷點續傳', x: 1100, y: 460, size: 'small', arriveLabel: '檢查已成功的位元組位置' }
-      ],
-      edges: [
-        { from: 'users_tw', to: 'cdn_tw' }, { from: 'cdn_tw', to: 'loadBalancer_tw' }, { from: 'loadBalancer_tw', to: 'apiServer_tw' }, { from: 'apiServer_tw', to: 'storage' },
-        { from: 'users_us', to: 'cdn_us' }, { from: 'cdn_us', to: 'loadBalancer_us' }, { from: 'loadBalancer_us', to: 'apiServer_us' }, { from: 'apiServer_us', to: 'storage' },
-        { from: 'users_jp', to: 'cdn_jp' }, { from: 'cdn_jp', to: 'loadBalancer_jp' }, { from: 'loadBalancer_jp', to: 'apiServer_jp' }, { from: 'apiServer_jp', to: 'storage' },
-        { from: 'storage', to: 'transcodeArch' },
-        { from: 'apiServer_tw', to: 'metadataCache' }, { from: 'apiServer_us', to: 'metadataCache' }, { from: 'apiServer_jp', to: 'metadataCache' },
-        { from: 'apiServer_tw', to: 'metadataDB', kind: 'stub' }, { from: 'apiServer_us', to: 'metadataDB', kind: 'stub' }, { from: 'apiServer_jp', to: 'metadataDB', kind: 'stub' },
-        { from: 'users_tw', to: 'preSignedBadge', kind: 'stub', requiresComponent: 'preSignedUpload' },
-        { from: 'users_us', to: 'preSignedBadge', kind: 'stub', requiresComponent: 'preSignedUpload' },
-        { from: 'users_jp', to: 'preSignedBadge', kind: 'stub', requiresComponent: 'preSignedUpload' },
-        { from: 'storage', to: 'uploadBadge', kind: 'stub' }
-      ],
-      // `regionId` picks which region's edge stack the request enters through; the backend
-      // origin it eventually reaches is always the same centralized cluster, so a Taiwan/Japan
-      // request's *last* leg into that cluster is the one crossRegionWeight makes visibly slower.
-      computeFlow: (kind, ctx, regionId = 'us') => {
-        const r = regionId;
-        if (kind === 'upload') {
-          return ctx.has('preSignedUpload')
-            ? [`users_${r}`, 'storage', 'transcodeArch', 'storage']
-            : [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'storage', 'transcodeArch', 'storage'];
+    topology: (() => {
+      const regionNode = (r, label, yUpper, yCenter, yLower) => [
+        { id: `users_${r}`, kind: 'user', label: `觀眾（${label}）`, region: label, x: 90, y: yCenter, arriveLabel: '使用者裝置收到回應' },
+        { id: `cdn_${r}`, kind: 'component', componentId: 'cdnPopularOnly', label: `CDN（${label}）`, region: label, x: 280, y: yUpper, arriveLabel: '檢查熱門內容是否命中這個地區的 Edge 快取' },
+        { id: `loadBalancer_${r}`, kind: 'fixed', label: `Load Balancer（${label}）`, region: label, x: 480, y: yCenter, arriveLabel: '健康檢查後依路徑把請求導向 API 或串流伺服器群組' },
+        { id: `streamServer_${r}`, kind: 'component', componentId: 'apiRedundancy', label: `串流伺服器（${label}）`, region: label, x: 680, y: yUpper, pool: true, arriveLabel: '從快取或原始儲存系統取得影片內容區塊' },
+        { id: `apiServer_${r}`, kind: 'component', componentId: 'apiRedundancy', label: `API 伺服器（${label}）`, region: label, x: 680, y: yLower, pool: true, arriveLabel: '驗證請求並決定下一步路由' }
+      ];
+      const regionEdges = r => [
+        { from: `users_${r}`, to: `loadBalancer_${r}` },
+        { from: `loadBalancer_${r}`, to: `apiServer_${r}` },
+        { from: `users_${r}`, to: `cdn_${r}` },
+        { from: `cdn_${r}`, to: `loadBalancer_${r}` },
+        { from: `loadBalancer_${r}`, to: `streamServer_${r}` },
+        { from: `streamServer_${r}`, to: 'storage' },
+        { from: `apiServer_${r}`, to: 'storage' },
+        { from: `apiServer_${r}`, to: 'metadataCache' },
+        { from: `apiServer_${r}`, to: 'metadataDB', kind: 'stub' },
+        { from: `users_${r}`, to: 'preSignedBadge', kind: 'stub', requiresComponent: 'preSignedUpload' }
+      ];
+      return {
+        viewBox: '0 0 1300 950',
+        regionIds: ['tw', 'us', 'jp'],
+        regionLabel: { tw: '台灣', us: '美國', jp: '日本' },
+        crossRegionWeight: 3.4,
+        nodes: [
+          ...regionNode('tw', '台灣', 80, 140, 200),
+          ...regionNode('us', '美國', 400, 460, 520),
+          { id: 'transcodeArch', kind: 'component', componentId: 'transcodeResilience', label: '轉碼架構', region: '美國', zone: '美國主機房（後端）', x: 1050, y: 380, pool: true, arriveLabel: 'DAG 排程器指派任務給某一台工作程序' },
+          { id: 'storage', kind: 'fixed', label: '儲存系統', region: '美國', zone: '美國主機房（後端）', x: 1050, y: 460, arriveLabel: '寫入或讀取原始／已轉碼影片' },
+          { id: 'metadataCache', kind: 'component', componentId: 'cacheReplica', label: 'Metadata 快取', region: '美國', zone: '美國主機房（後端）', x: 1050, y: 540, arriveLabel: '從 Metadata 快取節點取得資料' },
+          { id: 'metadataDB', kind: 'component', componentId: 'dbMasterSlave', label: 'Metadata 資料庫', region: '美國', zone: '美國主機房（後端）', x: 1050, y: 600, size: 'small', arriveLabel: '讀取或寫入 Metadata 資料庫' },
+          ...regionNode('jp', '日本', 720, 780, 840),
+          { id: 'uploadBadge', kind: 'component', componentId: 'resumableUpload', label: '斷點續傳', x: 1050, y: 220, size: 'small', arriveLabel: '檢查已成功的位元組位置' },
+          { id: 'preSignedBadge', kind: 'component', componentId: 'preSignedUpload', label: '預簽名直傳', x: 860, y: 880, size: 'small', arriveLabel: '直接對原始儲存系統上傳，略過 API 伺服器' }
+        ],
+        edges: [
+          ...regionEdges('tw'), ...regionEdges('us'), ...regionEdges('jp'),
+          { from: 'storage', to: 'transcodeArch' },
+          { from: 'storage', to: 'uploadBadge', kind: 'stub' }
+        ],
+        // `regionId` picks which region's edge stack the request enters through. Watching a
+        // video (`watch`) never visits `apiServer_*` — it's routed entirely through the region's
+        // own `streamServer_*` pool instead, which is the whole point of separating the two
+        // tiers. The backend origin it eventually reaches is always the same centralized
+        // cluster, so a Taiwan/Japan request's last leg into that cluster is the one
+        // crossRegionWeight makes visibly slower; a US request's isn't.
+        computeFlow: (kind, ctx, regionId = 'us') => {
+          const r = regionId;
+          if (kind === 'upload') {
+            return ctx.has('preSignedUpload')
+              ? [`users_${r}`, 'storage', 'transcodeArch', 'storage']
+              : [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'storage', 'transcodeArch', 'storage'];
+          }
+          if (kind === 'search') {
+            return [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'metadataCache', `apiServer_${r}`, `users_${r}`];
+          }
+          return [`users_${r}`, `cdn_${r}`, `loadBalancer_${r}`, `streamServer_${r}`, 'storage', `streamServer_${r}`, `loadBalancer_${r}`, `cdn_${r}`, `users_${r}`];
         }
-        return [`users_${r}`, `cdn_${r}`, 'storage', `cdn_${r}`, `users_${r}`];
-      }
-    },
+      };
+    })(),
     chunkSim: {
       total: 6,
       resumeComponentId: 'resumableUpload',
@@ -188,6 +200,15 @@
         { id: '720p', label: '720p', mbps: 5.0 }
       ]
     },
+    // A draggable avatar directly on the topology: pull it into the marked zone (or focus it and
+    // press Enter) and its own live playback — running continuously in the background — starts
+    // sampling bad-network bandwidth, so its next segment visibly drops quality right there,
+    // without needing to open the separate ABR lab panel. Reuses abrSim's ladder/ranges/timing
+    // by simply omitting them here (wireDragViewer falls back to sim.abrSim's values).
+    dragViewerSim: {
+      start: { x: 1200, y: 100 },
+      zone: { x: 550, y: 260, width: 300, height: 80, label: '📶 訊號不良區（把觀眾拖進來試試）' }
+    },
     events: [
       {
         month: 2,
@@ -206,10 +227,10 @@
       {
         month: 4,
         id: 'apiServerDown',
-        title: '一台 API 伺服器當機',
+        title: '一台 API（搜尋／上架）伺服器當機',
         relevantComponents: ['apiRedundancy'],
         demoFlow: ['users_us', 'loadBalancer_us', 'apiServer_us'],
-        narrative: '其中一台 API 伺服器硬體故障離線，這台伺服器原本承擔的請求全部需要別人接手。',
+        narrative: '負責搜尋與上架的其中一台 API 伺服器硬體故障離線，這台伺服器原本承擔的請求全部需要別人接手（觀看影片走的是另一組串流伺服器，不受影響，但套用的是同一套備援策略）。',
         resolve: ctx => {
           const choice = ctx.get('apiRedundancy');
           if (choice === 'warmStandby') return { uptime: 0, qoe: 0, log: '熱備援伺服器立即接手，容量足夠吸收這些流量，幾乎沒人感覺得到。', ok: true };

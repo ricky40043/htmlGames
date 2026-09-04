@@ -144,6 +144,18 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-abr-seg.q-360p{background:var(--sim-bad)}
 .sim-abr-seg.stalled{outline:2px solid #fff;outline-offset:1px}
 .sim-abrlab-actions{display:flex;gap:10px;flex-wrap:wrap}
+.sim-drag-zone{fill:rgba(251,113,133,.08);stroke:var(--sim-bad);stroke-dasharray:5 4;stroke-width:1.5;transition:fill .2s ease}
+.sim-drag-zone.active{fill:rgba(251,113,133,.22)}
+.sim-drag-zone-label{fill:#fca5b1;font-size:11px;font-weight:700}
+.sim-drag-viewer{cursor:grab;touch-action:none}
+.sim-drag-viewer.dragging{cursor:grabbing}
+.sim-drag-viewer circle{fill:rgba(110,168,254,.18);stroke:var(--accent);stroke-width:2;transition:stroke .2s ease,fill .2s ease}
+.sim-drag-viewer.in-zone circle{stroke:var(--sim-bad);fill:rgba(251,113,133,.22)}
+.sim-drag-viewer:hover circle,.sim-drag-viewer:focus circle{filter:drop-shadow(0 0 6px rgba(110,168,254,.6));outline:none}
+.sim-drag-viewer-emoji{text-anchor:middle;font-size:16px;pointer-events:none}
+.sim-drag-viewer-quality{text-anchor:middle;font-size:11px;font-weight:800;pointer-events:none;fill:var(--sim-good)}
+.sim-drag-viewer-quality.q-480p{fill:var(--sim-warn)}
+.sim-drag-viewer-quality.q-360p{fill:var(--sim-bad)}
 @keyframes simBurst{to{transform:translate(var(--dx),var(--dy));opacity:0}}
 @keyframes simTopoFail{0%,100%{transform:scale(1)}40%{transform:scale(1.3)}}
 @keyframes simTopoPulse{0%,100%{opacity:1}50%{opacity:.5}}
