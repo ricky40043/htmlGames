@@ -297,18 +297,39 @@
     });
   }
 
-  // Pure interpolation so this is unit-testable without touching timers/DOM.
-  function pointAlongPath(points, t) {
+  // Cumulative fraction-of-total-duration boundary for each waypoint (0..1). Uniform when no
+  // per-segment weights are given (the original, still-default behaviour); otherwise a heavier
+  // segment claims a proportionally bigger slice of the same total travel time.
+  function weightBoundaries(segCount, weights) {
+    if (!weights || weights.length !== segCount) {
+      return Array.from({ length: segCount + 1 }, (_, i) => i / segCount);
+    }
+    const total = weights.reduce((s, w) => s + w, 0) || segCount;
+    let acc = 0;
+    const bounds = [0];
+    weights.forEach(w => { acc += w / total; bounds.push(acc); });
+    bounds[bounds.length - 1] = 1; // guard float drift so the last boundary is always exactly 1
+    return bounds;
+  }
+
+  // Pure interpolation so this is unit-testable without touching timers/DOM. `weights` lets a
+  // specific hop (e.g. one that crosses regions) claim a bigger share of the same total duration
+  // than a same-region hop — this is what makes "Taiwan and the US are actually far apart"
+  // visible as the token noticeably slowing down on that one segment, not just a number in text.
+  function pointAlongPath(points, t, weights) {
     const segCount = points.length - 1;
     if (segCount <= 0) return points[0];
-    const scaled = clamp(t, 0, 1) * segCount;
-    const i = Math.min(Math.floor(scaled), segCount - 1);
-    const localT = scaled - i;
+    const tt = clamp(t, 0, 1);
+    const bounds = weightBoundaries(segCount, weights);
+    let i = 0;
+    while (i < segCount - 1 && tt >= bounds[i + 1]) i++;
+    const span = bounds[i + 1] - bounds[i];
+    const localT = span > 0 ? (tt - bounds[i]) / span : 0;
     const a = points[i], b = points[i + 1];
     return { x: a.x + (b.x - a.x) * localT, y: a.y + (b.y - a.y) * localT };
   }
 
-  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, onDone, onHop } = {}) {
+  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, weights, onDone, onHop } = {}) {
     if (!svgEl || waypoints.length < 2) { onDone?.(null); return null; }
     const circle = document.createElementNS(SVG_NS, 'circle');
     circle.setAttribute('r', '7');
@@ -318,9 +339,10 @@
     svgEl.appendChild(circle);
     const start = Date.now();
     const segCount = waypoints.length - 1;
+    const bounds = weightBoundaries(segCount, weights);
     let nextHop = 1;
     const fireHopsUpTo = t => {
-      while (nextHop < waypoints.length && t >= nextHop / segCount) {
+      while (nextHop < waypoints.length && t >= bounds[nextHop]) {
         onHop?.(nextHop);
         nextHop++;
       }
@@ -337,7 +359,7 @@
         return;
       }
       fireHopsUpTo(t);
-      const p = pointAlongPath(waypoints, t);
+      const p = pointAlongPath(waypoints, t, weights);
       circle.setAttribute('cx', p.x);
       circle.setAttribute('cy', p.y);
     }, 40);
@@ -354,6 +376,18 @@
     });
   }
 
+  // A hop between two nodes tagged with a different `.region` physically crosses an ocean —
+  // give it a bigger share of the token's travel time than a same-region hop gets. Nodes with no
+  // region (chapters that don't use multi-region topology) always compare unequal to nothing, so
+  // this is a no-op everywhere except a topology that actually declares regions.
+  function hopWeights(topo, nodeIds) {
+    return nodeIds.slice(1).map((id, i) => {
+      const a = findNode(topo, nodeIds[i]), b = findNode(topo, id);
+      const crossRegion = a?.region && b?.region && a.region !== b.region;
+      return crossRegion ? (topo.crossRegionWeight || 3) : 1;
+    });
+  }
+
   // Cycling a capability's option used to trigger a full render() — that wiped the trace log,
   // killed any in-flight token animation, and flashed the whole screen on every click. This
   // updates only the node, its edges, and its legend row in place. For pool nodes the instance
@@ -361,17 +395,21 @@
   // just this one <g>, not the whole screen) rather than patched field-by-field.
   function updateComponentVisual(root, sim, state, componentId) {
     const topo = sim.topology;
-    const g = topo.nodes.find(n => n.componentId === componentId);
-    if (!g) return;
+    const nodes = topo.nodes.filter(n => n.componentId === componentId);
+    if (!nodes.length) return;
     const opt = currentOption(sim, componentId, state);
     const on = opt.id !== 'off';
-    const nodeEl = root.querySelector(`[data-node="${g.id}"]`);
-    if (nodeEl) {
+    // A capability can now be physically present at more than one node (e.g. the same CDN
+    // strategy rendered once per region) — every one of them shares this one on/off state and
+    // instance count, so all of them need to be repainted, not just whichever was declared first.
+    nodes.forEach(g => {
+      const nodeEl = root.querySelector(`[data-node="${g.id}"]`);
+      if (!nodeEl) return;
       nodeEl.classList.toggle('on', on);
       nodeEl.classList.toggle('off', !on);
       const interactive = nodeEl.hasAttribute('data-toggle');
       nodeEl.innerHTML = nodeInnerSvg(sim, state, g, interactive);
-    }
+    });
     // Only edges that explicitly require this component ever change state when it's toggled —
     // every other edge is a static structural connection (see the note in edgesSvg above).
     topo.edges.forEach(e => {
@@ -416,23 +454,35 @@
     const topo = sim.topology;
     if (!topo?.computeFlow) return;
     const ctx = makeChoiceCtx(sim, state);
-    const flowIds = topo.computeFlow('watch', ctx);
-    if (flowIds.length < 2) return;
+    const regionIds = topo.regionIds;
     const count = clamp(Math.round(batchSize / 40), 1, 4);
+    // Picked up front (not inside the setTimeout below) so the trace-log breakdown line can
+    // report real counts immediately instead of racing the staggered spawns that haven't fired yet.
+    const picks = Array.from({ length: count }, () => regionIds?.length ? regionIds[Math.floor(Math.random() * regionIds.length)] : undefined);
+    const regionTally = {};
+    picks.forEach(r => { if (r) regionTally[r] = (regionTally[r] || 0) + 1; });
     for (let i = 0; i < count; i++) {
       setTimeout(() => {
-        // Recomputed per token (not hoisted) so each simulated viewer that lands on a pool
-        // node (e.g. the API server pool) can be routed to a different random instance.
+        // Pool instance still picked per token (not hoisted) so each simulated viewer that lands
+        // on a pool node (e.g. a regional API pool) can independently hit a different server.
+        const regionId = picks[i];
+        const flowIds = topo.computeFlow('watch', ctx, regionId);
+        if (flowIds.length < 2) return;
         const waypoints = waypointsFor(sim, state, flowIds);
+        const weights = hopWeights(topo, flowIds);
         spawnToken(svgEl, waypoints, {
           className: 'ambient',
           tokenClass: 'sim-token-ambient',
           durationMs: (1100 + Math.random() * 900) / (state.speed || 1),
+          weights,
           onDone: circle => setTimeout(() => circle?.remove(), 300 / (state.speed || 1))
         });
       }, Math.random() * 650);
     }
-    traceLine(root, `其中約 ${numFmt(count)} 位使用者立刻開始觀看內容`);
+    const breakdown = regionIds?.length
+      ? `（分布：${regionIds.map(r => `${esc(topo.regionLabel?.[r] || r)} ${regionTally[r] || 0}`).join('・')}）`
+      : '';
+    traceLine(root, `其中約 ${numFmt(count)} 位使用者立刻開始觀看內容${breakdown}`);
   }
 
   function wireTopologyControls(root, sim, state, onCycle) {
@@ -458,13 +508,19 @@
       btn.onclick = () => {
         const kind = btn.dataset.kind;
         const ctx = makeChoiceCtx(sim, state);
-        const flowIds = sim.topology.computeFlow(kind, ctx);
+        const topo = sim.topology;
+        const regionIds = topo.regionIds;
+        const regionId = regionIds?.length ? regionIds[Math.floor(Math.random() * regionIds.length)] : undefined;
+        const regionLabel = regionId && topo.regionLabel?.[regionId];
+        const flowIds = topo.computeFlow(kind, ctx, regionId);
         const waypoints = waypointsFor(sim, state, flowIds);
+        const weights = hopWeights(topo, flowIds);
         svgEl.querySelector('.sim-token-demo')?.remove();
-        traceLine(root, `— 開始模擬：${btn.textContent.trim()} —`, 'head');
+        traceLine(root, `— 開始模擬：${btn.textContent.trim()}${regionLabel ? `（來自「${regionLabel}」的請求）` : ''} —`, 'head');
         spawnToken(svgEl, waypoints, {
           className: kind, tokenClass: 'sim-token-demo',
           durationMs: 1600 / (state.speed || 1),
+          weights,
           onHop: idx => {
             const n = findNode(sim.topology, flowIds[idx]);
             traceLine(root, `抵達「${n?.label || flowIds[idx]}」${n?.arriveLabel ? '：' + n.arriveLabel : ''}`);
@@ -492,10 +548,12 @@
     if (event.severity === 'cost') {
       traceLine(root, `— 帳務／成本事件：${event.title} —`, 'head');
       (event.relevantComponents || []).forEach(id => {
-        const n = topo.nodes.find(x => x.componentId === id);
-        const g = n && svgEl.querySelector(`[data-node="${n.id}"]`);
-        g?.classList.add('stressed');
-        if (n) traceLine(root, `「${n.label}」承受成本壓力`);
+        // A capability can exist at more than one physical node (e.g. once per region) — stress
+        // every instance, not just the first one declared, since the cost pressure applies to all.
+        topo.nodes.filter(x => x.componentId === id).forEach(n => {
+          svgEl.querySelector(`[data-node="${n.id}"]`)?.classList.add('stressed');
+          traceLine(root, `「${n.label}」承受成本壓力`);
+        });
       });
       setTimeout(done, 900 / (state.speed || 1));
       return;
@@ -508,18 +566,24 @@
     // Only look for a break point when the event actually failed — some events succeed via an
     // OR of capabilities, so a "still off" relevant component doesn't always mean it broke there.
     const missingId = outcome.ok ? null : (event.relevantComponents || []).find(id => currentOptionId(sim, id, state) === 'off');
-    const missingNode = missingId ? topo.nodes.find(n => n.componentId === missingId) : null;
+    // Look for the missing capability only among the nodes actually on this flow's path — a
+    // capability can now exist at several physical nodes (e.g. once per region), and the token
+    // only ever visits one of them, so a global first-match could point at a node it never went
+    // near and put the "broke here" marker on the wrong region's box.
+    const missingNode = missingId ? flowIds.map(id => findNode(topo, id)).find(n => n?.componentId === missingId) : null;
     let travelIds = flowIds;
     if (missingNode) {
       const idx = flowIds.indexOf(missingNode.id);
       if (idx >= 0) travelIds = flowIds.slice(0, idx + 1);
     }
     const waypoints = waypointsFor(sim, state, travelIds);
+    const weights = hopWeights(topo, travelIds);
     traceLine(root, `— 事件發生：${event.title} —`, 'head');
     spawnToken(svgEl, waypoints, {
       className: outcome.ok ? 'ok' : 'bad',
       tokenClass: 'sim-token-event',
       durationMs: 1500 / (state.speed || 1),
+      weights,
       onHop: idx => {
         const n = findNode(topo, travelIds[idx]);
         traceLine(root, `抵達「${n?.label || travelIds[idx]}」${n?.arriveLabel ? '：' + n.arriveLabel : ''}`);
@@ -835,7 +899,7 @@
 
   // Exposed only for the automated test harness (jsdom can't fast-forward real timers, so the
   // pure geometry used by the token animation needs to be reachable and testable in isolation).
-  window.__simTestHooks = { pointAlongPath, waypointsFor, clusterPositions };
+  window.__simTestHooks = { pointAlongPath, waypointsFor, clusterPositions, hopWeights };
 
   boot();
 })();
