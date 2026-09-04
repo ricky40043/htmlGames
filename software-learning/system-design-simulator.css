@@ -82,6 +82,23 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-topo-node.component.off.present circle{stroke:var(--sim-warn);fill:rgba(250,204,21,.1);opacity:1}
 .sim-topo-node.component.off.absent circle{stroke:#55556b;fill:#16161f;opacity:.6;stroke-dasharray:4 4}
 .sim-topo-node.overloaded circle{stroke:var(--sim-bad);fill:rgba(251,113,133,.16)}
+/* One machine out of a pool, killed by hand: dead grey with a red X, while its siblings keep
+   their own colour and keep serving. Being able to tell them apart at a glance is the point. */
+.sim-topo-instance.killable{cursor:pointer}
+.sim-topo-instance.killable:hover circle,.sim-topo-instance.killable:focus circle{stroke-width:3.5;filter:drop-shadow(0 0 6px rgba(251,113,133,.7));outline:none}
+.sim-topo-node .sim-topo-instance.down circle{stroke:#6b3040!important;fill:#1a1016!important;opacity:.85;stroke-dasharray:3 3}
+.sim-topo-node .sim-topo-instance.down .sim-topo-mark{fill:var(--sim-bad)!important;opacity:1}
+.sim-topo-instance-id{text-anchor:middle;font-size:8.5px;font-weight:800;fill:#6f6f88;pointer-events:none;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.sim-topo-instance.down .sim-topo-instance-id{fill:var(--sim-bad)}
+.sim-topo-node.all-down .sim-topo-label{fill:var(--sim-bad)}
+.sim-topo-absent{text-anchor:middle;font-size:9px;fill:#5c5c72;pointer-events:none}
+.sim-topo-node.absent circle{opacity:.45}
+.sim-topo-node.absent .sim-topo-label{fill:#6a6a80}
+.sim-topo-cost.strategy{cursor:pointer;fill:#9aa4c4;text-decoration:underline dotted}
+.sim-topo-cost.strategy:hover,.sim-topo-cost.strategy:focus{fill:var(--accent);outline:none}
+/* A packet whose machine was pulled mid-flight: it stops where it is and dies visibly. */
+.lost{fill:var(--sim-bad)!important;stroke:var(--sim-bad)!important;animation:simLost .9s ease-out forwards}
+@keyframes simLost{0%{opacity:1;transform:scale(1)}40%{opacity:1;transform:scale(1.9)}100%{opacity:0;transform:scale(.3)}}
 .sim-topo-node.clickable circle{cursor:pointer}
 .sim-topo-node.clickable:hover circle,.sim-topo-node.clickable:focus circle{stroke-width:3.5;filter:drop-shadow(0 0 6px rgba(110,168,254,.55));outline:none}
 .sim-topo-node.failing circle{stroke:var(--sim-bad);fill:rgba(251,113,133,.22);animation:simTopoFail .5s ease}
@@ -169,6 +186,8 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-drag-zone{fill:rgba(251,113,133,.08);stroke:var(--sim-bad);stroke-dasharray:5 4;stroke-width:1.5;transition:fill .2s ease}
 .sim-drag-zone.active{fill:rgba(251,113,133,.22)}
 .sim-drag-zone-label{fill:#fca5b1;font-size:11px;font-weight:700;pointer-events:none}
+.sim-drag-zone-handle{fill:rgba(251,113,133,.55);stroke:#fca5b1;stroke-width:1.5;rx:4;cursor:nwse-resize;touch-action:none}
+.sim-drag-zone-handle:hover{fill:var(--sim-bad)}
 .sim-drag-viewer{cursor:grab;touch-action:none}
 .sim-drag-viewer.dragging{cursor:grabbing}
 .sim-drag-viewer circle{fill:rgba(110,168,254,.18);stroke:var(--accent);stroke-width:2;transition:stroke .2s ease,fill .2s ease}
@@ -179,6 +198,18 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-drag-viewer-quality.q-480p{fill:var(--sim-warn)}
 .sim-drag-viewer-quality.q-360p{fill:var(--sim-bad)}
 .sim-drag-viewer-region{text-anchor:middle;font-size:9.5px;font-weight:700;pointer-events:none;fill:#c4b5fd}
+.sim-wander-btn.active{background:var(--accent-2);border-color:var(--accent-2);color:#0a0a10;font-weight:800}
+.sim-arch-editor{margin:0 0 16px;padding:12px 16px;border:1px solid rgba(139,92,246,.32);border-radius:12px;background:rgba(139,92,246,.06)}
+.sim-arch-editor summary{cursor:pointer;font-weight:800;font-size:.88rem;color:#c4b5fd}
+.sim-arch-note{margin:10px 0;color:var(--muted);font-size:.8rem;line-height:1.6}
+.sim-arch-row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px}
+.sim-arch-input,.sim-arch-select{flex:1;min-width:150px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:#0c0c13;color:#f2f2f7;font-size:.82rem}
+.sim-arch-regions{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
+.sim-arch-regions li{display:flex;align-items:center;gap:10px;padding:6px 10px;background:#0c0c13;border:1px solid var(--border);border-radius:9px;font-size:.8rem}
+.sim-arch-regions li span{color:var(--muted);margin-left:auto}
+.sim-mini-btn{padding:3px 9px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--muted);font-size:.72rem;cursor:pointer}
+.sim-mini-btn:hover{color:var(--sim-bad);border-color:rgba(251,113,133,.5)}
+.sim-topo-node.user.dragging circle{stroke:var(--accent-2);stroke-width:3.5}
 .sim-log-item.capacity{border-left-color:var(--sim-warn)}
 .sim-log-item.capacity .sim-log-tag{background:rgba(250,204,21,.16);color:var(--sim-warn)}
 .sim-sandbox-layout{display:grid;grid-template-columns:160px 1fr;gap:16px;margin:0 0 18px}
@@ -210,6 +241,7 @@ svg.sim-sandbox-svg{width:100%;height:auto;display:block;background:#0a0a10;bord
 .sim-sandbox-conn-item.warn{color:var(--sim-warn)}
 .sim-sandbox-conn-warn-icon{font-size:.78rem}
 .sim-sandbox-field select{display:block;width:100%;margin-top:4px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:#0c0c13;color:#f2f2f7;font-size:.88rem}
+@media(max-width:620px){.sim-arch-row{flex-direction:column}.sim-arch-row .button,.sim-arch-input,.sim-arch-select{width:100%}}
 .sim-sandbox-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 .sim-sandbox-toolbar select{padding:7px 8px;border-radius:8px;border:1px solid var(--border);background:#0c0c13;color:#f2f2f7;font-size:.8rem}
 @keyframes simBurst{to{transform:translate(var(--dx),var(--dy));opacity:0}}

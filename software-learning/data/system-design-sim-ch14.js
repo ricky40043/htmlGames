@@ -19,17 +19,58 @@
   // instead of the single generic「關閉」that made a live-but-unredundant server read as dead.
   const OFF_ALWAYS = label => ({ id: 'off', label, cost: 0 });
 
+  // ---------------------------------------------------------------------------------------
+  // ONE recipe for a region's stack. The three starting regions are built from it, and so is
+  // any region the player invents mid-run via the architecture editor — which is the whole
+  // point: the architecture is generated from a blueprint, not hard-coded three times.
+  // `regionKey` on the pool nodes is what ties a machine to its region for load accounting.
+  // ---------------------------------------------------------------------------------------
+  const regionNode = (r, label, yUpper, yCenter, yLower) => [
+    { id: `users_${r}`, kind: 'user', label: `觀眾（${label}）`, region: label, regionKey: r, x: 90, y: yCenter, arriveLabel: '使用者裝置收到回應' },
+    { id: `cdn_${r}`, kind: 'component', componentId: 'cdnTier', label: `CDN（${label}）`, region: label, regionKey: r, x: 280, y: yUpper, arriveLabel: '檢查這部影片有沒有在這個地區的邊緣節點命中' },
+    { id: `loadBalancer_${r}`, kind: 'fixed', label: `Load Balancer（${label}）`, region: label, regionKey: r, x: 480, y: yCenter, arriveLabel: '健康檢查後依路徑把請求導向 API 或串流伺服器群組' },
+    {
+      id: `streamServer_${r}`, kind: 'component', componentId: 'streamRedundancy',
+      label: `串流伺服器（${label}）`, region: label, x: 680, y: yUpper, pool: true,
+      regionKey: r, loadKind: 'stream', capacityPerInstance: 45000, extraInstanceCost: 2,
+      arriveLabel: '從原始儲存系統取得影片內容區塊並送給觀眾'
+    },
+    {
+      id: `apiServer_${r}`, kind: 'component', componentId: 'apiRedundancy',
+      label: `API 伺服器（${label}）`, region: label, x: 680, y: yLower, pool: true,
+      regionKey: r, loadKind: 'api', capacityPerInstance: 60000, extraInstanceCost: 1,
+      arriveLabel: '驗證請求並決定下一步路由'
+    }
+  ];
+
+  const regionEdges = r => [
+    { from: `users_${r}`, to: `loadBalancer_${r}` },
+    { from: `loadBalancer_${r}`, to: `apiServer_${r}` },
+    // Both CDN legs are gated on the CDN actually existing: with 不建 CDN selected there is
+    // no edge node in this region at all, so these two wires go dashed and computeFlow
+    // routes watch traffic straight through the load balancer to the origin instead.
+    { from: `users_${r}`, to: `cdn_${r}`, requiresComponent: 'cdnTier' },
+    { from: `cdn_${r}`, to: `loadBalancer_${r}`, requiresComponent: 'cdnTier' },
+    { from: `loadBalancer_${r}`, to: `streamServer_${r}` },
+    { from: `streamServer_${r}`, to: 'storage' },
+    { from: `apiServer_${r}`, to: 'storage' },
+    { from: `apiServer_${r}`, to: 'metadataCache' },
+    { from: `apiServer_${r}`, to: 'metadataDB', kind: 'stub' },
+    { from: `users_${r}`, to: 'preSignedBadge', kind: 'stub', requiresComponent: 'preSignedUpload' }
+  ];
+
   window.SYSTEM_DESIGN_SIM['sd-book-14'] = {
     chapterId: 'sd-book-14',
     title: 'YouTube 生存戰：撐過爆紅的第一年',
     subtitle: '你接手一個剛起步的影片平台。12 個月內，尖峰同時觀看人數會從 5,000 成長到超過一百五十萬，中間會發生書裡「錯誤處理」一節列出的那些真實故障：資料庫 Master 當機、API 伺服器掛掉、轉檔工作程序卡死、快取節點失效。你在每個月初決定每個能力要用哪一種做法、每個地區要開幾台機器——事件發生時不能再改變主意，只能承擔當下選擇的後果。',
     briefing: [
-      '**節點上的符號代表什麼**：✓ 代表這個能力目前有做保護；⚠ 代表機器還在跑、流量照走，但沒有備援，壞一台就有事；✕ 代表這個東西你根本還沒建（例如還沒買 CDN），流量不會經過它，連線也會變成虛線。伺服器不會因為你沒開備援就消失。',
-      '**你可以自己加機器**：串流伺服器、API 伺服器、轉碼工作程序旁邊有 ＋／－ 按鈕，可以在備援策略的基本台數之上自己加開機器。每台都要錢，但能實際擋住超載。',
-      '**容量是真的會算的**：每個地區分到的觀看人數 ÷ 你在那個地區開的機器容量 = 負載率。超過 100% 就會顯示紅色超載，每推進一個月會扣播放品質分數——這不是裝飾，是真的在算。',
-      '**CDN 決定流量從哪裡出來**：沒建 CDN 時，每一次觀看都要一路回源到你自己的串流伺服器；建了 CDN 之後，大多數觀看在地區的 CDN 邊緣節點就直接回覆，根本不會碰到後面的機器——拓樸圖上的封包會直接顯示這個差別。',
-      '**測試觀眾（🙋）有自己的地區**：他站在哪個地區的框裡，就由那個地區的節點服務他；把他拖到別的地區框裡，服務他的節點就會跟著換。訊號不良區（紅色虛線框）本身也可以拖著移動，想測哪一區就把它拖過去。',
-      '拓樸圖上台灣、美國、日本各有自己獨立的 CDN、Load Balancer——後面又分成兩條路：搜尋／上架影片打「API 伺服器」，觀看影片走「串流伺服器」，兩者是分開的伺服器群組，不會互相影響。後端的儲存與轉碼系統則集中在美國主機房，從台灣或日本過去要跨海，動畫上會明顯變慢。'
+      '**每一台機器都是獨立的**：伺服器群組裡的每一台都有自己的編號（#1、#2…）。**點某一台就可以把它拔掉**模擬當機——負載平衡器會立刻改導到還活著的機器，而「正在傳給那一台的請求」會當場中斷，你會看到封包在半路變紅消失。再點一次就把它插回去。要換備援策略請點節點上方那行有底線的策略文字。',
+      '**節點上的符號**：✓ 有做保護 · ⚠ 機器照跑但沒備援，壞一台就有事 · ✕ 這個東西你還沒建（例如還沒買 CDN），流量不會經過它，連線也是虛線。伺服器不會因為你沒開備援就消失。',
+      '**架構是你自己蓋的**：下面的「架構編輯」可以**新增／移除地區**（新地區會照同一份藍圖生出自己的 CDN、LB、串流與 API 伺服器），節點旁的 **＋／－** 可以加開或收掉機器，「＋100 人」會在你選的地區生出一個**獨立的使用者群組節點**，還能直接拖到別的地區——拖過去，那一區的負載就跟著變。',
+      '**容量是真的在算的**：地區觀眾數 ÷ 那一區的機器容量 = 負載率，超過 100% 變紅色，每推進一個月會扣播放品質分數。總觀眾人數是固定的，多開一個地區就是把同一群人分散開來。',
+      '**CDN 決定流量從哪裡出來**：沒建 CDN 時每一次觀看都要回源到你自己的串流伺服器；建了之後大多數觀看在地區 CDN 就直接回覆，根本不碰後面的機器——封包動畫會直接顯示這個差別。',
+      '**測試觀眾（🙋）**：他站在哪個地區的框裡就由那一區服務，可以拖到別區，也可以按「讓觀眾隨機走動」讓他自己亂走。訊號不良區可以拖、也可以拉右下角縮放。注意畫質**不會馬上變**——正在傳的那一段會照原畫質播完，要等下一段收到之後才會降或升，跟真實播放器一樣。',
+      '拓樸圖上每個地區各有自己獨立的 CDN、Load Balancer——後面又分成兩條路：搜尋／上架影片打「API 伺服器」，觀看影片走「串流伺服器」，兩者是分開的伺服器群組，不會互相影響。後端的儲存與轉碼系統則集中在美國主機房，跨海過去在動畫上會明顯變慢。'
     ],
     months: 12,
     viewersLabel: '目前尖峰同時觀看人數估計',
@@ -41,11 +82,18 @@
     // how many concurrent viewers ONE instance can carry, and the topology draws the resulting
     // load ratio live. `offloadFrom` names the component whose current option decides what
     // fraction of watch traffic never reaches the origin at all (the CDN edge absorbs it).
+    // regionWeight is a WEIGHT, not a fixed percentage: the same total audience is split across
+    // however many regions currently exist, so adding a region genuinely relieves the others
+    // instead of conjuring new viewers out of nowhere.
     capacity: {
-      regionShare: { tw: 0.25, us: 0.5, jp: 0.25 },
+      regionWeight: { tw: 1, us: 2, jp: 1 },
       apiRatio: 0.2,
       offloadFrom: 'cdnTier'
     },
+    // The topology is a STARTING architecture the player edits at runtime, not a fixed picture:
+    // regions, machines and user groups are all added and removed during the run. See
+    // `regionBlueprint` below for how a region the player invents actually gets built.
+    mutableTopology: true,
     components: [
       {
         id: 'cdnTier',
@@ -68,7 +116,7 @@
         desc: '伺服器是無狀態的，單台當機時負載平衡器能把流量導到其他伺服器——差別在於備援容量是「隨時待命」還是「當下才開」。這裡只管搜尋／上架影片這條線；觀看影片走的是另一組完全獨立的「串流伺服器」，備援策略要另外決定，兩邊不會互相牽動。',
         ...ref('sd14-s02-p01'),
         options: [
-          { ...OFF_ALWAYS('無備援（只有 1 台在跑）'), instances: 1 },
+          { ...OFF_ALWAYS('無備援（壞掉沒有人接手）'), instances: 1 },
           { id: 'autoScale', label: '自動擴縮容（觸發後約 3–5 分鐘生效）', cost: 1, instances: 2, desc: '負載升高時自動開新機器，成本較低，但生效前這幾分鐘容量會偏緊。' },
           { id: 'warmStandby', label: '熱備援（固定多開 2 台待命）', cost: 3, instances: 3, desc: '隨時有備援容量可以立即接手，幾乎無感，但平常就要多付這些機器的錢。' }
         ]
@@ -81,7 +129,7 @@
         desc: '串流伺服器只負責把影片位元組送到觀眾裝置，跟處理搜尋／上架的 API 伺服器是完全分開的一組機器、分開計費、分開故障——這裡的選擇不會影響 API 伺服器，反過來也一樣。',
         ...ref('sd14-s02-p01'),
         options: [
-          { ...OFF_ALWAYS('無備援（只有 1 台在跑）'), instances: 1 },
+          { ...OFF_ALWAYS('無備援（壞掉沒有人接手）'), instances: 1 },
           { id: 'autoScale', label: '自動擴縮容（觸發後約 3–5 分鐘生效）', cost: 1, instances: 2, desc: '負載升高時自動開新機器，成本較低，但生效前這幾分鐘容量會偏緊。' },
           { id: 'warmStandby', label: '熱備援（固定多開 2 台待命）', cost: 3, instances: 3, desc: '隨時有備援容量可以立即接手，幾乎無感，但平常就要多付這些機器的錢。' }
         ]
@@ -120,7 +168,7 @@
         desc: '任務工作程序當機時，任務排程器可以把工作重新指派給其他工作程序——差別在於重派後是「從頭重轉」還是「接著中斷點繼續」。轉碼管線本身一直在跑，這裡選的是它出事時怎麼救。',
         ...ref('sd14-s09-p01'),
         options: [
-          { ...OFF_ALWAYS('沒有容錯（工作程序當掉就卡死）'), instances: 1 },
+          { ...OFF_ALWAYS('沒有容錯（當掉就卡死）'), instances: 1 },
           { id: 'reassign', label: '偵測＋重新指派（從頭重轉）', cost: 2, instances: 2, desc: '換一個工作程序處理，但沒有進度紀錄，只能整個任務重來。' },
           { id: 'checkpointResume', label: '重新指派＋定期 Checkpoint', cost: 4, instances: 3, desc: '額外維護處理進度快照，換人接手後可以從中斷點繼續，幾乎不浪費已完成的工作。' }
         ]
@@ -161,39 +209,16 @@
     // Master/Slave failover for *availability*, not a geo-distributed database, so this doesn't
     // invent content beyond what's grounded. A request from Taiwan or Japan has to cross an
     // ocean to reach that origin; a request from the US region doesn't — see crossRegionWeight.
+    // How the architecture editor builds a region the player adds at runtime: the exact same
+    // blueprint the three starting regions came from, laid out on a fresh row below them.
+    regionBlueprint: {
+      maxRegions: 6,
+      rowGap: 200,
+      defaultWeight: 1,
+      nodes: (key, name, baseY) => regionNode(key, name, baseY, baseY + 60, baseY + 120),
+      edges: key => regionEdges(key)
+    },
     topology: (() => {
-      const regionNode = (r, label, yUpper, yCenter, yLower) => [
-        { id: `users_${r}`, kind: 'user', label: `觀眾（${label}）`, region: label, x: 90, y: yCenter, arriveLabel: '使用者裝置收到回應' },
-        { id: `cdn_${r}`, kind: 'component', componentId: 'cdnTier', label: `CDN（${label}）`, region: label, x: 280, y: yUpper, arriveLabel: '檢查這部影片有沒有在這個地區的邊緣節點命中' },
-        { id: `loadBalancer_${r}`, kind: 'fixed', label: `Load Balancer（${label}）`, region: label, x: 480, y: yCenter, arriveLabel: '健康檢查後依路徑把請求導向 API 或串流伺服器群組' },
-        {
-          id: `streamServer_${r}`, kind: 'component', componentId: 'streamRedundancy',
-          label: `串流伺服器（${label}）`, region: label, x: 680, y: yUpper, pool: true,
-          regionKey: r, loadKind: 'stream', capacityPerInstance: 45000, extraInstanceCost: 2,
-          arriveLabel: '從原始儲存系統取得影片內容區塊並送給觀眾'
-        },
-        {
-          id: `apiServer_${r}`, kind: 'component', componentId: 'apiRedundancy',
-          label: `API 伺服器（${label}）`, region: label, x: 680, y: yLower, pool: true,
-          regionKey: r, loadKind: 'api', capacityPerInstance: 60000, extraInstanceCost: 1,
-          arriveLabel: '驗證請求並決定下一步路由'
-        }
-      ];
-      const regionEdges = r => [
-        { from: `users_${r}`, to: `loadBalancer_${r}` },
-        { from: `loadBalancer_${r}`, to: `apiServer_${r}` },
-        // Both CDN legs are gated on the CDN actually existing: with 不建 CDN selected there is
-        // no edge node in this region at all, so these two wires go dashed and computeFlow
-        // routes watch traffic straight through the load balancer to the origin instead.
-        { from: `users_${r}`, to: `cdn_${r}`, requiresComponent: 'cdnTier' },
-        { from: `cdn_${r}`, to: `loadBalancer_${r}`, requiresComponent: 'cdnTier' },
-        { from: `loadBalancer_${r}`, to: `streamServer_${r}` },
-        { from: `streamServer_${r}`, to: 'storage' },
-        { from: `apiServer_${r}`, to: 'storage' },
-        { from: `apiServer_${r}`, to: 'metadataCache' },
-        { from: `apiServer_${r}`, to: 'metadataDB', kind: 'stub' },
-        { from: `users_${r}`, to: 'preSignedBadge', kind: 'stub', requiresComponent: 'preSignedUpload' }
-      ];
       return {
         viewBox: '0 0 1300 950',
         regionIds: ['tw', 'us', 'jp'],

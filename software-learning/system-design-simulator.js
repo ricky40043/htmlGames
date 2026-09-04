@@ -91,6 +91,69 @@
     return snap;
   }
 
+  // ---------- Live (editable) topology ----------
+  // A scenario's `topology` is its STARTING architecture, not a fixed picture. When the scenario
+  // opts in with `mutableTopology: true`, the run gets its own deep copy in `state.topo` that the
+  // player can genuinely extend at runtime — add a region, add machines, add user groups — and
+  // every render/flow/load function reads that copy instead of the frozen scenario data. The
+  // scenario's `computeFlow` is carried over by reference (it's a pure function of node-id
+  // conventions, so it keeps working for regions that didn't exist when it was written).
+  function topoOf(sim, state) {
+    return state?.topo || sim.topology;
+  }
+
+  function cloneTopology(topo) {
+    if (!topo) return topo;
+    return {
+      ...topo,
+      nodes: topo.nodes.map(n => ({ ...n })),
+      edges: topo.edges.map(e => ({ ...e })),
+      regionIds: [...(topo.regionIds || [])],
+      regionLabel: { ...(topo.regionLabel || {}) }
+    };
+  }
+
+  // Region audience split is a set of WEIGHTS, not fixed percentages, so adding a region
+  // genuinely redistributes the same total audience instead of inventing viewers out of thin
+  // air — which is also the real lesson: a new edge region relieves the existing ones.
+  function regionWeights(sim, state) {
+    const topo = topoOf(sim, state);
+    const declared = sim.capacity?.regionWeight || {};
+    const w = {};
+    (topo?.regionIds || []).forEach(r => { w[r] = state?.regionWeight?.[r] ?? declared[r] ?? 1; });
+    return w;
+  }
+
+  function regionShare(sim, state, regionKey) {
+    const w = regionWeights(sim, state);
+    const total = Object.values(w).reduce((s, v) => s + v, 0);
+    if (!total || !(regionKey in w)) return 0;
+    return w[regionKey] / total;
+  }
+
+  // ---------- Individual machines ----------
+  // Every machine in a pool is its own object with its own identity ("#2"), its own up/down
+  // state and its own hit target. Requests are only ever routed to machines that are up, and a
+  // request already in flight toward a machine that is pulled dies where it is — which is the
+  // whole point of being able to kill one.
+
+  function instanceKey(nodeId, idx) { return `${nodeId}::${idx}`; }
+
+  function instanceIsDown(state, nodeId, idx) {
+    return !!state?.instanceDown?.[instanceKey(nodeId, idx)];
+  }
+
+  function setInstanceDown(state, nodeId, idx, down) {
+    state.instanceDown = state.instanceDown || {};
+    if (down) state.instanceDown[instanceKey(nodeId, idx)] = true;
+    else delete state.instanceDown[instanceKey(nodeId, idx)];
+  }
+
+  function aliveInstanceIndexes(sim, state, node) {
+    const n = instanceCount(sim, state, node);
+    return Array.from({ length: n }, (_, i) => i).filter(i => !instanceIsDown(state, node.id, i));
+  }
+
   function newState(sim) {
     const cs = sim.dragViewerSim;
     return {
@@ -102,15 +165,21 @@
       // id, so each region's pool scales independently (adding Taiwan streaming servers must not
       // silently also add them in the US).
       extraInstances: {},
+      // Machines the player has pulled the plug on, keyed "<nodeId>::<index>".
+      instanceDown: {},
+      // The editable copy of the architecture (see topoOf) plus the audience weight per region.
+      topo: sim.mutableTopology ? cloneTopology(sim.topology) : null,
+      regionWeight: { ...(sim.capacity?.regionWeight || {}) },
+      nextRegionSeq: 1, nextGroupSeq: 1,
       dragViewer: cs ? {
-        x: cs.start.x, y: cs.start.y, inZone: false,
+        x: cs.start.x, y: cs.start.y, inZone: false, wander: false,
         regionId: cs.homeRegionId || sim.topology?.regionIds?.[0] || null,
         qualityId: (cs.ladder || sim.abrSim?.ladder || []).slice(-1)[0]?.id
       } : null,
-      // The bad-signal zone is a movable object too, not scenery painted at a fixed spot —
-      // its live position lives here so it survives a full renderPlay remount, exactly like the
-      // avatar's does.
-      badZone: cs?.zone ? { x: cs.zone.x, y: cs.zone.y } : null,
+      // The bad-signal zone is a movable AND resizable object, not scenery painted at a fixed
+      // spot — its live geometry lives here so it survives a full renderPlay remount, exactly
+      // like the avatar's position does.
+      badZone: cs?.zone ? { x: cs.zone.x, y: cs.zone.y, width: cs.zone.width, height: cs.zone.height } : null,
       dragViewerTimer: null,
       log: [], history: [{ month: 0, uptime: 100, qoe: 100 }], phase: 'briefing'
     };
@@ -147,17 +216,23 @@
   // decision and the ＋/－ buttons mean something measurable rather than decorative.
   function nodeLoad(sim, state, node) {
     if (!node?.capacityPerInstance || !sim.capacity) return null;
-    const share = sim.capacity.regionShare?.[node.regionKey] ?? (1 / (sim.topology?.regionIds?.length || 1));
-    let demand = sim.viewersAtMonth(state.month) * share;
+    let demand = sim.viewersAtMonth(state.month) * regionShare(sim, state, node.regionKey);
+    // Hand-placed user groups are extra, concrete audience sitting in a specific region — they
+    // are on top of the modelled baseline, not a slice of it.
+    demand += (topoOf(sim, state)?.nodes || [])
+      .filter(n => n.kind === 'user' && n.headcount && n.regionKey === node.regionKey)
+      .reduce((s, n) => s + n.headcount, 0);
     if (node.loadKind === 'stream') demand *= (1 - offloadRatio(sim, state));
     else if (node.loadKind === 'api') demand *= (sim.capacity.apiRatio ?? 0.2);
-    const capacity = instanceCount(sim, state, node) * node.capacityPerInstance;
+    // Capacity comes only from machines that are actually up: pulling one out really does
+    // shrink what this tier can carry, which is what makes killing a machine mean something.
+    const capacity = aliveInstanceIndexes(sim, state, node).length * node.capacityPerInstance;
     return { demand: Math.round(demand), capacity, ratio: capacity > 0 ? demand / capacity : Infinity };
   }
 
   function overloadedNodes(sim, state) {
-    if (!sim.topology?.nodes) return [];
-    return sim.topology.nodes
+    if (!topoOf(sim, state)?.nodes) return [];
+    return topoOf(sim, state).nodes
       .map(n => ({ node: n, load: nodeLoad(sim, state, n) }))
       .filter(x => x.load && x.load.ratio > 1)
       .sort((a, b) => b.load.ratio - a.load.ratio);
@@ -168,7 +243,7 @@
     sim.components.forEach(c => { total += currentOption(sim, c.id, state).cost || 0; });
     // Hand-added machines are real machines: they show up on the bill every month, which is the
     // counterweight that stops "just add servers forever" from being a free win.
-    (sim.topology?.nodes || []).forEach(n => {
+    (topoOf(sim, state)?.nodes || []).forEach(n => {
       const extra = Math.max(0, state.extraInstances?.[n.id] || 0);
       if (extra) total += extra * (n.extraInstanceCost ?? 1);
     });
@@ -251,36 +326,50 @@
   // about which server instance answers you depends on raw pixel distance to its icon; every
   // instance in the chosen region's pool is already interchangeable, which is what "stateless"
   // actually buys you, not "there's no such thing as region-based routing at all").
-  function regionIdAtPoint(topo, x, y) {
-    if (!topo.regionIds || !topo.regionLabel) return null;
-    const groups = {};
-    topo.nodes.forEach(n => { const key = n.zone || n.region; if (key) { (groups[key] ??= []).push(n); } });
-    const pad = 36;
-    for (const ns of Object.values(groups)) {
-      const x0 = Math.min(...ns.map(n => n.x)) - pad, y0 = Math.min(...ns.map(n => n.y)) - pad;
-      const x1 = Math.max(...ns.map(n => n.x)) + pad, y1 = Math.max(...ns.map(n => n.y)) + pad;
-      if (x >= x0 && x <= x1 && y >= y0 && y <= y1) {
-        const label = ns[0].region;
-        const match = Object.entries(topo.regionLabel).find(([, l]) => l === label);
-        if (match) return match[0];
-      }
-    }
-    return null;
-  }
-
-  function regionBoxesSvg(topo) {
+  // A region's drawn box is the extent of its FIXED stack. Nodes the player can drag around
+  // (user groups, and anything else flagged `movable`) are deliberately excluded: otherwise
+  // dragging a group downward stretches its own region's rectangle to follow it, the group is
+  // then still "inside" the region it just left, and it can never be moved anywhere else.
+  function regionBoxes(topo) {
     const groups = {};
     // `zone` groups nodes into a drawn box; `region` (used separately by hopWeights for travel
     // speed) still governs whether two nodes count as "the same place" for latency purposes.
     // They're usually identical, but a centralized backend that's physically same-region as one
     // edge stack still wants its own box rather than merging into that edge stack's box.
-    topo.nodes.forEach(n => { const key = n.zone || n.region; if (key) { groups[key] ??= []; groups[key].push(n); } });
-    return Object.entries(groups).map(([name, ns]) => {
-      const pad = 36;
-      const x0 = Math.min(...ns.map(n => n.x)) - pad, y0 = Math.min(...ns.map(n => n.y)) - pad;
-      const x1 = Math.max(...ns.map(n => n.x)) + pad, y1 = Math.max(...ns.map(n => n.y)) + pad;
-      return `<rect class="sim-topo-region" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" rx="16"/><text class="sim-topo-region-label" x="${x0 + 12}" y="${y0 + 20}">${esc(name)}</text>`;
-    }).join('');
+    topo.nodes.forEach(n => {
+      if (n.movable) return;
+      const key = n.zone || n.region;
+      if (key) (groups[key] ??= []).push(n);
+    });
+    const pad = 36;
+    return Object.entries(groups).map(([name, ns]) => ({
+      name, region: ns[0].region,
+      x0: Math.min(...ns.map(n => n.x)) - pad, y0: Math.min(...ns.map(n => n.y)) - pad,
+      x1: Math.max(...ns.map(n => n.x)) + pad, y1: Math.max(...ns.map(n => n.y)) + pad
+    }));
+  }
+
+  function regionIdAtPoint(topo, x, y) {
+    if (!topo.regionIds || !topo.regionLabel) return null;
+    // Smallest containing box wins, so a point inside a backend zone nested near an edge stack
+    // resolves to the tighter, more specific one rather than to whichever was declared first.
+    const hits = regionBoxes(topo)
+      .filter(b => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1)
+      .sort((a, b) => (a.x1 - a.x0) * (a.y1 - a.y0) - (b.x1 - b.x0) * (b.y1 - b.y0));
+    for (const b of hits) {
+      const match = Object.entries(topo.regionLabel).find(([, l]) => l === b.region);
+      if (match) return match[0];
+    }
+    return null;
+  }
+
+  function regionBoxesSvg(topo) {
+    return regionBoxes(topo).map(b =>
+      // The name sits just ABOVE its box rather than inside the top-left corner: inside, it
+      // collided with whatever node happened to be drawn near that corner (the backend zone's
+      // label ran straight through the transcode workers' machine numbers).
+      `<rect class="sim-topo-region" x="${b.x0}" y="${b.y0}" width="${b.x1 - b.x0}" height="${b.y1 - b.y0}" rx="16"/><text class="sim-topo-region-label" x="${b.x0 + 2}" y="${b.y0 - 5}">${esc(b.name)}</text>`
+    ).join('');
   }
 
   // "Is this capability currently switched on" — NOT the same question as "does this box exist".
@@ -301,7 +390,7 @@
   }
 
   function edgesSvg(sim, state) {
-    const topo = sim.topology;
+    const topo = topoOf(sim, state);
     return topo.edges.map(e => {
       const a = findNode(topo, e.from), b = findNode(topo, e.to);
       if (!a || !b) return '';
@@ -354,25 +443,44 @@
     const labelOffset = n.size === 'small' ? 15 : n.kind === 'user' ? 25 : 23;
     const positions = clusterPositions(sim, state, n);
     const opt = isComponent ? currentOption(sim, n.componentId, state) : null;
-    const countNote = n.pool ? `（${positions.length} 台）` : '';
+    const aliveCount = n.pool ? aliveInstanceIndexes(sim, state, n).length : 1;
+    const countNote = n.pool ? `（${aliveCount}/${positions.length} 台運作中）` : '';
+    // The strategy label is its own hit target on pool nodes: clicking a MACHINE pulls that one
+    // machine's plug, so the "which strategy" decision needs somewhere else to live.
     const costText = opt ? `${opt.cost > 0 ? '+' : ''}${opt.cost}/月 · ${opt.label}${countNote}` : '';
     // One line BELOW the node label, not two pixels under it — at +16 against the label's +14
     // the two strings printed on top of each other and rendered the users node unreadable.
-    const badge = n.kind === 'user' ? `<text class="sim-topo-badge" x="${n.x}" y="${n.y + labelOffset + 30}">已服務 ${numFmt(state.usersServed || 0)} 人</text>` : '';
-    const circles = positions.map(p => `<circle cx="${p.x}" cy="${p.y}" r="${r}"/>`).join('');
-    // ✓ protected · ⚠ running but with no redundancy · ✕ not built at all. The old two-state
-    // ✓/✕ was the source of "the server is X, so why is it still sending me data?" — a live
-    // server with no spare capacity is not a dead server, and must not look like one.
+    const headText = n.kind === 'user'
+      ? (n.headcount ? `${numFmt(n.headcount)} 人` : `已服務 ${numFmt(state.usersServed || 0)} 人`)
+      : '';
+    const badge = headText ? `<text class="sim-topo-badge" x="${n.x}" y="${n.y + labelOffset + 30}">${esc(headText)}</text>` : '';
+    // ✓ protected · ⚠ running but with no redundancy · ✕ not built at all · ✕(red, dead) a
+    // machine whose plug you pulled. The old two-state ✓/✕ was the source of "the server is X,
+    // so why is it still sending me data?" — a live server with no spare capacity is not a dead
+    // server, and must not look like one.
     const glyph = present ? (on ? '✓' : '⚠') : '✕';
-    const marks = isComponent ? positions.map(p => `<text class="sim-topo-mark" x="${p.x}" y="${p.y + 5}">${glyph}</text>`).join('') : '';
+    // Each machine is its own <g> so it can be clicked, killed, labelled "#2" and targeted by a
+    // token independently of its siblings.
+    const machines = positions.map((p, i) => {
+      const down = n.pool && instanceIsDown(state, n.id, i);
+      const cls = ['sim-topo-instance', n.pool ? 'machine' : '', down ? 'down' : '', interactive && n.pool ? 'killable' : ''].filter(Boolean).join(' ');
+      const mark = isComponent ? `<text class="sim-topo-mark" x="${p.x}" y="${p.y + 5}">${down ? '✕' : glyph}</text>` : '';
+      const idx = n.pool ? `<text class="sim-topo-instance-id" x="${p.x}" y="${p.y - r - 3}">#${i + 1}</text>` : '';
+      const tip = n.pool
+        ? `<title>${esc(n.label)} #${i + 1}${down ? '（已當機）' : ''}${interactive ? ' — 點一下可以拔掉／插回這一台，模擬單台當機' : ''}</title>`
+        : '';
+      return `<g class="${cls}"${n.pool ? ` data-instance="${esc(instanceKey(n.id, i))}"${interactive ? ' role="button" tabindex="0"' : ''}` : ''}>${tip}<circle cx="${p.x}" cy="${p.y}" r="${r}"/>${mark}${idx}</g>`;
+    }).join('');
     const load = nodeLoad(sim, state, n);
     const loadText = load
-      ? `<text class="sim-topo-load${load.ratio > 1 ? ' over' : ''}" x="${n.x}" y="${n.y + labelOffset + 28}">負載 ${numFmt(load.demand)} / ${numFmt(load.capacity)}（${Math.round(load.ratio * 100)}%）</text>`
+      ? `<text class="sim-topo-load${load.ratio > 1 ? ' over' : ''}" x="${n.x}" y="${n.y + labelOffset + 28}">負載 ${numFmt(load.demand)} / ${numFmt(load.capacity)}（${load.capacity ? Math.round(load.ratio * 100) + '%' : '全部當機'}）</text>`
       : '';
-    return `${circles}${marks}
+    const absentNote = !present
+      ? `<text class="sim-topo-absent" x="${n.x}" y="${n.y + labelOffset + 28}">（未建置，流量不會經過這裡）</text>` : '';
+    return `${machines}
         <text class="sim-topo-label" x="${n.x}" y="${n.y + labelOffset + 14}">${esc(n.label)}</text>
-        ${costText ? `<text class="sim-topo-cost" x="${n.x}" y="${n.y - labelOffset - 6}">${esc(costText)}</text>` : ''}
-        ${loadText}${badge}
+        ${costText ? `<text class="sim-topo-cost${interactive && n.pool ? ' strategy' : ''}" x="${n.x}" y="${n.y - labelOffset - 6}"${interactive && n.pool ? ' data-strategy-hit="1" role="button" tabindex="0"' : ''}>${esc(costText)}</text>` : ''}
+        ${loadText}${absentNote}${badge}
         ${interactive && n.pool ? instanceStepperSvg(sim, state, n, positions.length) : ''}`;
   }
 
@@ -381,13 +489,24 @@
     const on = nodeIsOn(sim, state, n);
     const present = nodeIsPresent(sim, state, n);
     const load = nodeLoad(sim, state, n);
+    const allDown = n.pool && aliveInstanceIndexes(sim, state, n).length === 0;
     return ['sim-topo-node', n.kind, on ? 'on' : 'off', present ? 'present' : 'absent',
       isComponent && interactive ? 'clickable' : '', n.pool ? 'pool' : '',
+      allDown ? 'all-down' : '',
       load && load.ratio > 1 ? 'overloaded' : ''].filter(Boolean).join(' ');
   }
 
+  // Is this node able to accept a request right now? A pool with every machine pulled cannot,
+  // and neither can a component that was never built.
+  function nodeCanServe(sim, state, node) {
+    if (!node) return false;
+    if (!nodeIsPresent(sim, state, node)) return false;
+    if (node.pool) return aliveInstanceIndexes(sim, state, node).length > 0;
+    return true;
+  }
+
   function nodesSvg(sim, state, interactive) {
-    const topo = sim.topology;
+    const topo = topoOf(sim, state);
     return topo.nodes.map(n => {
       const isComponent = n.kind === 'component';
       const attrs = isComponent && interactive ? `role="button" tabindex="0" data-toggle="${esc(n.componentId)}"` : '';
@@ -399,8 +518,21 @@
   // the <svg> root, the edges, the drag-viewer group or the trace log), and used instead of a
   // per-node patch because one change can move several nodes' numbers at once — turning the CDN
   // off, for instance, multiplies every region's streaming-server load, not just one node's.
+  // Edges are pure geometry between two node positions, so a moved node has to drag its wires
+  // with it. Patching the existing <line> elements keeps the drag smooth (no full SVG rebuild).
+  function repaintEdges(root, sim, state) {
+    const topo = topoOf(sim, state);
+    (topo?.edges || []).forEach(e => {
+      const a = findNode(topo, e.from), b = findNode(topo, e.to);
+      const line = root.querySelector(`[data-edge="${e.from}-${e.to}"]`);
+      if (!a || !b || !line) return;
+      line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+      line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+    });
+  }
+
   function repaintNodes(root, sim, state) {
-    (sim.topology?.nodes || []).forEach(n => {
+    (topoOf(sim, state)?.nodes || []).forEach(n => {
       const el = root.querySelector(`[data-node="${n.id}"]`);
       if (!el) return;
       const interactive = el.dataset.interactive === '1';
@@ -422,12 +554,14 @@
     if (!cs || !dv) return '';
     const ladder = cs.ladder || sim.abrSim?.ladder || [];
     const qLabel = ladder.find(q => q.id === dv.qualityId)?.label || dv.qualityId || '--';
-    const zonePos = state.badZone || { x: cs.zone.x, y: cs.zone.y };
-    const regionName = sim.topology?.regionLabel?.[dv.regionId] || dv.regionId || '';
+    const z = state.badZone || { x: cs.zone.x, y: cs.zone.y, width: cs.zone.width, height: cs.zone.height };
+    const zw = z.width ?? cs.zone.width, zh = z.height ?? cs.zone.height;
+    const regionName = topoOf(sim, state)?.regionLabel?.[dv.regionId] || dv.regionId || '';
     return `
-      <g class="sim-drag-zone-g" data-drag-zone tabindex="0" role="button" aria-label="拖曳訊號不良區到你想測試的地區，或用方向鍵移動">
-        <rect class="sim-drag-zone${dv.inZone ? ' active' : ''}" x="${zonePos.x}" y="${zonePos.y}" width="${cs.zone.width}" height="${cs.zone.height}" rx="10"/>
-        <text class="sim-drag-zone-label" x="${zonePos.x + 10}" y="${zonePos.y + 22}">${esc(cs.zone.label)}</text>
+      <g class="sim-drag-zone-g" data-drag-zone tabindex="0" role="button" aria-label="拖曳訊號不良區到你想測試的地區；方向鍵移動，Shift＋方向鍵縮放">
+        <rect class="sim-drag-zone${dv.inZone ? ' active' : ''}" x="${z.x}" y="${z.y}" width="${zw}" height="${zh}" rx="10"/>
+        <text class="sim-drag-zone-label" x="${z.x + 10}" y="${z.y + 22}">${esc(cs.zone.label)}</text>
+        <rect class="sim-drag-zone-handle" data-zone-handle x="${z.x + zw - 9}" y="${z.y + zh - 9}" width="18" height="18" rx="4"><title>拖曳這個角可以縮放訊號不良區</title></rect>
       </g>
       <g class="sim-drag-viewer${dv.inZone ? ' in-zone' : ''}" data-drag-viewer tabindex="0" role="button" aria-label="拖曳測試觀眾到別的地區或訊號不良區，或按 Enter 切換">
         <circle cx="${dv.x}" cy="${dv.y}" r="14"/>
@@ -437,8 +571,102 @@
       </g>`;
   }
 
+  // ---------- Runtime architecture editing ----------
+  // The starting three regions are a starting point, not a fixed truth. `regionBlueprint` in the
+  // scenario data describes how ONE region's stack is built (its nodes, its edges, its layout
+  // row height), so the same recipe that produced Taiwan/US/Japan can produce a region the
+  // player invents at month 4 — the topology is generated, never hard-coded per region.
+
+  // Lowest point of the region STACKS (hand-placed user groups are excluded — they're dragged
+  // around freely and must not push new regions ever further down the canvas).
+  function regionRowBounds(sim, state) {
+    const topo = topoOf(sim, state);
+    const ys = topo.nodes.filter(n => n.regionKey && !n.headcount).map(n => n.y);
+    return ys.length ? Math.max(...ys) : 0;
+  }
+
+  function addRegion(sim, state, label) {
+    const bp = sim.regionBlueprint;
+    const topo = topoOf(sim, state);
+    if (!bp || !topo) return null;
+    const name = (label || '').trim();
+    if (!name) return { error: '請先輸入地區名稱。' };
+    if (Object.values(topo.regionLabel).includes(name)) return { error: `「${name}」這個地區已經存在了。` };
+    if (topo.regionIds.length >= (bp.maxRegions || 6)) return { error: `這個模擬最多支援 ${bp.maxRegions || 6} 個地區。` };
+    const key = `r${state.nextRegionSeq++}`;
+    const baseY = regionRowBounds(sim, state) + (bp.rowGap || 320);
+    topo.nodes.push(...bp.nodes(key, name, baseY));
+    topo.edges.push(...bp.edges(key));
+    topo.regionIds.push(key);
+    topo.regionLabel[key] = name;
+    state.regionWeight[key] = bp.defaultWeight ?? 1;
+    // Grow the canvas downward so a newly added row is actually visible.
+    const [vx, vy, vw, vh] = String(topo.viewBox).split(/\s+/).map(Number);
+    const needed = regionRowBounds(sim, state) + 130;
+    if (needed > vy + vh) topo.viewBox = `${vx} ${vy} ${vw} ${Math.ceil(needed - vy)}`;
+    return { key, name };
+  }
+
+  function removeRegion(sim, state, key) {
+    const topo = topoOf(sim, state);
+    if (!topo || topo.regionIds.length <= 1) return { error: '至少要保留一個地區。' };
+    const label = topo.regionLabel[key];
+    topo.nodes = topo.nodes.filter(n => n.regionKey !== key);
+    topo.edges = topo.edges.filter(e => !e.from.endsWith(`_${key}`) && !e.to.endsWith(`_${key}`));
+    topo.regionIds = topo.regionIds.filter(r => r !== key);
+    delete topo.regionLabel[key];
+    delete state.regionWeight[key];
+    if (state.dragViewer?.regionId === key) state.dragViewer.regionId = topo.regionIds[0];
+    return { key, name: label };
+  }
+
+  // "+100 users" should not be an abstract counter — it drops a real, named, draggable group of
+  // 100 people into a region, which then shows up in that region's load like any other audience.
+  function addUserGroup(sim, state, regionKey, headcount) {
+    const topo = topoOf(sim, state);
+    const anchor = findNode(topo, `users_${regionKey}`);
+    if (!anchor) return null;
+    const seq = state.nextGroupSeq++;
+    const ring = topo.nodes.filter(n => n.kind === 'user' && n.regionKey === regionKey && n.headcount).length;
+    const id = `userGroup_${seq}`;
+    topo.nodes.push({
+      id, kind: 'user', label: `使用者群組 #${seq}`, region: anchor.region, regionKey,
+      headcount, movable: true,
+      x: anchor.x + 4 + (ring % 2 ? 46 : -34), y: anchor.y + 62 + Math.floor(ring / 2) * 40,
+      arriveLabel: '這一群使用者的裝置收到回應'
+    });
+    topo.edges.push({ from: id, to: `loadBalancer_${regionKey}`, kind: 'stub' });
+    return findNode(topo, id);
+  }
+
+  function architectureEditorHtml(sim, state) {
+    const topo = topoOf(sim, state);
+    const w = regionWeights(sim, state);
+    const total = Object.values(w).reduce((s, v) => s + v, 0) || 1;
+    const rows = topo.regionIds.map(r => `<li>
+        <b>${esc(topo.regionLabel[r] || r)}</b>
+        <span>觀眾占比 ${Math.round((w[r] / total) * 100)}%</span>
+        <button class="sim-mini-btn" type="button" data-region-remove="${esc(r)}">移除</button>
+      </li>`).join('');
+    return `<details class="sim-arch-editor" open>
+      <summary>🏗️ 架構編輯：自己新增地區與使用者群組</summary>
+      <p class="sim-arch-note">地區不是寫死的。新增一個地區會照同一份藍圖生出它自己的 CDN、Load Balancer、串流伺服器與 API 伺服器，並把總觀眾人數重新分配到所有地區——這也是真實世界加一個 edge region 的效果。</p>
+      <div class="sim-arch-row">
+        <input type="text" class="sim-arch-input" data-region-name placeholder="新地區名稱，例如「新加坡」" aria-label="新地區名稱" />
+        <button class="button secondary" type="button" data-region-add>＋ 新增地區</button>
+      </div>
+      <div class="sim-arch-row">
+        <select class="sim-arch-select" data-group-region aria-label="要把使用者群組放在哪一個地區">
+          ${topo.regionIds.map(r => `<option value="${esc(r)}">${esc(topo.regionLabel[r] || r)}</option>`).join('')}
+        </select>
+        <button class="button secondary" type="button" data-group-add="100">＋ 新增 100 人（成為獨立節點）</button>
+      </div>
+      <ul class="sim-arch-regions">${rows}</ul>
+    </details>`;
+  }
+
   function svgTopology(sim, state, { interactive = false, showControls = false } = {}) {
-    const topo = sim.topology;
+    const topo = topoOf(sim, state);
     if (!topo) return '<p class="sim-topo-missing">這個場景還沒有拓樸圖資料。</p>';
     const legend = sim.components.map(c => {
       const opt = currentOption(sim, c.id, state);
@@ -457,7 +685,7 @@
         ${interactive && showControls ? dragViewerSvg(sim, state) : ''}
       </svg>
       ${interactive
-        ? '<p class="sim-topo-hint">點節點可以循環切換這個能力的不同做法；節點旁的 <b>＋／−</b> 可以直接加開或收掉機器。符號：<b>✓</b> 有保護 · <b>⚠</b> 機器照跑但沒有備援 · <b>✕</b> 這個東西還沒建，流量不會經過它（連線變虛線）。負載超過 100% 會變紅色，代表這個地區的機器已經吃不下這些觀眾。</p>'
+        ? '<p class="sim-topo-hint"><b>點單獨一台機器</b>（#1／#2…）＝把那一台拔掉或插回去，正在傳給它的請求會當場中斷；<b>點節點上方有底線的策略文字</b>＝切換備援做法；<b>＋／−</b>＝加開或收掉機器。符號：<b>✓</b> 有保護 · <b>⚠</b> 機器照跑但沒備援 · <b>✕</b> 還沒建，流量不會經過它。負載超過 100% 變紅色，代表這一區的機器已經吃不下這些觀眾。</p>'
         : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法與當時開的機器數量決定。</p>'}
       ${showControls ? `<div class="sim-topo-controls">
         <button class="button secondary sim-add-users" type="button" data-add="100">${esc(sim.addUsersLabel || '＋100 使用者')}</button>
@@ -465,7 +693,9 @@
         <button class="button secondary sim-demo" type="button" data-kind="upload">${esc(sim.demoLabels?.upload || '⬆ 模擬一次寫入請求')}</button>
         ${sim.demoLabels?.search ? `<button class="button secondary sim-demo" type="button" data-kind="search">${esc(sim.demoLabels.search)}</button>` : ''}
         ${sim.concurrentViewersLabel ? `<button class="button secondary sim-demo-concurrent" type="button" data-count="10">${esc(sim.concurrentViewersLabel)}</button>` : ''}
-      </div>` : ''}
+        ${sim.dragViewerSim ? '<button class="button secondary sim-wander-btn" type="button" data-viewer-wander aria-pressed="false">🚶 讓觀眾隨機走動</button>' : ''}
+      </div>
+      ${sim.mutableTopology ? architectureEditorHtml(sim, state) : ''}` : ''}
       ${speedControls}
       <div class="sim-trace">
         <div class="sim-trace-head"><span>即時處理紀錄</span><button class="sim-trace-clear" type="button">清空</button></div>
@@ -533,7 +763,10 @@
     return { x: a.x + (b.x - a.x) * localT, y: a.y + (b.y - a.y) * localT };
   }
 
-  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, weights, radius = 7, onDone, onHop } = {}) {
+  // `guard` is checked every frame: the moment it returns false the packet is considered lost in
+  // transit — it stops where it is, turns red, and `onLost` fires instead of `onDone`. That is
+  // what "pull a machine out and watch the half-delivered requests die" actually looks like.
+  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, weights, radius = 7, onDone, onHop, guard, onLost } = {}) {
     if (!svgEl || waypoints.length < 2) { onDone?.(null); return null; }
     const circle = document.createElementNS(SVG_NS, 'circle');
     circle.setAttribute('r', String(radius));
@@ -552,6 +785,13 @@
       }
     };
     const timer = setInterval(() => {
+      if (guard && !guard()) {
+        clearInterval(timer);
+        circle.setAttribute('class', `${tokenClass} ${className} lost`.trim());
+        setTimeout(() => circle.remove(), 900);
+        onLost?.(circle);
+        return;
+      }
       const t = (Date.now() - start) / durationMs;
       if (t >= 1) {
         clearInterval(timer);
@@ -570,14 +810,51 @@
     return { circle, stop: () => clearInterval(timer) };
   }
 
-  // Picks ONE instance position per pool node the flow passes through (a different random
-  // server each time), so a token visibly lands on a specific box instead of an abstract point.
+  // Picks ONE machine per pool node the flow passes through — and only ever a machine that is
+  // actually up, because a load balancer does not hand requests to a box it knows is dead. The
+  // chosen machines come back alongside the points so the caller can keep watching them: if one
+  // of them is pulled while the request is still travelling, that request has to die too.
+  function routeFor(sim, state, nodeIds) {
+    const topo = topoOf(sim, state);
+    const points = [];
+    const chosen = [];
+    // Waypoint index → which machine was picked there, so the trace log can say "went to #2"
+    // instead of the useless "went to the API server pool".
+    const chosenAt = {};
+    const visited = [];
+    let blockedAt = null;
+    // A request that revisits the same pool node on the way back out (…→ server → storage →
+    // server → …) has to come back to the SAME machine, not teleport to a sibling.
+    const sticky = {};
+    for (const id of nodeIds) {
+      const n = findNode(topo, id);
+      if (!n) continue;
+      if (n.pool) {
+        const alive = aliveInstanceIndexes(sim, state, n);
+        if (!alive.length) { blockedAt = n; break; }
+        const idx = n.id in sticky ? sticky[n.id] : alive[Math.floor(Math.random() * alive.length)];
+        sticky[n.id] = idx;
+        const positions = clusterPositions(sim, state, n);
+        chosenAt[points.length] = { nodeId: n.id, idx };
+        points.push(positions[idx]);
+        if (!chosen.some(c => c.nodeId === n.id && c.idx === idx)) chosen.push({ nodeId: n.id, idx });
+      } else {
+        points.push({ x: n.x, y: n.y });
+      }
+      visited.push(id);
+    }
+    return { points, chosen, chosenAt, blockedAt, visited };
+  }
+
+  // Backwards-compatible thin wrapper (still exposed to the test harness).
   function waypointsFor(sim, state, nodeIds) {
-    const topo = sim.topology;
-    return nodeIds.map(id => findNode(topo, id)).filter(Boolean).map(n => {
-      const positions = clusterPositions(sim, state, n);
-      return positions[Math.floor(Math.random() * positions.length)];
-    });
+    return routeFor(sim, state, nodeIds).points;
+  }
+
+  // "Are all the machines this request was routed to still up?" — evaluated every animation
+  // frame, so pulling a machine's plug kills the requests already in flight toward it.
+  function routeStillAlive(state, chosen) {
+    return chosen.every(c => !instanceIsDown(state, c.nodeId, c.idx));
   }
 
   // A hop between two nodes tagged with a different `.region` physically crosses an ocean —
@@ -598,7 +875,7 @@
   // *count* can change between options, so the node's inner markup is rebuilt (still scoped to
   // just this one <g>, not the whole screen) rather than patched field-by-field.
   function updateComponentVisual(root, sim, state, componentId) {
-    const topo = sim.topology;
+    const topo = topoOf(sim, state);
     const nodes = topo.nodes.filter(n => n.componentId === componentId);
     if (!nodes.length) return;
     const opt = currentOption(sim, componentId, state);
@@ -625,8 +902,8 @@
     }
   }
 
-  function burstUsers(topo, svgEl) {
-    const usersNode = topo.nodes.find(n => n.kind === 'user');
+  function burstUsers(topo, svgEl, atNode) {
+    const usersNode = atNode || topo.nodes.find(n => n.kind === 'user');
     if (!usersNode || !svgEl) return;
     for (let i = 0; i < 5; i++) {
       const c = document.createElementNS(SVG_NS, 'circle');
@@ -643,19 +920,61 @@
     }
   }
 
+  // One place where every simulated request is born, so the demo buttons, the ambient traffic,
+  // the concurrent-viewers burst and the test viewer's own video segments all obey exactly the
+  // same rules: route only to machines that are up, refuse to start at all if a whole tier is
+  // dead, and die in transit if the machine you were routed to is pulled mid-flight.
+  function spawnRequest(root, sim, state, svgEl, flowIds, opts = {}) {
+    const topo = topoOf(sim, state);
+    const { points, chosen, blockedAt, visited, chosenAt } = routeFor(sim, state, flowIds);
+    if (blockedAt) {
+      if (opts.trace !== false) {
+        traceLine(root, `⛔ 請求無法送出：「${blockedAt.label}」這一組機器全部當機了，負載平衡器找不到任何一台可以接手。`, 'bad');
+      }
+      // Still show the doomed request travelling as far as it can get, so the break point is
+      // visible on the diagram rather than the request silently never appearing.
+      if (points.length >= 2) {
+        spawnToken(svgEl, points, { ...opts.token, className: `${opts.token?.className || ''} lost`.trim(), onDone: c => { c?.setAttribute('class', `${opts.token?.tokenClass || 'sim-token'} lost`); setTimeout(() => c?.remove(), 900); } });
+      }
+      opts.onBlocked?.(blockedAt);
+      return null;
+    }
+    if (points.length < 2) return null;
+    // Position-only remap hook: the test viewer replaces its own `users_*` waypoints with
+    // wherever the avatar is standing right now.
+    const finalPoints = opts.mapPoint ? points.map((p, i) => opts.mapPoint(visited[i], p) || p) : points;
+    return spawnToken(svgEl, finalPoints, {
+      weights: hopWeights(topo, visited),
+      ...opts.token,
+      guard: () => routeStillAlive(state, chosen),
+      onLost: () => {
+        if (opts.trace !== false) {
+          const dead = chosen.find(c => instanceIsDown(state, c.nodeId, c.idx));
+          const n = dead && findNode(topo, dead.nodeId);
+          traceLine(root, `💥 傳到一半的請求中斷了：它被導到「${n?.label || dead?.nodeId}」#${(dead?.idx ?? 0) + 1}，那一台在傳輸途中被拔掉了。`, 'bad');
+        }
+        opts.onLost?.();
+      },
+      onHop: opts.token?.onHop ? idx => opts.token.onHop(idx, chosenAt[idx], visited[idx]) : undefined,
+      onDone: opts.token?.onDone
+    });
+  }
+
   // A batch of new users isn't just a decorative puff of dots at the users node — some of them
   // actually go watch something. Fire a few real "watch" tokens along the current path (same
   // mechanic as the manual ▶ demo button), staggered slightly so they don't land in a single
   // frame, and let the topology visually show organic traffic happening.
-  function spawnAmbientViewers(root, sim, state, svgEl, batchSize) {
-    const topo = sim.topology;
+  function spawnAmbientViewers(root, sim, state, svgEl, batchSize, forcedRegionId, originNode) {
+    const topo = topoOf(sim, state);
     if (!topo?.computeFlow) return;
     const ctx = makeChoiceCtx(sim, state);
     const regionIds = topo.regionIds;
     const count = clamp(Math.round(batchSize / 40), 1, 4);
     // Picked up front (not inside the setTimeout below) so the trace-log breakdown line can
     // report real counts immediately instead of racing the staggered spawns that haven't fired yet.
-    const picks = Array.from({ length: count }, () => regionIds?.length ? regionIds[Math.floor(Math.random() * regionIds.length)] : undefined);
+    // A batch that belongs to one specific user group all comes from that group's own region.
+    const picks = Array.from({ length: count }, () => forcedRegionId
+      || (regionIds?.length ? regionIds[Math.floor(Math.random() * regionIds.length)] : undefined));
     const regionTally = {};
     picks.forEach(r => { if (r) regionTally[r] = (regionTally[r] || 0) + 1; });
     for (let i = 0; i < count; i++) {
@@ -665,14 +984,17 @@
         const regionId = picks[i];
         const flowIds = topo.computeFlow('watch', ctx, regionId);
         if (flowIds.length < 2) return;
-        const waypoints = waypointsFor(sim, state, flowIds);
-        const weights = hopWeights(topo, flowIds);
-        spawnToken(svgEl, waypoints, {
-          className: 'ambient',
-          tokenClass: 'sim-token-ambient',
-          durationMs: (1100 + Math.random() * 900) / (state.speed || 1),
-          weights,
-          onDone: circle => setTimeout(() => circle?.remove(), 300 / (state.speed || 1))
+        spawnRequest(root, sim, state, svgEl, flowIds, {
+          trace: false,
+          // These viewers are the group standing at `originNode`, so their requests start and
+          // end there rather than at the region's generic users icon.
+          mapPoint: originNode ? (nodeId, p) => (nodeId === `users_${regionId}` ? { x: originNode.x, y: originNode.y } : p) : undefined,
+          token: {
+            className: 'ambient',
+            tokenClass: 'sim-token-ambient',
+            durationMs: (1100 + Math.random() * 900) / (state.speed || 1),
+            onDone: circle => setTimeout(() => circle?.remove(), 300 / (state.speed || 1))
+          }
         });
       }, Math.random() * 650);
     }
@@ -682,9 +1004,25 @@
     traceLine(root, `其中約 ${numFmt(count)} 位使用者立刻開始觀看內容${breakdown}`);
   }
 
-  function wireTopologyControls(root, sim, state, onCycle, onInstanceDelta) {
+  function wireTopologyControls(root, sim, state, onCycle, onInstanceDelta, onInstanceKill, onStructureChange, onLoadChange) {
     const svgEl = root.querySelector('svg.sim-topo');
     if (!svgEl) return;
+    // Clicking an individual MACHINE pulls its plug (or plugs it back in). Same capture-phase
+    // trick as the steppers: it must not also bubble into the node's "cycle the strategy"
+    // handler. The strategy label above the node is the hit target for that instead.
+    if (onInstanceKill) {
+      const handleKill = evt => {
+        const g = evt.target.closest?.('[data-instance]');
+        if (!g) return;
+        if (evt.type === 'keydown' && evt.key !== 'Enter' && evt.key !== ' ') return;
+        evt.stopPropagation();
+        evt.preventDefault();
+        const [nodeId, idx] = g.dataset.instance.split('::');
+        onInstanceKill(nodeId, Number(idx));
+      };
+      svgEl.addEventListener('click', handleKill, true);
+      svgEl.addEventListener('keydown', handleKill, true);
+    }
     // The ＋/− buttons sit INSIDE the node <g> that already has its own "cycle this capability"
     // click handler, and they get rebuilt on every repaint. Both problems are solved by one
     // delegated listener in the CAPTURE phase on the svg: capture reaches the svg before the
@@ -711,35 +1049,125 @@
       btn.onclick = () => {
         const batch = Number(btn.dataset.add || 100);
         state.usersServed = (state.usersServed || 0) + batch;
+        const topo = topoOf(sim, state);
+        burstUsers(topo, svgEl);
+        // On a scenario with an editable topology this batch is not a counter — it becomes its
+        // own node on the diagram, in a region, draggable to another one, and counted in that
+        // region's load like any other audience.
+        if (sim.mutableTopology && topo.regionIds?.length) {
+          const pick = root.querySelector('[data-group-region]')?.value || topo.regionIds[0];
+          const node = addUserGroup(sim, state, pick, batch);
+          if (node) {
+            traceLine(root, `湧入 ${numFmt(batch)} 位新使用者，成為「${node.label}」這個獨立節點，放在「${esc(topo.regionLabel?.[pick] || pick)}」，可以直接把它拖到別的地區。`, 'head');
+            // Rebuild the diagram so the new node exists, THEN show those people arriving and
+            // actually watching something — on the fresh SVG, and starting from their own node
+            // rather than from the region's generic users icon.
+            onStructureChange?.();
+            const freshSvg = root.querySelector('svg.sim-topo');
+            burstUsers(topoOf(sim, state), freshSvg, node);
+            spawnAmbientViewers(root, sim, state, freshSvg, batch, pick, node);
+            return;
+          }
+        }
         const badge = svgEl.querySelector('.sim-topo-badge');
         if (badge) badge.textContent = `已服務 ${numFmt(state.usersServed)} 人`;
-        burstUsers(sim.topology, svgEl);
         traceLine(root, `湧入 ${numFmt(batch)} 位新使用者`, 'head');
         spawnAmbientViewers(root, sim, state, svgEl, batch);
       };
     });
+    // --- Architecture editor: add/remove a whole region, add a user group ---
+    if (onStructureChange) {
+      root.querySelector('[data-region-add]')?.addEventListener('click', () => {
+        const input = root.querySelector('[data-region-name]');
+        const res = addRegion(sim, state, input?.value);
+        if (!res) return;
+        if (res.error) { traceLine(root, `⚠️ ${res.error}`, 'bad'); return; }
+        traceLine(root, `🏗️ 新增地區「${esc(res.name)}」：已照藍圖生出它自己的 CDN、Load Balancer、串流伺服器與 API 伺服器，總觀眾人數重新分配到所有地區。`, 'ok');
+        onStructureChange();
+      });
+      root.querySelectorAll('[data-region-remove]').forEach(b => {
+        b.addEventListener('click', () => {
+          const res = removeRegion(sim, state, b.dataset.regionRemove);
+          if (res.error) { traceLine(root, `⚠️ ${res.error}`, 'bad'); return; }
+          traceLine(root, `🏗️ 移除地區「${esc(res.name)}」，它的觀眾被重新分配到其他地區。`, '');
+          onStructureChange();
+        });
+      });
+      root.querySelector('[data-group-add]')?.addEventListener('click', ev => {
+        const n = Number(ev.currentTarget.dataset.groupAdd || 100);
+        const pick = root.querySelector('[data-group-region]')?.value;
+        const node = addUserGroup(sim, state, pick, n);
+        if (!node) return;
+        state.usersServed = (state.usersServed || 0) + n;
+        traceLine(root, `🏗️ 新增「${node.label}」（${numFmt(n)} 人）到「${esc(topoOf(sim, state).regionLabel?.[pick] || pick)}」，可以直接拖到別的地區。`, 'ok');
+        onStructureChange();
+      });
+    }
+    // --- Any node flagged `movable` (user groups) can be dragged between regions ---
+    {
+      let dragNode = null, dx = 0, dy = 0;
+      svgEl.addEventListener('pointerdown', evt => {
+        const g = evt.target.closest?.('[data-node]');
+        if (!g) return;
+        const n = findNode(topoOf(sim, state), g.dataset.node);
+        if (!n?.movable) return;
+        const p = svgCoordsFromEvent(svgEl, evt);
+        dragNode = n; dx = p.x - n.x; dy = p.y - n.y;
+        g.classList.add('dragging');
+        evt.preventDefault();
+      });
+      svgEl.addEventListener('pointermove', evt => {
+        if (!dragNode) return;
+        const p = svgCoordsFromEvent(svgEl, evt);
+        dragNode.x = p.x - dx;
+        dragNode.y = p.y - dy;
+        repaintNodes(root, sim, state);
+        repaintEdges(root, sim, state);
+      });
+      const dropNode = () => {
+        if (!dragNode) return;
+        const topo = topoOf(sim, state);
+        const hit = regionIdAtPoint(topo, dragNode.x, dragNode.y);
+        if (hit && hit !== dragNode.regionKey) {
+          dragNode.regionKey = hit;
+          dragNode.region = topo.regionLabel[hit] || dragNode.region;
+          const edge = topo.edges.find(e => e.from === dragNode.id);
+          if (edge) edge.to = `loadBalancer_${hit}`;
+          traceLine(root, `🏗️「${dragNode.label}」搬到「${esc(topo.regionLabel[hit] || hit)}」，改由這一區的機器承載。`, 'head');
+        }
+        svgEl.querySelector(`[data-node="${dragNode.id}"]`)?.classList.remove('dragging');
+        dragNode = null;
+        repaintNodes(root, sim, state);
+        repaintEdges(root, sim, state);
+        onLoadChange?.();
+      };
+      svgEl.addEventListener('pointerup', dropNode);
+      svgEl.addEventListener('pointerleave', dropNode);
+    }
     root.querySelectorAll('.sim-demo').forEach(btn => {
       btn.onclick = () => {
         const kind = btn.dataset.kind;
         const ctx = makeChoiceCtx(sim, state);
-        const topo = sim.topology;
+        const topo = topoOf(sim, state);
         const regionIds = topo.regionIds;
         const regionId = regionIds?.length ? regionIds[Math.floor(Math.random() * regionIds.length)] : undefined;
         const regionLabel = regionId && topo.regionLabel?.[regionId];
         const flowIds = topo.computeFlow(kind, ctx, regionId);
-        const waypoints = waypointsFor(sim, state, flowIds);
-        const weights = hopWeights(topo, flowIds);
         svgEl.querySelector('.sim-token-demo')?.remove();
         traceLine(root, `— 開始模擬：${btn.textContent.trim()}${regionLabel ? `（來自「${regionLabel}」的請求）` : ''} —`, 'head');
-        spawnToken(svgEl, waypoints, {
-          className: kind, tokenClass: 'sim-token-demo',
-          durationMs: 1600 / (state.speed || 1),
-          weights,
-          onHop: idx => {
-            const n = findNode(sim.topology, flowIds[idx]);
-            traceLine(root, `抵達「${n?.label || flowIds[idx]}」${n?.arriveLabel ? '：' + n.arriveLabel : ''}`);
-          },
-          onDone: () => traceLine(root, '— 完成 —', 'done')
+        spawnRequest(root, sim, state, svgEl, flowIds, {
+          token: {
+            className: kind, tokenClass: 'sim-token-demo',
+            durationMs: 1600 / (state.speed || 1),
+            onHop: (idx, machine, nodeId) => {
+              const n = findNode(topoOf(sim, state), nodeId);
+              // Naming the exact machine is the whole point of splitting the pool apart: you can
+              // now see that this request went to #2, and kill #2 to watch what happens.
+              const which = machine ? ` #${machine.idx + 1}` : '';
+              traceLine(root, `抵達「${n?.label || nodeId}」${which}${n?.arriveLabel ? '：' + n.arriveLabel : ''}`);
+            },
+            onDone: () => traceLine(root, '— 完成 —', 'done')
+          }
         });
       };
     });
@@ -750,22 +1178,28 @@
     // edge/streaming-server copy, not N independent origin trips).
     root.querySelectorAll('.sim-demo-concurrent').forEach(btn => {
       btn.onclick = () => {
-        const topo = sim.topology;
+        const topo = topoOf(sim, state);
         const ctx = makeChoiceCtx(sim, state);
         const regionIds = topo.regionIds;
         const regionId = regionIds?.length ? regionIds[Math.floor(Math.random() * regionIds.length)] : undefined;
         const regionLabel = regionId && topo.regionLabel?.[regionId];
         const flowIds = topo.computeFlow('watch', ctx, regionId);
-        const waypoints = waypointsFor(sim, state, flowIds);
-        const weights = hopWeights(topo, flowIds);
+        const route = routeFor(sim, state, flowIds);
         const count = Number(btn.dataset.count || 10);
-        traceLine(root, `— 模擬 ${count} 人同時觀看同一部影片${regionLabel ? `（${regionLabel}地區，共用同一份 CDN／串流伺服器路徑）` : ''} —`, 'head');
+        if (route.blockedAt) {
+          traceLine(root, `⛔ 這 ${count} 個人的請求全部送不出去：「${route.blockedAt.label}」整組機器都當機了。`, 'bad');
+          return;
+        }
+        const machineNote = route.chosen.map(c => `${findNode(topo, c.nodeId)?.label} #${c.idx + 1}`).join('、');
+        traceLine(root, `— 模擬 ${count} 人同時觀看同一部影片${regionLabel ? `（${regionLabel}地區）` : ''}${machineNote ? `，全部被導到同一組機器：${machineNote}` : ''} —`, 'head');
+        const weights = hopWeights(topo, route.visited);
         for (let i = 0; i < count; i++) {
           setTimeout(() => {
-            spawnToken(svgEl, waypoints, {
+            spawnToken(svgEl, route.points, {
               className: 'concurrent', tokenClass: 'sim-token-ambient',
               durationMs: (1400 + Math.random() * 400) / (state.speed || 1),
               weights,
+              guard: () => routeStillAlive(state, route.chosen),
               onDone: circle => setTimeout(() => circle?.remove(), 250 / (state.speed || 1))
             });
           }, i * 60 + Math.random() * 40);
@@ -786,7 +1220,7 @@
   // did" visual. The *magnitude* of the outcome (which strategy, not just on/off) lives in the
   // narrative text and score deltas the scenario's own resolve() function returns.
   function animateEventOutcome(root, sim, state, svgEl, event, outcome, done) {
-    const topo = sim.topology;
+    const topo = topoOf(sim, state);
     if (!topo || !svgEl) { setTimeout(done, 200); return; }
     if (event.severity === 'cost') {
       traceLine(root, `— 帳務／成本事件：${event.title} —`, 'head');
@@ -805,7 +1239,18 @@
     // path often doesn't pass through every component (e.g. a small satellite node that sits
     // off to the side), so without an override the "break point" visual couldn't land on the
     // node that's actually missing.
-    const flowIds = event.demoFlow || topo.computeFlow('watch', makeChoiceCtx(sim, state));
+    // A scripted demoFlow names specific nodes (users_us, apiServer_us…), and on an editable
+    // topology the player may well have removed that whole region by the time the event fires.
+    // Rewrite the path onto a region that still exists rather than animating nothing.
+    const ctx = makeChoiceCtx(sim, state);
+    let flowIds = event.demoFlow || topo.computeFlow('watch', ctx);
+    if (event.demoFlow && flowIds.some(id => !findNode(topo, id))) {
+      const live = topo.regionIds?.[0];
+      const remapped = live ? flowIds.map(id => id.replace(/_[a-z0-9]+$/i, `_${live}`)) : flowIds;
+      flowIds = remapped.every(id => findNode(topo, id))
+        ? remapped
+        : (topo.computeFlow ? topo.computeFlow('watch', ctx, live) : []).filter(id => findNode(topo, id));
+    }
     // Only look for a break point when the event actually failed — some events succeed via an
     // OR of capabilities, so a "still off" relevant component doesn't always mean it broke there.
     const missingId = outcome.ok ? null : (event.relevantComponents || []).find(id => currentOptionId(sim, id, state) === 'off');
@@ -1153,7 +1598,7 @@
     const svgEl = root.querySelector('svg.sim-topo');
     const g = root.querySelector('[data-drag-viewer]');
     if (!svgEl || !g) return;
-    const topo = sim.topology;
+    const topo = topoOf(sim, state);
     const circle = g.querySelector('circle');
     const emojiText = g.querySelector('.sim-drag-viewer-emoji');
     const qualityText = g.querySelector('.sim-drag-viewer-quality');
@@ -1164,8 +1609,10 @@
     if (!state.badZone) state.badZone = { x: cs.zone.x, y: cs.zone.y };
     if (!state.dragViewer.regionId) state.dragViewer.regionId = cs.homeRegionId || topo?.regionIds?.[0] || null;
 
-    const inZone = (x, y) => x >= state.badZone.x && x <= state.badZone.x + cs.zone.width
-      && y >= state.badZone.y && y <= state.badZone.y + cs.zone.height;
+    const zoneW = () => state.badZone.width ?? cs.zone.width;
+    const zoneH = () => state.badZone.height ?? cs.zone.height;
+    const inZone = (x, y) => x >= state.badZone.x && x <= state.badZone.x + zoneW()
+      && y >= state.badZone.y && y <= state.badZone.y + zoneH();
 
     const refreshZoneFlag = () => {
       const was = state.dragViewer.inZone;
@@ -1173,9 +1620,12 @@
       g.classList.toggle('in-zone', state.dragViewer.inZone);
       zoneRect?.classList.toggle('active', state.dragViewer.inZone);
       if (state.dragViewer.inZone !== was) {
+        // Deliberately says "the segment that arrives NEXT", because that is exactly what
+        // happens: the segment already in flight was fetched under the old conditions and still
+        // plays at its original quality. Real players behave the same way.
         traceLine(root, state.dragViewer.inZone
-          ? '🙋 測試觀眾現在位於訊號不良區——之後的片段會照這裡量到的頻寬重新決定畫質。'
-          : '🙋 測試觀眾離開了訊號不良區，頻寬恢復正常。', state.dragViewer.inZone ? 'bad' : 'ok');
+          ? '🙋 測試觀眾走進訊號不良區——目前正在傳的那一段還是照舊畫質播完，要等下一段收到之後畫質才會降下來。'
+          : '🙋 測試觀眾離開訊號不良區——同樣要等下一段收到之後，畫質才會開始往回爬。', state.dragViewer.inZone ? 'bad' : 'ok');
       }
     };
 
@@ -1203,14 +1653,29 @@
       refreshZoneFlag();
     };
 
+    const handle = root.querySelector('[data-zone-handle]');
+    const paintZone = () => {
+      const { x, y } = state.badZone;
+      zoneRect?.setAttribute('x', x);
+      zoneRect?.setAttribute('y', y);
+      zoneRect?.setAttribute('width', zoneW());
+      zoneRect?.setAttribute('height', zoneH());
+      zoneLabel?.setAttribute('x', x + 10);
+      zoneLabel?.setAttribute('y', y + 22);
+      handle?.setAttribute('x', x + zoneW() - 9);
+      handle?.setAttribute('y', y + zoneH() - 9);
+      refreshZoneFlag();
+    };
     const setZonePos = (x, y) => {
       state.badZone.x = x;
       state.badZone.y = y;
-      zoneRect?.setAttribute('x', x);
-      zoneRect?.setAttribute('y', y);
-      zoneLabel?.setAttribute('x', x + 10);
-      zoneLabel?.setAttribute('y', y + 22);
-      refreshZoneFlag();
+      paintZone();
+    };
+    const MIN_ZONE = 60;
+    const setZoneSize = (w, h) => {
+      state.badZone.width = Math.max(MIN_ZONE, w);
+      state.badZone.height = Math.max(MIN_ZONE, h);
+      paintZone();
     };
 
     // One shared drag state for both movable objects: whichever was grabbed last owns the
@@ -1229,6 +1694,12 @@
     };
     g.addEventListener('pointerdown', evt => beginDrag('viewer', g, evt, state.dragViewer.x, state.dragViewer.y));
     zoneG?.addEventListener('pointerdown', evt => beginDrag('zone', zoneG, evt, state.badZone.x, state.badZone.y));
+    // The corner handle resizes instead of moving; it sits inside the zone group, so it has to
+    // claim the pointer first and stop the move-drag from also starting.
+    handle?.addEventListener('pointerdown', evt => {
+      evt.stopPropagation();
+      beginDrag('zone-resize', zoneG, evt, state.badZone.x + zoneW(), state.badZone.y + zoneH());
+    });
     const endDrag = evt => {
       if (!dragTarget) return;
       dragTarget = null;
@@ -1241,6 +1712,7 @@
       if (!dragTarget) return;
       const p = svgCoordsFromEvent(svgEl, evt);
       if (dragTarget === 'viewer') setPos(p.x - grabDX, p.y - grabDY);
+      else if (dragTarget === 'zone-resize') setZoneSize(p.x - grabDX - state.badZone.x, p.y - grabDY - state.badZone.y);
       else setZonePos(p.x - grabDX, p.y - grabDY);
     });
     svgEl.addEventListener('pointerup', endDrag);
@@ -1252,99 +1724,141 @@
       evt.preventDefault();
       const target = state.dragViewer.inZone
         ? cs.start
-        : { x: state.badZone.x + cs.zone.width / 2, y: state.badZone.y + cs.zone.height / 2 };
+        : { x: state.badZone.x + zoneW() / 2, y: state.badZone.y + zoneH() / 2 };
       setPos(target.x, target.y);
     });
     zoneG?.addEventListener('keydown', evt => {
+      // Arrows move it; shift+arrows resize it — the keyboard equivalent of the corner handle.
       const step = { ArrowLeft: [-20, 0], ArrowRight: [20, 0], ArrowUp: [0, -20], ArrowDown: [0, 20] }[evt.key];
       if (!step) return;
       evt.preventDefault();
-      setZonePos(state.badZone.x + step[0], state.badZone.y + step[1]);
+      if (evt.shiftKey) setZoneSize(zoneW() + step[0], zoneH() + step[1]);
+      else setZonePos(state.badZone.x + step[0], state.badZone.y + step[1]);
     });
+    paintZone();
+
+    // "Let the viewer walk around on their own" — a random walk that genuinely wanders in and
+    // out of the bad-signal zone, so you can watch quality fall and recover without holding the
+    // mouse down. Bounded to the drawing area so they can never wander off the canvas.
+    const wanderBtn = root.querySelector('[data-viewer-wander]');
+    const syncWanderBtn = () => {
+      if (!wanderBtn) return;
+      wanderBtn.classList.toggle('active', !!state.dragViewer.wander);
+      wanderBtn.textContent = state.dragViewer.wander ? '🚶 隨機走動中（點一下停止）' : '🚶 讓觀眾隨機走動';
+      wanderBtn.setAttribute('aria-pressed', String(!!state.dragViewer.wander));
+    };
+    wanderBtn?.addEventListener('click', () => {
+      state.dragViewer.wander = !state.dragViewer.wander;
+      syncWanderBtn();
+      traceLine(root, state.dragViewer.wander
+        ? '🚶 測試觀眾開始隨機走動，會自己走進走出訊號不良區。'
+        : '🚶 測試觀眾停下來了。', '');
+    });
+    syncWanderBtn();
+
+    const [vbX, vbY, vbW, vbH] = String(topo?.viewBox || '0 0 1000 1000').split(/\s+/).map(Number);
+    const stepWander = () => {
+      if (!state.dragViewer.wander || dragTarget) return;
+      const dv = state.dragViewer;
+      dv.heading = (dv.heading ?? Math.random() * Math.PI * 2) + (Math.random() - 0.5) * 1.1;
+      const stepLen = 26;
+      let nx = dv.x + Math.cos(dv.heading) * stepLen;
+      let ny = dv.y + Math.sin(dv.heading) * stepLen;
+      if (nx < vbX + 20 || nx > vbX + vbW - 20) { dv.heading = Math.PI - dv.heading; nx = clamp(nx, vbX + 20, vbX + vbW - 20); }
+      if (ny < vbY + 20 || ny > vbY + vbH - 20) { dv.heading = -dv.heading; ny = clamp(ny, vbY + 20, vbY + vbH - 20); }
+      setPos(nx, ny);
+    };
 
     const ladder = cs.ladder || sim.abrSim?.ladder || [];
     const poorRange = cs.poorMbpsRange || sim.abrSim?.poorMbpsRange || [0.4, 1.6];
     const goodRange = cs.goodMbpsRange || sim.abrSim?.goodMbpsRange || [4.0, 7.5];
     const tickMs = cs.tickMs || sim.abrSim?.tickMs || 900;
 
+    // ONE segment per tick, and the quality decision belongs to the segment's ARRIVAL, not its
+    // departure. That ordering is the whole point: walking into the bad-signal area cannot
+    // retroactively change the segment already in flight — it plays out at the quality it was
+    // requested at, and only the segment that arrives AFTER that measures the worse bandwidth
+    // and drops to 360p. Walking back out behaves the same way in reverse, so quality climbs
+    // back one arrival at a time instead of snapping. Real ABR players work exactly like this.
     const tick = () => {
+      stepWander();
       const dv = state.dragViewer;
       const r = dv.regionId;
       const ctx = makeChoiceCtx(sim, state);
-      // The segment this viewer is about to receive takes the SAME path every other watch
-      // request takes — resolved from the scenario's own computeFlow for this viewer's region.
-      // So when the CDN is on and this segment hits the edge, the packet genuinely leaves the
-      // CDN node; when it misses, it genuinely comes from the streaming servers; and when there
-      // is no CDN at all, the CDN node is not on the path and nothing comes out of it.
+      // This segment takes the SAME path every other watch request takes — resolved from the
+      // scenario's own computeFlow for this viewer's region. So when the CDN is on and the
+      // segment hits the edge, the packet genuinely leaves the CDN node; when it misses, it
+      // genuinely comes from the streaming servers; and when there is no CDN at all, the CDN
+      // node is not on the path and nothing comes out of it.
       const flowIds = (topo?.computeFlow ? topo.computeFlow('watch', ctx, r) : []) || [];
+      if (flowIds.length < 2) return;
       const servedFromOrigin = flowIds.includes(`streamServer_${r}`);
       const originNode = findNode(topo, `streamServer_${r}`);
+      const regionName = topo?.regionLabel?.[r] || r;
 
-      // Being served from an overloaded origin is not free: a streaming tier carrying more
-      // viewers than it has capacity for delivers each of them less bandwidth, which the ABR
-      // logic below then reacts to by dropping quality — the same causal chain as the bad-signal
-      // zone, but caused by an architecture decision instead of by where the viewer is standing.
-      const load = servedFromOrigin ? nodeLoad(sim, state, originNode) : null;
-      const overloadFactor = load && load.ratio > 1 ? Math.max(0.15, 1 - (load.ratio - 1) * 0.5) : 1;
-
-      const [lo, hi] = dv.inZone ? poorRange : goodRange;
-      const measured = (lo + Math.random() * (hi - lo)) * overloadFactor;
-      const curIdx = Math.max(0, ladder.findIndex(q => q.id === dv.qualityId));
-      let sustainableIdx = 0;
-      for (let i = ladder.length - 1; i >= 0; i--) {
-        if (measured >= ladder[i].mbps * 0.9) { sustainableIdx = i; break; }
-      }
-      let nextIdx;
-      if (sustainableIdx < curIdx) nextIdx = sustainableIdx;
-      else if (curIdx < ladder.length - 1 && measured > ladder[curIdx + 1].mbps * 1.3) nextIdx = curIdx + 1;
-      else nextIdx = curIdx;
-      if (nextIdx !== curIdx) {
-        dv.qualityId = ladder[nextIdx].id;
-        qualityText.textContent = ladder[nextIdx].label;
-        qualityText.setAttribute('class', `sim-drag-viewer-quality q-${ladder[nextIdx].id}`);
-        traceLine(root, `🙋 測試觀眾：量測頻寬 ${measured.toFixed(1)} Mbps，畫質${nextIdx < curIdx ? '降為' : '回升為'}「${ladder[nextIdx].label}」。`, nextIdx < curIdx ? 'bad' : 'ok');
-      }
+      // The quality this segment is being FETCHED at was decided when the previous one arrived.
+      const sendIdx = Math.max(0, ladder.findIndex(q => q.id === dv.qualityId));
 
       // Announce where the bytes are coming from only when that actually changes, otherwise
       // every single tick would spam the log with the same line.
-      const regionName = topo?.regionLabel?.[r] || r;
       const edgeCacheId = sim.capacity?.offloadFrom;
       const hasEdgeCache = edgeCacheId ? ctx.has(edgeCacheId) : false;
-      const pathKind = !flowIds.length ? 'none' : servedFromOrigin ? (hasEdgeCache ? 'miss' : 'noCdn') : 'edge';
-      const overKind = overloadFactor < 1 ? 'over' : 'ok';
-      const kindKey = `${r}|${pathKind}|${overKind}`;
-      if (kindKey !== dv.lastPathKind) {
-        dv.lastPathKind = kindKey;
+      const pathKind = servedFromOrigin ? (hasEdgeCache ? 'miss' : 'noCdn') : 'edge';
+      if (pathKind !== dv.lastPathKind) {
+        dv.lastPathKind = pathKind;
         if (pathKind === 'edge') traceLine(root, `🙋 這段影片在「${esc(regionName)}」的 CDN 邊緣節點命中，直接從 CDN 送出，完全沒有碰到後面的串流伺服器。`, 'ok');
         else if (pathKind === 'miss') traceLine(root, `🙋 CDN 沒有這部影片，這段回源到「${esc(regionName)}」的串流伺服器，再經 CDN 送出。`, '');
-        else if (pathKind === 'noCdn') traceLine(root, `🙋 目前沒有建 CDN，每一段都直接從「${esc(regionName)}」的串流伺服器送出。`, '');
-        if (overloadFactor < 1) {
-          traceLine(root, `⚠️「${esc(originNode?.label || regionName)}」已超載（負載 ${Math.round(load.ratio * 100)}%），分給每位觀眾的頻寬被壓縮，畫質會被迫下降——加開機器或用 CDN 分流才救得回來。`, 'bad');
-        }
+        else traceLine(root, `🙋 目前沒有建 CDN，每一段都直接從「${esc(regionName)}」的串流伺服器送出。`, '');
       }
 
-      // A real packet, sized by the quality just decided, traveling the real path and ending at
-      // wherever this viewer is currently standing (every `users_<region>` waypoint on the path
-      // is literally this avatar, so both ends of the round trip land on them).
-      if (flowIds.length >= 2) {
-        const pts = flowIds.map(id => {
-          if (id === `users_${r}`) return { x: dv.x, y: dv.y };
-          const n = findNode(topo, id);
-          if (!n) return null;
-          const ps = clusterPositions(sim, state, n);
-          return ps[Math.floor(Math.random() * ps.length)];
-        }).filter(Boolean);
-        if (pts.length >= 2) {
-          spawnToken(svgEl, pts, {
-            tokenClass: 'sim-token-segment',
-            className: `q-${ladder[nextIdx].id}`,
-            radius: 5 + nextIdx * 4,
-            weights: hopWeights(topo, flowIds),
-            durationMs: (tickMs * 0.9) / (state.speed || 1),
-            onDone: c => c?.remove()
-          });
+      // Decided at ARRIVAL, from the conditions that hold at that moment.
+      const onSegmentArrived = () => {
+        // Being served from an overloaded origin is not free: a streaming tier carrying more
+        // viewers than it has capacity for delivers each of them less bandwidth, which the ABR
+        // logic then reacts to — the same causal chain as the bad-signal zone, but caused by an
+        // architecture decision instead of by where the viewer is standing.
+        const load = servedFromOrigin ? nodeLoad(sim, state, originNode) : null;
+        const overloadFactor = load && load.ratio > 1 ? Math.max(0.15, 1 - (load.ratio - 1) * 0.5) : 1;
+        const [lo, hi] = dv.inZone ? poorRange : goodRange;
+        const measured = (lo + Math.random() * (hi - lo)) * overloadFactor;
+        const curIdx = Math.max(0, ladder.findIndex(q => q.id === dv.qualityId));
+        let sustainableIdx = 0;
+        for (let i = ladder.length - 1; i >= 0; i--) {
+          if (measured >= ladder[i].mbps * 0.9) { sustainableIdx = i; break; }
         }
-      }
+        let nextIdx;
+        if (sustainableIdx < curIdx) nextIdx = sustainableIdx;
+        else if (curIdx < ladder.length - 1 && measured > ladder[curIdx + 1].mbps * 1.3) nextIdx = curIdx + 1;
+        else nextIdx = curIdx;
+        if (nextIdx !== curIdx) {
+          dv.qualityId = ladder[nextIdx].id;
+          qualityText.textContent = ladder[nextIdx].label;
+          qualityText.setAttribute('class', `sim-drag-viewer-quality q-${ladder[nextIdx].id}`);
+          traceLine(root, `🙋 這一段收到了：量測頻寬 ${measured.toFixed(1)} Mbps，所以「下一段」畫質${nextIdx < curIdx ? '降為' : '回升為'}「${ladder[nextIdx].label}」。`, nextIdx < curIdx ? 'bad' : 'ok');
+        }
+        if (overloadFactor < 1 && !dv.warnedOverload) {
+          dv.warnedOverload = true;
+          traceLine(root, `⚠️「${esc(originNode?.label || regionName)}」已超載（負載 ${Math.round(load.ratio * 100)}%），分給每位觀眾的頻寬被壓縮，畫質會被迫下降——加開機器或用 CDN 分流才救得回來。`, 'bad');
+        }
+        if (overloadFactor >= 1) dv.warnedOverload = false;
+      };
+
+      spawnRequest(root, sim, state, svgEl, flowIds, {
+        trace: true,
+        // Both ends of this round trip are the viewer themself, wherever they are standing now.
+        mapPoint: (nodeId, p) => (nodeId === `users_${r}` ? { x: dv.x, y: dv.y } : p),
+        token: {
+          tokenClass: 'sim-token-segment',
+          className: `q-${ladder[sendIdx].id}`,
+          radius: 5 + sendIdx * 4,
+          durationMs: (tickMs * 0.9) / (state.speed || 1),
+          onDone: c => { c?.remove(); onSegmentArrived(); }
+        },
+        // A segment lost because its machine was pulled is a stall, not an arrival: nothing is
+        // measured, so the quality for the next segment is left exactly where it was.
+        onLost: () => traceLine(root, '🙋 這一段影片沒有送達（負責的機器中途被拔掉），播放器會卡住重新請求。', 'bad'),
+        onBlocked: () => traceLine(root, '🙋 測試觀眾完全收不到影片：這一區沒有任何一台機器可以服務他。', 'bad')
+      });
     };
 
     qualityText.textContent = ladder.find(q => q.id === state.dragViewer.qualityId)?.label || state.dragViewer.qualityId || '--';
@@ -1433,7 +1947,7 @@
       // is exactly the moment you want to see "…now it comes from the CDN instead" in the log.
       if (state.dragViewer) state.dragViewer.lastPathKind = null;
     }, (nodeId, delta) => {
-      const node = findNode(sim.topology, nodeId);
+      const node = findNode(topoOf(sim, state), nodeId);
       if (!node) return;
       const base = baseInstances(sim, state, node);
       const curExtra = Math.max(0, state.extraInstances[nodeId] || 0);
@@ -1451,7 +1965,32 @@
       traceLine(root, `「${node.label}」${delta > 0 ? '加開' : '收掉'}一台機器，現在共 ${base + nextExtra} 台${
         load ? `，負載變成 ${Math.round(load.ratio * 100)}%` : ''
       }（每台每月成本 ${node.extraInstanceCost ?? 1}）。`, delta > 0 ? 'ok' : '');
-    });
+    }, (nodeId, idx) => {
+      // Pull (or re-seat) one specific machine. Requests already in flight toward it die on the
+      // spot — see spawnToken's guard — and the load balancer stops routing to it immediately.
+      const node = findNode(topoOf(sim, state), nodeId);
+      if (!node) return;
+      const nowDown = !instanceIsDown(state, nodeId, idx);
+      const aliveAfter = aliveInstanceIndexes(sim, state, node).length + (nowDown ? -1 : 1);
+      setInstanceDown(state, nodeId, idx, nowDown);
+      repaintNodes(root, sim, state);
+      refreshLoadSummary(root, sim, state);
+      if (nowDown) {
+        traceLine(root, aliveAfter > 0
+          ? `💀 拔掉「${node.label}」#${idx + 1}。負載平衡器立刻把流量改導到剩下的 ${aliveAfter} 台，正在傳給這台的請求則直接中斷。`
+          : `💀 拔掉「${node.label}」#${idx + 1}——這是最後一台，這一層現在完全沒有機器可以服務請求了。`, 'bad');
+      } else {
+        traceLine(root, `🔌 把「${node.label}」#${idx + 1} 插回去，它重新開始接收流量（共 ${aliveAfter} 台運作中）。`, 'ok');
+      }
+    }, () => {
+      // A structural change (new region / new user group) changes the node and edge lists
+      // themselves, so the diagram is rebuilt — but the trace log is carried across so the
+      // record of what you just did survives the rebuild.
+      const log = root.querySelector('.sim-trace-body')?.innerHTML || '';
+      renderPlay(root, sim, state);
+      const body = root.querySelector('.sim-trace-body');
+      if (body && log) { body.innerHTML = log; body.scrollTop = body.scrollHeight; }
+    }, () => refreshLoadSummary(root, sim, state));
     wireTraceClear(root);
     wireChunkLab(root, sim, state);
     wireAbrLab(root, sim, state);
@@ -1966,6 +2505,9 @@
     }
     document.title = `模擬關卡｜${sim.title}`;
     const state = newState(sim);
+    // The live state object, so the automated tests can assert on the same architecture the
+    // screen is actually rendering (jsdom has no way to read it back out of the SVG).
+    window.__simTestHooks.stateRef = () => state;
     render(root, sim, state);
   }
 
@@ -1973,7 +2515,8 @@
   // pure geometry used by the token animation needs to be reachable and testable in isolation).
   window.__simTestHooks = {
     pointAlongPath, waypointsFor, clusterPositions, hopWeights,
-    instanceCount, nodeLoad, overloadedNodes, weeklyCostPenalty, regionIdAtPoint, nodeIsPresent
+    instanceCount, nodeLoad, overloadedNodes, weeklyCostPenalty, regionIdAtPoint, nodeIsPresent,
+    routeFor, regionShare, instanceIsDown, aliveInstanceIndexes, nodeCanServe, topoOf
   };
 
   boot();
