@@ -1257,15 +1257,226 @@
     };
   }
 
+  // ---------- Free-build sandbox mode ----------
+  // A separate, unscripted mode (chapter=sandbox): no strategies, no events, no scoring — just a
+  // blank canvas you build your own topology on. Drag a node type out of the palette to create
+  // it, click an existing node to configure its label/region/connections, drag it to reposition.
+  // Reuses the exact pointer+SVG-coordinate machinery already built for the draggable test-viewer
+  // (svgCoordsFromEvent's getScreenCTM fallback is what makes this testable in jsdom at all) and
+  // the same regionBoxesSvg used everywhere else, so a sandbox topology looks and groups exactly
+  // like every scripted chapter's does.
+
+  const SANDBOX_NODE_TYPES = [
+    { type: 'user', label: '使用者', icon: '👤' },
+    { type: 'cdn', label: 'CDN', icon: '☁️' },
+    { type: 'loadBalancer', label: 'Load Balancer', icon: '⚖️' },
+    { type: 'api', label: 'API 伺服器', icon: '🖥️' },
+    { type: 'db', label: '資料庫', icon: '🗄️' },
+    { type: 'cache', label: '快取', icon: '⚡' },
+    { type: 'storage', label: '儲存系統', icon: '📦' },
+    { type: 'queue', label: '訊息佇列', icon: '📨' },
+    { type: 'worker', label: '工作程序', icon: '⚙️' },
+    { type: 'custom', label: '自訂', icon: '🔷' }
+  ];
+  const sandboxTypeMeta = type => SANDBOX_NODE_TYPES.find(t => t.type === type) || SANDBOX_NODE_TYPES[SANDBOX_NODE_TYPES.length - 1];
+
+  function newSandboxState() {
+    return { nodes: [], edges: [], nextId: 1, selectedNodeId: null };
+  }
+
+  function sandboxNodesSvg(state, selectedId) {
+    return state.nodes.map(n => {
+      const meta = sandboxTypeMeta(n.type);
+      const selected = n.id === selectedId;
+      return `<g class="sim-topo-node sandbox-node${selected ? ' selected' : ''}" data-sandbox-node="${esc(n.id)}" role="button" tabindex="0" aria-label="${esc(n.label)}">
+        <circle cx="${n.x}" cy="${n.y}" r="24"/>
+        <text class="sim-topo-mark sandbox-icon" x="${n.x}" y="${n.y + 7}">${meta.icon}</text>
+        <text class="sim-topo-label" x="${n.x}" y="${n.y + 40}">${esc(n.label)}</text>
+      </g>`;
+    }).join('');
+  }
+
+  function sandboxEdgesSvg(state) {
+    return state.edges.map(e => {
+      const a = state.nodes.find(n => n.id === e.from), b = state.nodes.find(n => n.id === e.to);
+      if (!a || !b) return '';
+      return `<line class="sim-topo-edge active" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`;
+    }).join('');
+  }
+
+  function renderSandbox(root, state) {
+    const selected = state.nodes.find(n => n.id === state.selectedNodeId);
+    root.innerHTML = `<section class="sim-screen sim-sandbox">
+      <div class="eyebrow">自由建構模式</div>
+      <h1>拓樸圖沙盒</h1>
+      <p class="sim-lede">從左邊工具列把截點類型拖到畫布上放開就能新增；點一下既有截點可以設定名稱、地區與連線；直接拖曳截點可以移動位置。這裡不套用任何章節的規則或評分，純粹讓你自己畫架構圖。</p>
+      <div class="sim-sandbox-layout">
+        <div class="sim-sandbox-palette">
+          ${SANDBOX_NODE_TYPES.map(t => `<div class="sim-palette-item" data-palette-type="${t.type}" role="button" tabindex="0"><span class="sim-palette-icon">${t.icon}</span><span>${esc(t.label)}</span></div>`).join('')}
+          <button class="button secondary sim-sandbox-clear" type="button">清空畫布</button>
+        </div>
+        <div class="sim-sandbox-canvas-wrap">
+          <svg class="sim-topo sim-sandbox-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="img" aria-label="自訂拓樸圖畫布">
+            ${regionBoxesSvg({ nodes: state.nodes })}
+            <g class="sandbox-edges-group">${sandboxEdgesSvg(state)}</g>
+            ${sandboxNodesSvg(state, state.selectedNodeId)}
+          </svg>
+        </div>
+      </div>
+      ${selected ? `<div class="sim-sandbox-config">
+        <h2>${sandboxTypeMeta(selected.type).icon} 設定截點</h2>
+        <label class="sim-sandbox-field">顯示名稱<input type="text" class="sim-sandbox-label-input" value="${esc(selected.label)}"></label>
+        <label class="sim-sandbox-field">所屬地區<input type="text" class="sim-sandbox-region-input" value="${esc(selected.region || '')}" placeholder="例如：台灣、美國、日本"></label>
+        <div class="sim-sandbox-field">
+          <span>連線到</span>
+          <div class="sim-sandbox-connections">
+            ${state.nodes.filter(n => n.id !== selected.id).map(n => {
+              const connected = state.edges.some(e => (e.from === selected.id && e.to === n.id) || (e.from === n.id && e.to === selected.id));
+              return `<label class="sim-sandbox-conn-item"><input type="checkbox" class="sim-sandbox-conn-toggle" data-target="${esc(n.id)}" ${connected ? 'checked' : ''}> ${sandboxTypeMeta(n.type).icon} ${esc(n.label)}</label>`;
+            }).join('') || '<p class="sim-sandbox-empty">畫布上還沒有其他截點可以連線。</p>'}
+          </div>
+        </div>
+        <div class="sim-sandbox-config-actions">
+          <button class="button secondary sim-sandbox-delete" type="button">🗑 刪除這個截點</button>
+          <button class="button secondary sim-sandbox-close" type="button">關閉</button>
+        </div>
+      </div>` : ''}
+    </section>`;
+    wireSandbox(root, state);
+  }
+
+  function wireSandbox(root, state) {
+    const svgEl = root.querySelector('svg.sim-sandbox-svg');
+    if (!svgEl) return;
+
+    const rerender = () => renderSandbox(root, state);
+
+    // Drag a palette chip out onto the canvas to create a node there. The ghost node is a real
+    // SVG element from the moment the drag starts, positioned via svgCoordsFromEvent — since
+    // that's an affine transform it stays mathematically correct even while the pointer is over
+    // the HTML palette rather than the SVG itself, so there's no special-casing needed for "is
+    // the pointer currently over the canvas".
+    root.querySelectorAll('.sim-palette-item').forEach(chip => {
+      chip.addEventListener('pointerdown', evt => {
+        const type = chip.dataset.paletteType;
+        const meta = sandboxTypeMeta(type);
+        const ghost = document.createElementNS(SVG_NS, 'g');
+        ghost.setAttribute('class', 'sim-topo-node sandbox-node ghost');
+        const p0 = svgCoordsFromEvent(svgEl, evt);
+        ghost.innerHTML = `<circle cx="${p0.x}" cy="${p0.y}" r="24"/><text class="sim-topo-mark sandbox-icon" x="${p0.x}" y="${p0.y + 7}">${meta.icon}</text>`;
+        svgEl.appendChild(ghost);
+        let last = p0;
+        const onMove = mv => {
+          const p = svgCoordsFromEvent(svgEl, mv);
+          last = p;
+          ghost.querySelector('circle').setAttribute('cx', p.x);
+          ghost.querySelector('circle').setAttribute('cy', p.y);
+          const t = ghost.querySelector('text');
+          t.setAttribute('x', p.x);
+          t.setAttribute('y', p.y + 7);
+        };
+        const onUp = () => {
+          document.removeEventListener('pointermove', onMove);
+          document.removeEventListener('pointerup', onUp);
+          ghost.remove();
+          const id = `n${state.nextId++}`;
+          state.nodes.push({ id, type, region: '', label: meta.label, x: Math.round(last.x), y: Math.round(last.y) });
+          state.selectedNodeId = id;
+          rerender();
+        };
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp, { once: true });
+      });
+    });
+
+    // Existing nodes: a short drag repositions the node; a drag under the movement threshold is
+    // treated as a click that opens the config panel instead (classic click-vs-drag disambiguation).
+    root.querySelectorAll('[data-sandbox-node]').forEach(g => {
+      const id = g.dataset.sandboxNode;
+      const activateSelect = () => { state.selectedNodeId = id; rerender(); };
+      let moved = false;
+      g.addEventListener('pointerdown', evt => {
+        moved = false;
+        const startClient = { x: evt.clientX, y: evt.clientY };
+        const onMove = mv => {
+          if (!moved && Math.hypot(mv.clientX - startClient.x, mv.clientY - startClient.y) > 4) moved = true;
+          if (!moved) return;
+          const p = svgCoordsFromEvent(svgEl, mv);
+          const node = state.nodes.find(n => n.id === id);
+          if (!node) return;
+          node.x = Math.round(p.x);
+          node.y = Math.round(p.y);
+          const circle = g.querySelector('circle');
+          const [markText, labelText] = g.querySelectorAll('text');
+          circle.setAttribute('cx', node.x); circle.setAttribute('cy', node.y);
+          markText.setAttribute('x', node.x); markText.setAttribute('y', node.y + 7);
+          labelText.setAttribute('x', node.x); labelText.setAttribute('y', node.y + 40);
+          // Edges touching this node are redrawn each move so they stay attached while dragging.
+          // Setting innerHTML on an existing <g> (not the <svg> root) is the same safe pattern
+          // used everywhere else in this file for patching SVG content in place.
+          svgEl.querySelector('.sandbox-edges-group').innerHTML = sandboxEdgesSvg(state);
+        };
+        const onUp = () => {
+          document.removeEventListener('pointermove', onMove);
+          document.removeEventListener('pointerup', onUp);
+          if (moved) rerender(); else activateSelect();
+        };
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp, { once: true });
+      });
+      g.addEventListener('keydown', evt => {
+        if (evt.key === 'Enter' || evt.key === ' ') { evt.preventDefault(); activateSelect(); }
+      });
+    });
+
+    root.querySelector('.sim-sandbox-clear')?.addEventListener('click', () => {
+      state.nodes = [];
+      state.edges = [];
+      state.selectedNodeId = null;
+      rerender();
+    });
+
+    const selected = state.nodes.find(n => n.id === state.selectedNodeId);
+    if (!selected) return;
+    root.querySelector('.sim-sandbox-label-input')?.addEventListener('input', evt => { selected.label = evt.target.value; });
+    root.querySelector('.sim-sandbox-label-input')?.addEventListener('change', rerender);
+    root.querySelector('.sim-sandbox-region-input')?.addEventListener('input', evt => { selected.region = evt.target.value; });
+    root.querySelector('.sim-sandbox-region-input')?.addEventListener('change', rerender);
+    root.querySelectorAll('.sim-sandbox-conn-toggle').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const targetId = cb.dataset.target;
+        const idx = state.edges.findIndex(e => (e.from === selected.id && e.to === targetId) || (e.from === targetId && e.to === selected.id));
+        if (cb.checked && idx === -1) state.edges.push({ from: selected.id, to: targetId });
+        else if (!cb.checked && idx !== -1) state.edges.splice(idx, 1);
+        rerender();
+      });
+    });
+    root.querySelector('.sim-sandbox-delete')?.addEventListener('click', () => {
+      state.nodes = state.nodes.filter(n => n.id !== selected.id);
+      state.edges = state.edges.filter(e => e.from !== selected.id && e.to !== selected.id);
+      state.selectedNodeId = null;
+      rerender();
+    });
+    root.querySelector('.sim-sandbox-close')?.addEventListener('click', () => {
+      state.selectedNodeId = null;
+      rerender();
+    });
+  }
+
   function boot() {
     const root = document.querySelector('#simRoot');
     if (!root) return;
     const params = new URLSearchParams(location.search);
     const chapterId = params.get('chapter') || 'sd-book-14';
+    if (chapterId === 'sandbox') {
+      document.title = '自由建構模式｜拓樸圖沙盒';
+      renderSandbox(root, newSandboxState());
+      return;
+    }
     const sim = window.SYSTEM_DESIGN_SIM?.[chapterId];
     if (!sim) {
       const available = Object.keys(window.SYSTEM_DESIGN_SIM || {});
-      root.innerHTML = `<section class="sim-screen"><h1>這一章還沒有模擬關卡</h1><p>目前做了模擬關卡的章節：${available.length ? esc(available.join('、')) : '（無）'}</p><a class="button" href="system-design.html">回到章節目錄</a></section>`;
+      root.innerHTML = `<section class="sim-screen"><h1>這一章還沒有模擬關卡</h1><p>目前做了模擬關卡的章節：${available.length ? esc(available.join('、')) : '（無）'}</p><a class="button" href="system-design.html">回到章節目錄</a><p class="sim-sandbox-hint"><a href="system-design-simulator.html?chapter=sandbox">或試試自由建構模式 →</a></p></section>`;
       return;
     }
     document.title = `模擬關卡｜${sim.title}`;
