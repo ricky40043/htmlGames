@@ -181,8 +181,13 @@
     return topo.edges.map(e => {
       const a = findNode(topo, e.from), b = findNode(topo, e.to);
       if (!a || !b) return '';
-      const reqOn = !e.requiresComponent || currentOptionId(sim, e.requiresComponent, state) !== 'off';
-      const isActive = nodeIsOn(sim, state, a) && nodeIsOn(sim, state, b) && reqOn;
+      // An edge is only "inactive" when it explicitly requires a capability that's off (e.g. a
+      // direct-upload bypass that only exists once you've turned it on). It must NOT go dashed
+      // just because the node at one end is a resilience/cost capability that's currently off —
+      // that node is still structurally there (e.g. CDN with popularity-tiering off is still a
+      // CDN, just not cost-optimized); dimming its wires falsely implies the path is broken.
+      // The node's own ✓/✕ colour is what shows whether that capability is currently on.
+      const isActive = !e.requiresComponent || currentOptionId(sim, e.requiresComponent, state) !== 'off';
       const cls = ['sim-topo-edge', e.kind === 'stub' ? 'stub' : '', isActive ? 'active' : 'inactive'].filter(Boolean).join(' ');
       return `<line class="${cls}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" data-edge="${esc(e.from)}-${esc(e.to)}"/>`;
     }).join('');
@@ -339,11 +344,11 @@
       const costEl = nodeEl.querySelector('.sim-topo-cost');
       if (costEl) costEl.textContent = `${opt.cost > 0 ? '+' : ''}${opt.cost}/月 · ${opt.label}`;
     }
+    // Only edges that explicitly require this component ever change state when it's toggled —
+    // every other edge is a static structural connection (see the note in edgesSvg above).
     topo.edges.forEach(e => {
-      if (e.from !== g.id && e.to !== g.id) return;
-      const a = findNode(topo, e.from), b = findNode(topo, e.to);
-      const reqOn = !e.requiresComponent || currentOptionId(sim, e.requiresComponent, state) !== 'off';
-      const isActive = nodeIsOn(sim, state, a) && nodeIsOn(sim, state, b) && reqOn;
+      if (e.requiresComponent !== componentId) return;
+      const isActive = currentOptionId(sim, componentId, state) !== 'off';
       const line = root.querySelector(`[data-edge="${e.from}-${e.to}"]`);
       if (line) {
         line.classList.toggle('active', isActive);
@@ -375,6 +380,31 @@
     }
   }
 
+  // A batch of new users isn't just a decorative puff of dots at the users node — some of them
+  // actually go watch something. Fire a few real "watch" tokens along the current path (same
+  // mechanic as the manual ▶ demo button), staggered slightly so they don't land in a single
+  // frame, and let the topology visually show organic traffic happening.
+  function spawnAmbientViewers(root, sim, state, svgEl, batchSize) {
+    const topo = sim.topology;
+    if (!topo?.computeFlow) return;
+    const ctx = makeChoiceCtx(sim, state);
+    const flowIds = topo.computeFlow('watch', ctx);
+    const waypoints = waypointsFor(topo, flowIds);
+    if (waypoints.length < 2) return;
+    const count = clamp(Math.round(batchSize / 40), 1, 4);
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        spawnToken(svgEl, waypoints, {
+          className: 'ambient',
+          tokenClass: 'sim-token-ambient',
+          durationMs: (1100 + Math.random() * 900) / (state.speed || 1),
+          onDone: circle => setTimeout(() => circle?.remove(), 300 / (state.speed || 1))
+        });
+      }, Math.random() * 650);
+    }
+    traceLine(root, `其中約 ${numFmt(count)} 位使用者立刻開始觀看內容`);
+  }
+
   function wireTopologyControls(root, sim, state, onCycle) {
     const svgEl = root.querySelector('svg.sim-topo');
     if (!svgEl) return;
@@ -385,11 +415,13 @@
     });
     root.querySelectorAll('.sim-add-users').forEach(btn => {
       btn.onclick = () => {
-        state.usersServed = (state.usersServed || 0) + Number(btn.dataset.add || 100);
+        const batch = Number(btn.dataset.add || 100);
+        state.usersServed = (state.usersServed || 0) + batch;
         const badge = svgEl.querySelector('.sim-topo-badge');
         if (badge) badge.textContent = `已服務 ${numFmt(state.usersServed)} 人`;
         burstUsers(sim.topology, svgEl);
-        traceLine(root, `湧入 ${numFmt(Number(btn.dataset.add || 100))} 位新使用者`, 'head');
+        traceLine(root, `湧入 ${numFmt(batch)} 位新使用者`, 'head');
+        spawnAmbientViewers(root, sim, state, svgEl, batch);
       };
     });
     root.querySelectorAll('.sim-demo').forEach(btn => {
