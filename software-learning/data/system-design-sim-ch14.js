@@ -181,6 +181,15 @@
           if (kind === 'search') {
             return [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'metadataCache', `apiServer_${r}`, `users_${r}`];
           }
+          // This is the actual observable effect of "CDN 只服務熱門內容": with it on, most watch
+          // requests (this is popular content, by definition of what most viewers pick) never
+          // leave the CDN edge at all — a real cache hit, short and fast. A long-tail minority
+          // still misses even with CDN on (that's the whole point of not caching everything),
+          // and with CDN off there's no edge cache layer at all, so every single request makes
+          // the full round trip. Without this, toggling CDN only ever changed a slow background
+          // cost number — clicking the demo button looked identical either way.
+          const cacheHit = ctx.has('cdnPopularOnly') && Math.random() < 0.85;
+          if (cacheHit) return [`users_${r}`, `cdn_${r}`, `users_${r}`];
           return [`users_${r}`, `cdn_${r}`, `loadBalancer_${r}`, `streamServer_${r}`, 'storage', `streamServer_${r}`, `loadBalancer_${r}`, `cdn_${r}`, `users_${r}`];
         }
       };
