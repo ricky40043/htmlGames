@@ -98,6 +98,19 @@
 
   function chapterMeta(id) { return catalog().find(c => c.id === id); }
 
+  // How a chapter is NAMED on screen. `order` stays a plain running number because sequencing,
+  // prev/next and the progress index all key off it; a chapter that comes from a different
+  // volume just declares `volume`/`chapterNo` and is labelled by its own book instead of by its
+  // position in this list.
+  function chapterTag(c) {
+    // Callers pass either a catalog entry or a loaded chapter object; the volume numbering only
+    // lives in the catalog, so resolve back to it rather than duplicating the fields in the
+    // chapter data files.
+    const meta = (c?.volume && c?.chapterNo) ? c : (chapterMeta(c?.id) || c);
+    if (meta?.volume && meta?.chapterNo) return `第 ${meta.volume} 冊第 ${meta.chapterNo} 章`;
+    return `第 ${meta?.order ?? c?.order} 章`;
+  }
+
   function shortSectionTitle(section) {
     const title = String(section?.title || '').trim();
     const localized = title.replace(/\s*[（(][^）)]*[）)]/g, '').trim();
@@ -259,7 +272,7 @@
         <b>❌ ${selected ? `你選了：${esc(selected.text)}` : '未作答'}</b>
         <p><strong>可能的思考誤區：</strong>${esc(reason)}</p>
         <p><strong>正確判斷：</strong>${esc(q.explanation)}</p>
-        ${review ? `<a class="book-review-link" href="system-design-chapter.html?chapter=${encodeURIComponent(chapter.id)}&section=${encodeURIComponent(review.sectionId)}&page=${encodeURIComponent(q.reviewPageId)}&question=${encodeURIComponent(q.id)}&review=1">回到第 ${chapter.order} 章教材第 ${review.number} 頁，重做這一題：${esc(review.title)}</a>` : ''}`;
+        ${review ? `<a class="book-review-link" href="system-design-chapter.html?chapter=${encodeURIComponent(chapter.id)}&section=${encodeURIComponent(review.sectionId)}&page=${encodeURIComponent(q.reviewPageId)}&question=${encodeURIComponent(q.id)}&review=1">回到${chapterTag(chapter)}教材第 ${review.number} 頁，重做這一題：${esc(review.title)}</a>` : ''}`;
     }
     return { correct, selectedId: selected?.id || '' };
   }
@@ -312,7 +325,7 @@
       }
       const simBadge = meta.simulator ? `<a class="book-sim-badge" href="${esc(meta.simulator)}">🎮 模擬關卡</a>` : '';
       return `<div class="book-chapter-row">
-        <a class="book-chapter-card ${cls}" href="system-design-chapter.html?chapter=${encodeURIComponent(meta.id)}"><div class="chapter-number">第 ${meta.order} 章</div><div><h2>${esc(meta.title)}</h2><p>${esc(detail)}</p></div><span>${esc(status)}</span></a>
+        <a class="book-chapter-card ${cls}" href="system-design-chapter.html?chapter=${encodeURIComponent(meta.id)}"><div class="chapter-number">${chapterTag(meta)}</div><div><h2>${esc(meta.title)}</h2><p>${esc(detail)}</p></div><span>${esc(status)}</span></a>
         ${simBadge}
       </div>`;
     }).join('');
@@ -333,7 +346,7 @@
     if (!chapter) {
       const prev = catalog().find(c => c.order === meta.order - 1);
       const nextReady = catalog().find(c => c.order === meta.order + 1 && chapterData(c.id));
-      root.innerHTML = `<section class="book-placeholder"><div class="chapter-number">第 ${meta.order} 章</div><h1>${esc(meta.title)}</h1><p>這一章尚未開始製作。依目前流程，會先把上一章研究、教材、小節題庫與 30 題章末考完整做完，再進入下一章。</p><div class="result-actions">${prev ? `<a class="button secondary" href="system-design-chapter.html?chapter=${encodeURIComponent(prev.id)}">回到第 ${prev.order} 章</a>` : ''}${nextReady ? `<a class="button" href="system-design-chapter.html?chapter=${encodeURIComponent(nextReady.id)}">前往第 ${nextReady.order} 章</a>` : ''}<a class="button secondary" href="system-design.html">回到 16 章目錄</a></div></section>`;
+      root.innerHTML = `<section class="book-placeholder"><div class="chapter-number">${chapterTag(meta)}</div><h1>${esc(meta.title)}</h1><p>這一章尚未開始製作。依目前流程，會先把上一章研究、教材、小節題庫與 30 題章末考完整做完，再進入下一章。</p><div class="result-actions">${prev ? `<a class="button secondary" href="system-design-chapter.html?chapter=${encodeURIComponent(prev.id)}">回到${chapterTag(prev)}</a>` : ''}${nextReady ? `<a class="button" href="system-design-chapter.html?chapter=${encodeURIComponent(nextReady.id)}">前往${chapterTag(nextReady)}</a>` : ''}<a class="button secondary" href="system-design.html">回到章節目錄</a></div></section>`;
       return;
     }
 
@@ -346,8 +359,8 @@
     const page = section.pages[pageIdx];
     const progress = chapterProgress(chapter);
 
-    document.title = `第 ${chapter.order} 章｜${shortSectionTitle(section)}`;
-    document.querySelector('#bookChapterTitle').textContent = `第 ${chapter.order} 章｜${shortChapterTitle(chapter)}`;
+    document.title = `${chapterTag(chapter)}｜${shortSectionTitle(section)}`;
+    document.querySelector('#bookChapterTitle').textContent = `${chapterTag(chapter)}｜${shortChapterTitle(chapter)}`;
     document.querySelector('#bookChapterSummary').textContent = chapter.subtitle;
     document.querySelector('#bookProgressText').textContent = `已完成 ${progress.completed}/${progress.total} 小節`;
     document.querySelector('#bookProgressFill').style.width = `${progress.percent}%`;
@@ -365,7 +378,7 @@
     renderSectionTeachingGuide(chapter, section, pageIdx);
 
     const pInfo = map.get(page.id);
-    document.querySelector('#bookPageCounter').textContent = `第 ${chapter.order} 章教材第 ${pInfo.number} 頁 · 本小節 ${pageIdx + 1}/${section.pages.length}`;
+    document.querySelector('#bookPageCounter').textContent = `${chapterTag(chapter)}教材第 ${pInfo.number} 頁 · 本小節 ${pageIdx + 1}/${section.pages.length}`;
     const takeaway = pageTakeaway(page);
     document.querySelector('#bookPageStage').innerHTML = `<article class="book-page ${params.get('review') ? 'review-highlight' : ''}" id="${esc(page.id)}"><h2>${esc(page.title)}</h2><div class="book-page-purpose"><strong>這頁只先回答一件事</strong><p>先找出這個做法要解決的問題，再看它怎麼運作，以及它會帶來什麼代價。</p></div>${page.blocks.map(blockHtml).join('')}${takeaway ? `<aside class="book-page-takeaway"><strong>這頁先記住</strong><p>${esc(takeaway)}</p></aside>` : ''}</article>`;
 
@@ -458,7 +471,7 @@
     const groups = ['easy', 'medium', 'hard'];
     const questions = groups.flatMap(d => shuffle(chapter.finalExam.filter(q => q.difficulty === d)).slice(0, 10).map(prepareQuestion));
 
-    document.querySelector('#bookExamTitle').textContent = `第 ${chapter.order} 章｜${chapter.title}`;
+    document.querySelector('#bookExamTitle').textContent = `${chapterTag(chapter)}｜${chapter.title}`;
     document.querySelector('#bookExamInfo').textContent = `${questions.length} 題章末測驗 · 基礎 10 / 應用 10 / 進階 10 · ${PASS_SCORE} 分通過 · 題目與選項每次重新洗牌`;
 
     let n = 0;
@@ -490,7 +503,7 @@
       const currentMeta = chapterMeta(chapter.id);
       const simCta = score >= PASS_SCORE && currentMeta?.simulator ? `<a class="button" href="${esc(currentMeta.simulator)}">🎮 挑戰本章模擬關卡</a>` : '';
       const statHtml = groups.map(d => `<div><small>${DIFF_LABEL[d]}</small><strong>${stats[d].correct}/${stats[d].total} · ${stats[d].total ? Math.round(stats[d].correct / stats[d].total * 100) : 0}%</strong></div>`).join('');
-      result.innerHTML = `<div class="book-result-score">${score} 分</div><p>${score >= PASS_SCORE ? `✅ 第 ${chapter.order} 章通過` : `尚未通過第 ${chapter.order} 章；先依錯題連結回教材複習。`}</p><div class="difficulty-result-grid">${statHtml}</div><p>答對 ${correct}/${questions.length} · 章末考 ${saved.attempts} 次 · 最高 ${saved.bestScore} 分</p><div class="result-actions">${simCta}<a class="button secondary" href="system-design-chapter.html?chapter=${chapter.id}">回到第 ${chapter.order} 章</a>${nextMeta ? `<a class="button" href="system-design-chapter.html?chapter=${nextMeta.id}">進入下一章</a>` : `<a class="button" href="system-design.html">完成全書</a>`}<button class="button secondary" type="button" onclick="location.reload()">重新抽題再考</button></div>`;
+      result.innerHTML = `<div class="book-result-score">${score} 分</div><p>${score >= PASS_SCORE ? `✅ ${chapterTag(chapter)}通過` : `尚未通過${chapterTag(chapter)}；先依錯題連結回教材複習。`}</p><div class="difficulty-result-grid">${statHtml}</div><p>答對 ${correct}/${questions.length} · 章末考 ${saved.attempts} 次 · 最高 ${saved.bestScore} 分</p><div class="result-actions">${simCta}<a class="button secondary" href="system-design-chapter.html?chapter=${chapter.id}">回到${chapterTag(chapter)}</a>${nextMeta ? `<a class="button" href="system-design-chapter.html?chapter=${nextMeta.id}">進入下一章</a>` : `<a class="button" href="system-design.html">完成全書</a>`}<button class="button secondary" type="button" onclick="location.reload()">重新抽題再考</button></div>`;
       document.querySelector('#bookExamSubmit').disabled = true;
       result.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
