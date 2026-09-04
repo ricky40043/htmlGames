@@ -1,7 +1,7 @@
 window.SYSTEM_DESIGN_BOOK = {
   id: 'system-design-book-v1',
   title: '系統設計面試指南｜逐章互動課程',
-  sourceNote: '章節架構依 Alex Xu / ByteByteGo Volume 1；教材內容以公開官方技術文件重新研究、整理與教學化，不逐字重製書籍內容。',
+  sourceNote: '第 1–16 章的章節架構依 Alex Xu / ByteByteGo Volume 1，第 17 章起延伸自 Volume 2；教材內容以公開官方技術文件重新研究、整理與教學化，不逐字重製書籍內容。',
   chapters: [
     { id: 'sd-book-01', order: 1, title: '使用者人數——從零到百萬規模', status: 'ready', dataFiles: ['system-design-book-ch01-part1.js','system-design-book-ch01-part2.js','system-design-book-ch01-part3.js'], simulator: 'system-design-simulator.html?chapter=sd-book-01' },
     { id: 'sd-book-02', order: 2, title: '粗略的估算', status: 'ready', dataFiles: ['system-design-book-ch02-part1.js','system-design-book-ch02-part2.js','system-design-book-ch02-part3.js'] },
@@ -18,6 +18,7 @@ window.SYSTEM_DESIGN_BOOK = {
     { id: 'sd-book-13', order: 13, title: '設計搜尋文字自動補全系統', status: 'ready', dataFiles: ['system-design-book-ch13-part1.js','system-design-book-ch13-part2.js','system-design-book-ch13-final.js'] },
     { id: 'sd-book-14', order: 14, title: '設計 YouTube', status: 'ready', dataFiles: ['system-design-book-ch14-part1.js','system-design-book-ch14-part2.js','system-design-book-ch14-final.js'], simulator: 'system-design-simulator.html?chapter=sd-book-14' },
     { id: 'sd-book-15', order: 15, title: '設計 Google Drive', status: 'ready', dataFiles: ['system-design-book-ch15-part1.js','system-design-book-ch15-part2.js','system-design-book-ch15-final.js'], simulator: 'system-design-simulator.html?chapter=sd-book-15' },
-    { id: 'sd-book-16', order: 16, title: '持續學習：System Design Interview Playbook', status: 'ready', dataFiles: ['system-design-book-ch16-part1.js','system-design-book-ch16-part2.js','system-design-book-ch16-final.js'] }
+    { id: 'sd-book-16', order: 16, title: '持續學習：System Design Interview Playbook', status: 'ready', dataFiles: ['system-design-book-ch16-part1.js','system-design-book-ch16-part2.js','system-design-book-ch16-final.js'] },
+    { id: 'sd-book-17', order: 17, title: '設計 Google 地圖', status: 'ready', dataFiles: ['system-design-book-ch17-part1.js','system-design-book-ch17-part2.js','system-design-book-ch17-final.js'] }
   ]
 };

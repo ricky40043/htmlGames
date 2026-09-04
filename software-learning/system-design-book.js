@@ -114,7 +114,8 @@
       1: '使用者規模', 2: '粗略估算', 3: '面試框架', 4: '網路限速器',
       5: '一致性雜湊', 6: '鍵值儲存', 7: '唯一 ID', 8: '短網址',
       9: '網路爬蟲', 10: '通知系統', 11: '動態訊息', 12: '聊天系統',
-      13: '搜尋自動補全', 14: '影片平台', 15: '雲端檔案同步', 16: '持續學習'
+      13: '搜尋自動補全', 14: '影片平台', 15: '雲端檔案同步', 16: '持續學習',
+      17: '地圖與導航'
     };
     if (labels[chapter?.order]) return labels[chapter.order];
     const title = String(chapter?.title || '').trim();
@@ -217,6 +218,12 @@
     if (block.type === 'stepper') return `<div class="book-stepper">${block.steps.map((x, i) => `<article><span>${i + 1}</span><div><h4>${esc(x[0])}</h4><p>${esc(x[1])}</p></div></article>`).join('')}</div>`;
     if (block.type === 'code') return `<pre class="book-code"><code>${esc(block.text)}</code></pre>`;
     if (block.type === 'callout') return `<aside class="book-callout"><strong>${esc(block.title || '重點')}</strong><p>${esc(block.text)}</p></aside>`;
+    if (block.type === 'table') {
+      const head = block.head ? `<thead><tr>${block.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>` : '';
+      const body = `<tbody>${(block.rows || []).map(r => `<tr>${r.map((c, i) => `<td${i ? ' class="num"' : ''}>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      const caption = block.caption ? `<p class="book-table-caption">${esc(block.caption)}</p>` : '';
+      return `<div class="book-table-wrap"><table class="book-table">${head}${body}</table></div>${caption}`;
+    }
     return '';
   }
 

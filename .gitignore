@@ -43,3 +43,7 @@ Thumbs.db
 # Temporary files
 tmp_*
 temp_*
+# 書頁照片：教材的參考來源，不進版控也不隨網站部署
+software-learning/Google Drive/
+*.HEIC
+*.heic
