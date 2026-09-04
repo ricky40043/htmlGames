@@ -172,7 +172,8 @@ svg.sim-sandbox-svg{width:100%;height:auto;display:block;background:#0a0a10;bord
 .sandbox-node.selected circle{stroke:var(--accent-2);stroke-width:3;filter:drop-shadow(0 0 6px rgba(139,92,246,.6))}
 .sandbox-node.ghost{opacity:.7;pointer-events:none}
 .sandbox-node .sandbox-icon{font-size:18px}
-.sim-sandbox-config{margin:0 0 22px;padding:18px 20px;border:1px solid var(--border);border-radius:14px;background:rgba(139,92,246,.05)}
+.sim-sandbox-modal-backdrop{position:fixed;inset:0;background:rgba(6,6,10,.72);display:flex;align-items:center;justify-content:center;padding:20px;z-index:80;animation:simIn .15s ease}
+.sim-sandbox-config{width:min(440px,100%);max-height:82vh;overflow:auto;margin:0;padding:20px 22px;border:1px solid var(--border);border-radius:16px;background:#15151f;box-shadow:0 24px 70px rgba(0,0,0,.55)}
 .sim-sandbox-config h2{margin:0 0 12px;font-size:1.02rem}
 .sim-sandbox-field{display:block;margin:0 0 12px;font-size:.82rem;color:var(--muted)}
 .sim-sandbox-field input[type="text"]{display:block;width:100%;margin-top:4px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:#0c0c13;color:#f2f2f7;font-size:.88rem}

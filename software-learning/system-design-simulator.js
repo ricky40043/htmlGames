@@ -167,18 +167,29 @@
 
   function findNode(topo, id) { return topo.nodes.find(n => n.id === id); }
 
-  // Picks whichever of the given node ids sits physically closest to (x, y) — used to decide
-  // which region's streaming server is "delivering" to a viewer who's been dragged to an
-  // arbitrary point on the canvas, rather than a fixed/arbitrary source.
-  function nearestNode(topo, ids, x, y) {
-    let best = null, bestDist = Infinity;
-    ids.forEach(id => {
-      const n = findNode(topo, id);
-      if (!n) return;
-      const d = (n.x - x) ** 2 + (n.y - y) ** 2;
-      if (d < bestDist) { bestDist = d; best = n; }
-    });
-    return best;
+  // Which region's own drawn box (the same dashed rectangles regionBoxesSvg renders) a point
+  // falls inside, if any. This is what decides which region is actually "serving" a viewer
+  // who's been dragged to a given spot — being inside Taiwan's box means Taiwan's regional
+  // stack serves you, not "whichever server icon happens to be nearest in pixel space" (that
+  // was an arbitrary function of unrelated canvas layout, not a real routing decision — nothing
+  // about which server instance answers you depends on raw pixel distance to its icon; every
+  // instance in the chosen region's pool is already interchangeable, which is what "stateless"
+  // actually buys you, not "there's no such thing as region-based routing at all").
+  function regionIdAtPoint(topo, x, y) {
+    if (!topo.regionIds || !topo.regionLabel) return null;
+    const groups = {};
+    topo.nodes.forEach(n => { const key = n.zone || n.region; if (key) { (groups[key] ??= []).push(n); } });
+    const pad = 36;
+    for (const ns of Object.values(groups)) {
+      const x0 = Math.min(...ns.map(n => n.x)) - pad, y0 = Math.min(...ns.map(n => n.y)) - pad;
+      const x1 = Math.max(...ns.map(n => n.x)) + pad, y1 = Math.max(...ns.map(n => n.y)) + pad;
+      if (x >= x0 && x <= x1 && y >= y0 && y <= y1) {
+        const label = ns[0].region;
+        const match = Object.entries(topo.regionLabel).find(([, l]) => l === label);
+        if (match) return match[0];
+      }
+    }
+    return null;
   }
 
   function regionBoxesSvg(topo) {
@@ -1048,7 +1059,6 @@
     const goodRange = cs.goodMbpsRange || sim.abrSim?.goodMbpsRange || [4.0, 7.5];
     const tickMs = cs.tickMs || sim.abrSim?.tickMs || 900;
     const topo = sim.topology;
-    const streamIds = topo.regionIds?.map(r => `streamServer_${r}`) || [];
 
     const tick = () => {
       const [lo, hi] = state.dragViewer.inZone ? poorRange : goodRange;
@@ -1068,11 +1078,20 @@
         qualityText.setAttribute('class', `sim-drag-viewer-quality q-${ladder[nextIdx].id}`);
         traceLine(root, `🙋 測試觀眾：量測頻寬 ${measured.toFixed(1)} Mbps，畫質${nextIdx < curIdx ? '降為' : '回升為'}「${ladder[nextIdx].label}」。`, nextIdx < curIdx ? 'bad' : 'ok');
       }
+      // Which region serves this viewer is decided by which region's own drawn box they're
+      // physically standing in — not by pixel-distance to some server icon, which would be an
+      // arbitrary artifact of canvas layout. Outside every region's box, the request falls back
+      // to the home/master region, the same default computeFlow itself uses elsewhere.
+      const regionId = regionIdAtPoint(topo, state.dragViewer.x, state.dragViewer.y) || 'us';
+      if (regionId !== state.dragViewer.servedRegionId) {
+        state.dragViewer.servedRegionId = regionId;
+        traceLine(root, `🙋 測試觀眾目前由「${esc(topo.regionLabel?.[regionId] || regionId)}」地區的串流伺服器服務。`, '');
+      }
       // The actual point of this probe: a real packet, sized by the quality just decided,
-      // visibly traveling from the nearest region's streaming server to wherever the viewer
-      // currently sits — not just a text label next to them. Fires every tick regardless of
-      // whether quality changed, so playback reads as continuous, not just reactive.
-      const source = nearestNode(topo, streamIds, state.dragViewer.x, state.dragViewer.y);
+      // visibly traveling from that region's streaming server to wherever the viewer currently
+      // sits — not just a text label next to them. Fires every tick regardless of whether
+      // quality changed, so playback reads as continuous, not just reactive.
+      const source = findNode(topo, `streamServer_${regionId}`);
       if (source) {
         spawnToken(svgEl, [{ x: source.x, y: source.y }, { x: state.dragViewer.x, y: state.dragViewer.y }], {
           tokenClass: 'sim-token-segment',
@@ -1391,7 +1410,8 @@
           </div>
         </div>
       </div>
-      ${selected ? `<div class="sim-sandbox-config">
+      ${selected ? `<div class="sim-sandbox-modal-backdrop" data-sandbox-backdrop>
+      <div class="sim-sandbox-config" role="dialog" aria-modal="true">
         <h2>${sandboxTypeMeta(selected.type).icon} 設定截點</h2>
         <label class="sim-sandbox-field">顯示名稱<input type="text" class="sim-sandbox-label-input" value="${esc(selected.label)}"></label>
         <label class="sim-sandbox-field">所屬地區
@@ -1414,6 +1434,7 @@
           <button class="button secondary sim-sandbox-delete" type="button">🗑 刪除這個截點</button>
           <button class="button secondary sim-sandbox-close" type="button">關閉</button>
         </div>
+      </div>
       </div>` : ''}
     </section>`;
     wireSandbox(root, state);
@@ -1424,6 +1445,15 @@
     if (!svgEl) return;
 
     const rerender = () => renderSandbox(root, state);
+
+    // Every render calls wireSandbox again, so any Escape listener from a previous mount would
+    // otherwise stack up (document-level listeners aren't cleaned up when their DOM is replaced).
+    // At most one should ever be live at a time — remove the last one before maybe attaching a
+    // fresh one below.
+    if (state._sandboxEscapeHandler) {
+      document.removeEventListener('keydown', state._sandboxEscapeHandler);
+      state._sandboxEscapeHandler = null;
+    }
 
     // Drag a palette chip out onto the canvas to create a node there. The ghost node is a real
     // SVG element from the moment the drag starts, positioned via svgCoordsFromEvent — since
@@ -1599,6 +1629,21 @@
       state.selectedNodeId = null;
       rerender();
     });
+    // Clicking the dimmed backdrop (but not the dialog itself) closes the modal, same as
+    // pressing Escape — both are standard modal-dismiss conventions.
+    const backdrop = root.querySelector('[data-sandbox-backdrop]');
+    backdrop?.addEventListener('click', evt => {
+      if (evt.target === backdrop) { state.selectedNodeId = null; rerender(); }
+    });
+    if (backdrop) {
+      const onEscape = evt => {
+        if (evt.key !== 'Escape') return;
+        state.selectedNodeId = null;
+        rerender();
+      };
+      state._sandboxEscapeHandler = onEscape;
+      document.addEventListener('keydown', onEscape);
+    }
   }
 
   function boot() {
