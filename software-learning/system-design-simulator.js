@@ -95,6 +95,7 @@
     return {
       month: 0, uptime: 100, qoe: 100, costEff: 100, choice: {}, usersServed: 0, speed: 1,
       chunk: null, chunkTimer: null,
+      abr: null, abrTimer: null,
       log: [], history: [{ month: 0, uptime: 100, qoe: 100 }], phase: 'briefing'
     };
   }
@@ -717,6 +718,162 @@
     }
   }
 
+  // ---------- Adaptive bitrate playback sandbox ----------
+  // A free-play "watch this play out" experiment, separate from the scripted monthly events:
+  // playback is cut into fixed-length segments, and each segment's quality is decided by the
+  // bandwidth the player *just* measured — the standard throughput-based ABR behaviour every
+  // real DASH/HLS video player uses. You can force the network to degrade or recover at any
+  // point and watch the quality (and, if the network is bad enough for long enough, the buffer)
+  // react in real time, one segment at a time.
+
+  function renderAbrLab(sim) {
+    const cs = sim.abrSim;
+    if (!cs) return '';
+    return `<section class="sim-abrlab">
+      <h2>📶 ${esc(cs.label || '自適應畫質播放實驗室')}</h2>
+      <p class="sim-abrlab-desc">${esc(cs.desc || '模擬播放一部影片，畫面切成一個個固定長度的片段：每段要用什麼畫質，由播放器當下量測到的頻寬決定。')}</p>
+      <div class="sim-abr-buffer-row"><span class="sim-abr-buffer-label">緩衝區</span><div class="sim-abr-buffer-track"><div class="sim-abr-buffer-fill" style="width:0%"></div></div></div>
+      <p class="sim-abr-status">尚未開始</p>
+      <div class="sim-abr-strip"></div>
+      <div class="sim-abrlab-actions">
+        <button class="button secondary sim-abr-start" type="button">${esc(cs.startLabel || '▶ 開始播放')}</button>
+        <button class="button secondary sim-abr-degrade" type="button" disabled>🐌 模擬網路變差</button>
+        <button class="button secondary sim-abr-recover" type="button" disabled>🚀 模擬網路恢復</button>
+      </div>
+    </section>`;
+  }
+
+  function wireAbrLab(root, sim, state) {
+    const cs = sim.abrSim;
+    if (!cs) return;
+    // A previous mount may have left a ticking interval pointed at now-detached DOM nodes —
+    // always clear it before wiring the fresh one.
+    if (state.abrTimer) { clearInterval(state.abrTimer); state.abrTimer = null; }
+
+    const bufferFill = root.querySelector('.sim-abr-buffer-fill');
+    const status = root.querySelector('.sim-abr-status');
+    const strip = root.querySelector('.sim-abr-strip');
+    const startBtn = root.querySelector('.sim-abr-start');
+    const degradeBtn = root.querySelector('.sim-abr-degrade');
+    const recoverBtn = root.querySelector('.sim-abr-recover');
+    if (!strip) return;
+
+    const ladder = cs.ladder;
+    const segmentSec = cs.segmentSec || 5;
+    const maxBuffer = cs.maxBufferSec || 15;
+
+    const setStatus = () => {
+      const st = state.abr;
+      bufferFill.style.width = `${clamp((st.buffer / maxBuffer) * 100)}%`;
+      bufferFill.classList.toggle('low', st.buffer <= 2);
+      const curQ = ladder.find(q => q.id === st.qualityId);
+      status.textContent = st.idx >= st.total
+        ? `✅ 播放完成 · 共 ${st.total} 個片段`
+        : `播放中 · 第 ${st.idx}/${st.total} 段 · 目前畫質 ${curQ?.label || st.qualityId} · 緩衝 ${st.buffer.toFixed(1)} 秒`;
+    };
+
+    const appendSegBlock = seg => {
+      const div = document.createElement('div');
+      div.className = `sim-abr-seg q-${seg.qualityId}${seg.stalled ? ' stalled' : ''}`;
+      div.textContent = ladder.find(q => q.id === seg.qualityId)?.label || seg.qualityId;
+      div.title = `第 ${seg.idx} 段 · 量測頻寬 ${seg.mbps.toFixed(1)} Mbps`;
+      strip.appendChild(div);
+    };
+
+    const finish = () => {
+      clearInterval(state.abrTimer);
+      state.abrTimer = null;
+      startBtn.disabled = false;
+      degradeBtn.disabled = true;
+      recoverBtn.disabled = true;
+      setStatus();
+      const stalls = state.abr.segments.filter(s => s.stalled).length;
+      traceLine(root, `— 播放結束，共 ${state.abr.total} 個片段，其中 ${stalls} 次卡頓重新緩衝 —`, 'done');
+    };
+
+    const tickAbr = () => {
+      const st = state.abr;
+      if (st.idx >= st.total) { finish(); return; }
+      const [lo, hi] = st.condition === 'poor' ? (cs.poorMbpsRange || [0.4, 1.6]) : (cs.goodMbpsRange || [4.0, 7.5]);
+      const measured = lo + Math.random() * (hi - lo);
+      const curIdx = Math.max(0, ladder.findIndex(q => q.id === st.qualityId));
+      // The highest tier the measured throughput can actually sustain right now.
+      let sustainableIdx = 0;
+      for (let i = ladder.length - 1; i >= 0; i--) {
+        if (measured >= ladder[i].mbps * 0.9) { sustainableIdx = i; break; }
+      }
+      // Step down (possibly more than one tier at once) whenever the current tier isn't
+      // sustainable; step up only ONE tier at a time even with plenty of headroom to spare —
+      // real ABR players are conservative about climbing back up right after a drop.
+      let nextIdx;
+      if (sustainableIdx < curIdx) nextIdx = sustainableIdx;
+      else if (curIdx < ladder.length - 1 && measured > ladder[curIdx + 1].mbps * 1.3) nextIdx = curIdx + 1;
+      else nextIdx = curIdx;
+      const chosen = ladder[nextIdx];
+      const downloadTimeSec = (chosen.mbps * segmentSec) / measured;
+      st.buffer = downloadTimeSec > segmentSec
+        ? st.buffer - (downloadTimeSec - segmentSec)
+        : Math.min(maxBuffer, st.buffer + (segmentSec - downloadTimeSec));
+      let stalled = false;
+      if (st.buffer <= 0) {
+        stalled = true;
+        st.buffer = 1; // small grace buffer so playback can resume next tick
+        nextIdx = 0; // be maximally conservative right after a stall
+      }
+      st.qualityId = ladder[nextIdx].id;
+      st.idx += 1;
+      const seg = { idx: st.idx, qualityId: ladder[nextIdx].id, mbps: measured, stalled };
+      st.segments.push(seg);
+      appendSegBlock(seg);
+      if (stalled) {
+        traceLine(root, `⚠️ 第 ${seg.idx} 段：緩衝區見底，播放卡頓！量測頻寬僅 ${measured.toFixed(1)} Mbps，畫質降到最低的「${ladder[0].label}」重新開始累積緩衝。`, 'bad');
+      } else {
+        const tone = nextIdx === curIdx ? '' : nextIdx < curIdx ? 'bad' : 'ok';
+        traceLine(root, `第 ${seg.idx}/${st.total} 段（第 ${(seg.idx - 1) * segmentSec}–${seg.idx * segmentSec} 秒）：量測頻寬 ${measured.toFixed(1)} Mbps，選擇畫質「${chosen.label}」`, tone);
+      }
+      setStatus();
+      if (st.idx >= st.total) finish();
+    };
+
+    const start = () => {
+      state.abr = { idx: 0, total: cs.segments, qualityId: ladder[ladder.length - 1].id, buffer: maxBuffer * 0.4, condition: 'normal', segments: [] };
+      strip.innerHTML = '';
+      startBtn.disabled = true;
+      degradeBtn.disabled = false;
+      recoverBtn.disabled = true;
+      traceLine(root, `— 開始播放：${cs.label || '影片'}（共 ${cs.segments} 個 ${segmentSec} 秒片段，起始畫質「${ladder[ladder.length - 1].label}」）—`, 'head');
+      setStatus();
+      state.abrTimer = setInterval(tickAbr, (cs.tickMs || 650) / (state.speed || 1));
+    };
+
+    startBtn.onclick = start;
+    degradeBtn.onclick = () => {
+      state.abr.condition = 'poor';
+      degradeBtn.disabled = true;
+      recoverBtn.disabled = false;
+      traceLine(root, '📉 模擬網路狀況變差（頻寬大幅下降）', 'bad');
+    };
+    recoverBtn.onclick = () => {
+      state.abr.condition = 'normal';
+      recoverBtn.disabled = true;
+      degradeBtn.disabled = false;
+      traceLine(root, '📈 模擬網路狀況恢復正常', 'ok');
+    };
+
+    // Restore the panel if playback was already in progress before this re-render.
+    if (state.abr) {
+      const finished = state.abr.idx >= state.abr.total;
+      startBtn.disabled = !finished;
+      degradeBtn.disabled = finished || state.abr.condition === 'poor';
+      recoverBtn.disabled = finished || state.abr.condition === 'normal';
+      state.abr.segments.forEach(appendSegBlock);
+      setStatus();
+      if (!finished) {
+        state.abrTimer = setInterval(tickAbr, (cs.tickMs || 650) / (state.speed || 1));
+      }
+    }
+  }
+
   // ---------- Screens ----------
 
   function render(root, sim, state) {
@@ -758,6 +915,7 @@
       </div>
       ${svgTopology(sim, state, { interactive: true, showControls: true })}
       ${renderChunkLab(sim)}
+      ${renderAbrLab(sim)}
       ${nextEvent ? `<div class="sim-hint">下個月可能會發生足以考驗架構的事件——先決定好要不要調整能力配置。</div>` : ''}
       <button class="button sim-advance" type="button">${state.month >= sim.months ? '查看今年總結' : `推進到第 ${state.month + 1} 個月`}</button>
       ${historyChart(state.history, sim.months, lab)}
@@ -775,6 +933,7 @@
     });
     wireTraceClear(root);
     wireChunkLab(root, sim, state);
+    wireAbrLab(root, sim, state);
 
     root.querySelector('.sim-advance').onclick = () => {
       if (state.month >= sim.months) {
@@ -876,6 +1035,7 @@
     wireTraceClear(root);
     root.querySelector('.sim-restart').onclick = () => {
       if (state.chunkTimer) clearInterval(state.chunkTimer);
+      if (state.abrTimer) clearInterval(state.abrTimer);
       Object.assign(state, newState(sim));
       render(root, sim, state);
     };

@@ -168,6 +168,26 @@
       label: '一部 2GB 的影片原始檔',
       startLabel: '開始上傳這部影片'
     },
+    // Adaptive bitrate playback: standard throughput-based ABR behaviour every real DASH/HLS
+    // client uses (not gated behind any of the on/off capabilities above) — the player measures
+    // achieved bandwidth for the segment it just fetched and picks the next segment's quality
+    // from that, stepping down fast (to protect the buffer) but climbing back up only one tier
+    // at a time.
+    abrSim: {
+      label: '自適應畫質播放實驗室',
+      desc: '模擬播放一部影片，畫面切成一個個 5 秒片段：每段要用什麼畫質，由播放器當下量測到的頻寬決定——網路變差時下一段就會自動降到較低畫質以保護緩衝區，避免播放卡頓；網路恢復後畫質會逐步爬升回去，不會一次跳滿格。',
+      segments: 16,
+      segmentSec: 5,
+      tickMs: 650,
+      maxBufferSec: 15,
+      poorMbpsRange: [0.4, 1.6],
+      goodMbpsRange: [4.0, 7.5],
+      ladder: [
+        { id: '360p', label: '360p', mbps: 1.0 },
+        { id: '480p', label: '480p', mbps: 2.5 },
+        { id: '720p', label: '720p', mbps: 5.0 }
+      ]
+    },
     events: [
       {
         month: 2,

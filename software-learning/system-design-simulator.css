@@ -128,10 +128,26 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-chunk-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .3s ease}
 .sim-chunk-label{margin:8px 0 14px;font-size:.82rem;color:#d7d7e2;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .sim-chunklab-actions{display:flex;gap:10px;flex-wrap:wrap}
+.sim-abrlab{margin:0 0 22px;padding:18px 20px;border:1px solid var(--border);border-radius:14px;background:rgba(110,168,254,.05)}
+.sim-abrlab h2{margin:0 0 8px;font-size:1.02rem}
+.sim-abrlab-desc{margin:0 0 14px;color:var(--muted);font-size:.85rem;line-height:1.6}
+.sim-abr-buffer-row{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.sim-abr-buffer-label{font-size:.78rem;color:var(--muted);white-space:nowrap}
+.sim-abr-buffer-track{flex:1;height:10px;border-radius:999px;background:#0c0c13;border:1px solid var(--border);overflow:hidden}
+.sim-abr-buffer-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .3s ease}
+.sim-abr-buffer-fill.low{background:var(--sim-bad)}
+.sim-abr-status{margin:0 0 12px;font-size:.82rem;color:#d7d7e2;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.sim-abr-strip{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 14px;min-height:26px}
+.sim-abr-seg{font-size:.68rem;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:4px 7px;border-radius:6px;color:#0a0a10;animation:simIn .25s ease}
+.sim-abr-seg.q-720p{background:var(--sim-good)}
+.sim-abr-seg.q-480p{background:var(--sim-warn)}
+.sim-abr-seg.q-360p{background:var(--sim-bad)}
+.sim-abr-seg.stalled{outline:2px solid #fff;outline-offset:1px}
+.sim-abrlab-actions{display:flex;gap:10px;flex-wrap:wrap}
 @keyframes simBurst{to{transform:translate(var(--dx),var(--dy));opacity:0}}
 @keyframes simTopoFail{0%,100%{transform:scale(1)}40%{transform:scale(1.3)}}
 @keyframes simTopoPulse{0%,100%{opacity:1}50%{opacity:.5}}
 @media(prefers-reduced-motion:reduce){.sim-burst-dot,.sim-topo-node.failing circle,.sim-topo-node.stressed circle{animation:none}}
 
 @keyframes simIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
-@media(max-width:620px){.sim-comp-grid{grid-template-columns:1fr}.sim-topo-controls,.sim-chunklab-actions{flex-direction:column}.sim-topo-controls .button,.sim-chunklab-actions .button{width:100%}}
+@media(max-width:620px){.sim-comp-grid{grid-template-columns:1fr}.sim-topo-controls,.sim-chunklab-actions,.sim-abrlab-actions{flex-direction:column}.sim-topo-controls .button,.sim-chunklab-actions .button,.sim-abrlab-actions .button{width:100%}}
