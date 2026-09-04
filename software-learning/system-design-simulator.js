@@ -1280,8 +1280,54 @@
   ];
   const sandboxTypeMeta = type => SANDBOX_NODE_TYPES.find(t => t.type === type) || SANDBOX_NODE_TYPES[SANDBOX_NODE_TYPES.length - 1];
 
+  // Not a hard whitelist — a sandbox that blocked "unusual" connections outright would fight
+  // anyone trying to deliberately model a weird real system. Missing from this list just means
+  // "flag it with a warning icon", never "refuse to create the edge".
+  const SANDBOX_SENSIBLE_PAIRS = {
+    user: ['cdn', 'loadBalancer', 'api'],
+    cdn: ['user', 'loadBalancer', 'storage', 'api'],
+    loadBalancer: ['user', 'cdn', 'api', 'worker'],
+    api: ['user', 'loadBalancer', 'db', 'cache', 'storage', 'queue', 'worker', 'cdn'],
+    db: ['api', 'worker', 'cache'],
+    cache: ['api', 'db', 'worker'],
+    storage: ['api', 'worker', 'cdn', 'queue'],
+    queue: ['api', 'worker', 'storage'],
+    worker: ['queue', 'db', 'cache', 'storage', 'loadBalancer', 'api']
+  };
+  function sandboxIsSensible(typeA, typeB) {
+    if (typeA === 'custom' || typeB === 'custom') return true;
+    const list = SANDBOX_SENSIBLE_PAIRS[typeA];
+    return !list || list.includes(typeB);
+  }
+
+  // Unweighted BFS over the edges the player actually drew — this is what "▶ 模擬請求" answers:
+  // is there really a connected path from this node to that one, and if so, which one.
+  function sandboxFindPath(state, fromId, toId) {
+    if (fromId === toId) return [fromId];
+    const adj = {};
+    state.edges.forEach(e => {
+      (adj[e.from] ??= []).push(e.to);
+      (adj[e.to] ??= []).push(e.from);
+    });
+    const visited = new Set([fromId]);
+    const queue = [[fromId]];
+    while (queue.length) {
+      const path = queue.shift();
+      const last = path[path.length - 1];
+      for (const next of (adj[last] || [])) {
+        if (next === toId) return [...path, next];
+        if (!visited.has(next)) { visited.add(next); queue.push([...path, next]); }
+      }
+    }
+    return null;
+  }
+
   function newSandboxState() {
-    return { nodes: [], edges: [], nextId: 1, selectedNodeId: null };
+    return {
+      nodes: [], edges: [], nextId: 1, selectedNodeId: null,
+      regions: ['A 區'], activeRegion: 'A 區',
+      simFrom: '', simTo: ''
+    };
   }
 
   function sandboxNodesSvg(state, selectedId) {
@@ -1309,10 +1355,21 @@
     root.innerHTML = `<section class="sim-screen sim-sandbox">
       <div class="eyebrow">自由建構模式</div>
       <h1>拓樸圖沙盒</h1>
-      <p class="sim-lede">從左邊工具列把截點類型拖到畫布上放開就能新增；點一下既有截點可以設定名稱、地區與連線；直接拖曳截點可以移動位置。這裡不套用任何章節的規則或評分，純粹讓你自己畫架構圖。</p>
+      <p class="sim-lede">從左邊工具列把截點類型拖到畫布上放開就能新增；點一下既有截點可以設定名稱、地區與連線；直接拖曳截點可以移動位置。畫完可以按「模擬請求」讓一個真的請求沿著你畫的連線跑一次。</p>
       <div class="sim-sandbox-layout">
         <div class="sim-sandbox-palette">
           ${SANDBOX_NODE_TYPES.map(t => `<div class="sim-palette-item" data-palette-type="${t.type}" role="button" tabindex="0"><span class="sim-palette-icon">${t.icon}</span><span>${esc(t.label)}</span></div>`).join('')}
+          <div class="sim-sandbox-region-block">
+            <label class="sim-sandbox-field">目前地區（新截點會加進這裡）
+              <select class="sim-sandbox-active-region">
+                ${state.regions.map(r => `<option value="${esc(r)}" ${r === state.activeRegion ? 'selected' : ''}>${esc(r)}</option>`).join('')}
+              </select>
+            </label>
+            <div class="sim-sandbox-region-add">
+              <input type="text" class="sim-sandbox-new-region-input" placeholder="新地區名稱">
+              <button class="button secondary sim-sandbox-add-region-btn" type="button">＋ 新增地區</button>
+            </div>
+          </div>
           <button class="button secondary sim-sandbox-clear" type="button">清空畫布</button>
         </div>
         <div class="sim-sandbox-canvas-wrap">
@@ -1321,18 +1378,35 @@
             <g class="sandbox-edges-group">${sandboxEdgesSvg(state)}</g>
             ${sandboxNodesSvg(state, state.selectedNodeId)}
           </svg>
+          <div class="sim-sandbox-toolbar">
+            <select class="sim-sandbox-sim-from"><option value="">起點…</option>${state.nodes.map(n => `<option value="${esc(n.id)}" ${state.simFrom === n.id ? 'selected' : ''}>${sandboxTypeMeta(n.type).icon} ${esc(n.label)}</option>`).join('')}</select>
+            <select class="sim-sandbox-sim-to"><option value="">終點…</option>${state.nodes.map(n => `<option value="${esc(n.id)}" ${state.simTo === n.id ? 'selected' : ''}>${sandboxTypeMeta(n.type).icon} ${esc(n.label)}</option>`).join('')}</select>
+            <button class="button sim-sandbox-simulate-btn" type="button">▶ 模擬請求</button>
+            <button class="button secondary sim-sandbox-check-btn" type="button">🔍 檢查架構</button>
+            <button class="button secondary sim-sandbox-export-btn" type="button">⬇️ 匯出 JSON</button>
+          </div>
+          <div class="sim-trace">
+            <div class="sim-trace-head"><span>即時處理紀錄</span><button class="sim-trace-clear" type="button">清空</button></div>
+            <div class="sim-trace-body"></div>
+          </div>
         </div>
       </div>
       ${selected ? `<div class="sim-sandbox-config">
         <h2>${sandboxTypeMeta(selected.type).icon} 設定截點</h2>
         <label class="sim-sandbox-field">顯示名稱<input type="text" class="sim-sandbox-label-input" value="${esc(selected.label)}"></label>
-        <label class="sim-sandbox-field">所屬地區<input type="text" class="sim-sandbox-region-input" value="${esc(selected.region || '')}" placeholder="例如：台灣、美國、日本"></label>
+        <label class="sim-sandbox-field">所屬地區
+          <select class="sim-sandbox-region-select">
+            ${state.regions.map(r => `<option value="${esc(r)}" ${r === (selected.region || '') ? 'selected' : ''}>${esc(r)}</option>`).join('')}
+          </select>
+        </label>
         <div class="sim-sandbox-field">
           <span>連線到</span>
           <div class="sim-sandbox-connections">
             ${state.nodes.filter(n => n.id !== selected.id).map(n => {
               const connected = state.edges.some(e => (e.from === selected.id && e.to === n.id) || (e.from === n.id && e.to === selected.id));
-              return `<label class="sim-sandbox-conn-item"><input type="checkbox" class="sim-sandbox-conn-toggle" data-target="${esc(n.id)}" ${connected ? 'checked' : ''}> ${sandboxTypeMeta(n.type).icon} ${esc(n.label)}</label>`;
+              const sensible = sandboxIsSensible(selected.type, n.type);
+              const warnIcon = connected && !sensible ? ' <span class="sim-sandbox-conn-warn-icon" title="這種連線不常見">⚠️</span>' : '';
+              return `<label class="sim-sandbox-conn-item${connected && !sensible ? ' warn' : ''}"><input type="checkbox" class="sim-sandbox-conn-toggle" data-target="${esc(n.id)}" ${connected ? 'checked' : ''}> ${sandboxTypeMeta(n.type).icon} ${esc(n.label)}${warnIcon}</label>`;
             }).join('') || '<p class="sim-sandbox-empty">畫布上還沒有其他截點可以連線。</p>'}
           </div>
         </div>
@@ -1380,7 +1454,7 @@
           document.removeEventListener('pointerup', onUp);
           ghost.remove();
           const id = `n${state.nextId++}`;
-          state.nodes.push({ id, type, region: '', label: meta.label, x: Math.round(last.x), y: Math.round(last.y) });
+          state.nodes.push({ id, type, region: state.activeRegion, label: meta.label, x: Math.round(last.x), y: Math.round(last.y) });
           state.selectedNodeId = id;
           rerender();
         };
@@ -1436,12 +1510,76 @@
       rerender();
     });
 
+    // Regions are a real, managed list now (not free text typed fresh on every node) — new
+    // nodes default to whichever region is currently "active", and creating a new region is its
+    // own explicit step, matching "先有一個 A 區域，要別的地區要先新建立".
+    root.querySelector('.sim-sandbox-active-region')?.addEventListener('change', evt => {
+      state.activeRegion = evt.target.value;
+    });
+    root.querySelector('.sim-sandbox-add-region-btn')?.addEventListener('click', () => {
+      const input = root.querySelector('.sim-sandbox-new-region-input');
+      const name = (input?.value || '').trim();
+      if (!name) return;
+      if (!state.regions.includes(name)) state.regions.push(name);
+      state.activeRegion = name;
+      rerender();
+    });
+
+    wireTraceClear(root);
+    root.querySelector('.sim-sandbox-sim-from')?.addEventListener('change', evt => { state.simFrom = evt.target.value; });
+    root.querySelector('.sim-sandbox-sim-to')?.addEventListener('change', evt => { state.simTo = evt.target.value; });
+
+    // "Does this actually connect to anything" answered for real: BFS over the edges the player
+    // drew, then a genuine spawnToken animation along whatever path exists — reusing the exact
+    // same engine machinery every scripted chapter's demo button uses, not a separate mechanic.
+    root.querySelector('.sim-sandbox-simulate-btn')?.addEventListener('click', () => {
+      const fromId = state.simFrom, toId = state.simTo;
+      if (!fromId || !toId) { traceLine(root, '⚠️ 請先選擇起點與終點。', 'bad'); return; }
+      const fromNode = state.nodes.find(n => n.id === fromId), toNode = state.nodes.find(n => n.id === toId);
+      const path = sandboxFindPath(state, fromId, toId);
+      if (!path) {
+        traceLine(root, `❌ 找不到路徑：「${fromNode?.label}」跟「${toNode?.label}」目前沒有連通，檢查一下中間是不是少畫了一條線。`, 'bad');
+        return;
+      }
+      const waypoints = path.map(id => { const n = state.nodes.find(x => x.id === id); return { x: n.x, y: n.y }; });
+      traceLine(root, `— 開始模擬請求：「${fromNode?.label}」→「${toNode?.label}」，共 ${waypoints.length - 1} 段連線 —`, 'head');
+      svgEl.querySelector('.sim-token-demo')?.remove();
+      spawnToken(svgEl, waypoints, {
+        tokenClass: 'sim-token-demo',
+        durationMs: 1600,
+        onHop: idx => { const n = state.nodes.find(x => x.id === path[idx]); traceLine(root, `抵達「${n?.label || path[idx]}」`); },
+        onDone: () => traceLine(root, '— 完成，這條路徑真的連通 —', 'done')
+      });
+    });
+
+    root.querySelector('.sim-sandbox-check-btn')?.addEventListener('click', () => {
+      if (!state.nodes.length) { traceLine(root, '架構檢查：畫布上還沒有任何截點。', 'bad'); return; }
+      const isolated = state.nodes.filter(n => !state.edges.some(e => e.from === n.id || e.to === n.id));
+      if (!isolated.length) traceLine(root, `架構檢查：${state.nodes.length} 個截點都至少有一條連線，沒有孤立截點。`, 'ok');
+      else traceLine(root, `⚠️ 架構檢查：發現 ${isolated.length} 個孤立截點（沒有任何連線）：${isolated.map(n => n.label).join('、')}。`, 'bad');
+    });
+
+    root.querySelector('.sim-sandbox-export-btn')?.addEventListener('click', () => {
+      const data = JSON.stringify({ regions: state.regions, nodes: state.nodes, edges: state.edges }, null, 2);
+      try {
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'sandbox-topology.json';
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        traceLine(root, '⬇️ 已匯出目前架構為 sandbox-topology.json。', 'done');
+      } catch {
+        traceLine(root, '⚠️ 這個瀏覽器不支援直接下載檔案，架構的 JSON 內容已印在瀏覽器主控台（console）。', 'bad');
+        console.log(data);
+      }
+    });
+
     const selected = state.nodes.find(n => n.id === state.selectedNodeId);
     if (!selected) return;
     root.querySelector('.sim-sandbox-label-input')?.addEventListener('input', evt => { selected.label = evt.target.value; });
     root.querySelector('.sim-sandbox-label-input')?.addEventListener('change', rerender);
-    root.querySelector('.sim-sandbox-region-input')?.addEventListener('input', evt => { selected.region = evt.target.value; });
-    root.querySelector('.sim-sandbox-region-input')?.addEventListener('change', rerender);
+    root.querySelector('.sim-sandbox-region-select')?.addEventListener('change', evt => { selected.region = evt.target.value; rerender(); });
     root.querySelectorAll('.sim-sandbox-conn-toggle').forEach(cb => {
       cb.addEventListener('change', () => {
         const targetId = cb.dataset.target;
