@@ -96,9 +96,10 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-topo-hint{margin:8px 0 14px;font-size:.78rem;color:var(--muted)}
 .sim-topo-controls{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
 .sim-topo-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 22px;padding-top:12px;border-top:1px solid var(--border)}
-.sim-topo-legend-item{font-size:.78rem;color:#d7d7e2;text-decoration:none;display:inline-flex;gap:5px;align-items:baseline}
+.sim-topo-legend-item{font-size:.78rem;color:#d7d7e2;text-decoration:none;display:inline-flex;gap:5px;align-items:baseline;flex-wrap:wrap;max-width:280px}
 .sim-topo-legend-item small{color:var(--accent);font-weight:700}
 .sim-topo-legend-item:hover{color:var(--accent)}
+.sim-legend-choice{color:var(--muted);font-weight:600}
 .sim-event-outcome{margin-top:16px;padding:16px 18px;border-radius:12px;border:1px solid var(--border);background:#111119}
 .sim-event-outcome.ok{border-color:rgba(74,222,128,.4)}
 .sim-event-outcome.bad{border-color:rgba(251,113,133,.4)}

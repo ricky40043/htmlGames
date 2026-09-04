@@ -43,23 +43,70 @@
     };
   }
 
-  function newState(sim) {
-    const active = new Set();
+  // ---------- Component options (每個能力可以選不同做法/策略，不只是開關) ----------
+  // Every component declares `options`, an ordered list starting with an 'off' entry. Clicking
+  // a node cycles forward through this list. `state.choice[componentId]` holds the selected
+  // option id; a missing/invalid entry falls back to the first (off) option.
+
+  function findComponent(sim, componentId) {
+    return sim.components.find(c => c.id === componentId);
+  }
+
+  function currentOptionId(sim, componentId, state) {
+    const comp = findComponent(sim, componentId);
+    if (!comp) return 'off';
+    const chosen = state.choice[componentId];
+    if (chosen && comp.options.some(o => o.id === chosen)) return chosen;
+    return comp.options[0]?.id || 'off';
+  }
+
+  function currentOption(sim, componentId, state) {
+    const comp = findComponent(sim, componentId);
+    const id = currentOptionId(sim, componentId, state);
+    return comp?.options.find(o => o.id === id) || { id: 'off', label: '關閉', cost: 0 };
+  }
+
+  function nextOptionId(sim, componentId, state) {
+    const comp = findComponent(sim, componentId);
+    if (!comp) return 'off';
+    const ids = comp.options.map(o => o.id);
+    const idx = ids.indexOf(currentOptionId(sim, componentId, state));
+    return ids[(idx + 1) % ids.length];
+  }
+
+  // Passed into each scenario's `resolve`/`computeFlow` functions instead of the raw state, so
+  // scenario data can either do a simple on/off check (`ctx.has(id)`) or branch on exactly
+  // which strategy was chosen (`ctx.get(id)`).
+  function makeChoiceCtx(sim, state) {
     return {
-      month: 0, uptime: 100, qoe: 100, costEff: 100, active, usersServed: 0, speed: 1,
+      get: id => currentOptionId(sim, id, state),
+      has: id => currentOptionId(sim, id, state) !== 'off',
+      option: id => currentOption(sim, id, state)
+    };
+  }
+
+  function snapshotChoices(sim, state) {
+    const snap = {};
+    sim.components.forEach(c => { snap[c.id] = currentOptionId(sim, c.id, state); });
+    return snap;
+  }
+
+  function newState(sim) {
+    return {
+      month: 0, uptime: 100, qoe: 100, costEff: 100, choice: {}, usersServed: 0, speed: 1,
       chunk: null, chunkTimer: null,
       log: [], history: [{ month: 0, uptime: 100, qoe: 100 }], phase: 'briefing'
     };
   }
 
-  function weeklyCostPenalty(sim, active) {
+  function weeklyCostPenalty(sim, state) {
     let total = 0;
-    active.forEach(id => { total += sim.components.find(c => c.id === id)?.cost || 0; });
+    sim.components.forEach(c => { total += currentOption(sim, c.id, state).cost || 0; });
     return total;
   }
 
   function applyMonthCost(sim, state) {
-    const penalty = weeklyCostPenalty(sim, state.active);
+    const penalty = weeklyCostPenalty(sim, state);
     state.costEff = clamp(state.costEff - penalty * 0.6);
   }
 
@@ -91,14 +138,16 @@
     </details>`;
   }
 
-  function checkChip(sim, id, on) {
-    const comp = sim.components.find(c => c.id === id);
-    return `<span class="sim-chip ${on ? 'has' : 'missing'}">${on ? '✅' : '❌'} ${esc(comp?.shortName || id)}</span>`;
+  function checkChip(sim, componentId, optionId) {
+    const comp = findComponent(sim, componentId);
+    const opt = comp?.options.find(o => o.id === optionId);
+    const on = optionId !== 'off';
+    return `<span class="sim-chip ${on ? 'has' : 'missing'}">${on ? '✅' : '❌'} ${esc(comp?.shortName || componentId)}：${esc(opt?.label || optionId)}</span>`;
   }
 
   function logEntry(sim, entry) {
     const lab = labels(sim);
-    const chips = (entry.relevantComponents || []).map(id => checkChip(sim, id, entry.activeSnapshot.includes(id))).join('');
+    const chips = (entry.relevantComponents || []).map(id => checkChip(sim, id, entry.choiceSnapshot[id])).join('');
     return `<li class="sim-log-item ${entry.ok ? 'ok' : 'bad'}">
       <div class="sim-log-head"><span class="sim-log-tag">${entry.ok ? 'PASS' : 'FAIL'}</span><span>第 ${entry.month} 個月 · ${esc(entry.title)}</span></div>
       <p class="sim-log-narrative">${esc(entry.narrative)}</p>
@@ -123,34 +172,38 @@
     }).join('');
   }
 
-  function edgesSvg(topo, active) {
+  function nodeIsOn(sim, state, node) {
+    return node.kind !== 'component' || currentOptionId(sim, node.componentId, state) !== 'off';
+  }
+
+  function edgesSvg(sim, state) {
+    const topo = sim.topology;
     return topo.edges.map(e => {
       const a = findNode(topo, e.from), b = findNode(topo, e.to);
       if (!a || !b) return '';
-      const aOn = a.kind !== 'component' || active.has(a.componentId);
-      const bOn = b.kind !== 'component' || active.has(b.componentId);
-      const reqOn = !e.requiresComponent || active.has(e.requiresComponent);
-      const isActive = aOn && bOn && reqOn;
+      const reqOn = !e.requiresComponent || currentOptionId(sim, e.requiresComponent, state) !== 'off';
+      const isActive = nodeIsOn(sim, state, a) && nodeIsOn(sim, state, b) && reqOn;
       const cls = ['sim-topo-edge', e.kind === 'stub' ? 'stub' : '', isActive ? 'active' : 'inactive'].filter(Boolean).join(' ');
       return `<line class="${cls}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" data-edge="${esc(e.from)}-${esc(e.to)}"/>`;
     }).join('');
   }
 
-  function nodesSvg(topo, state, interactive) {
+  function nodesSvg(sim, state, interactive) {
+    const topo = sim.topology;
     return topo.nodes.map(n => {
       const isComponent = n.kind === 'component';
-      const on = !isComponent || state.active.has(n.componentId);
+      const on = nodeIsOn(sim, state, n);
       const r = n.size === 'small' ? 15 : n.kind === 'user' ? 25 : 23;
       const cls = ['sim-topo-node', n.kind, on ? 'on' : 'off', isComponent && interactive ? 'clickable' : ''].filter(Boolean).join(' ');
-      const comp = isComponent ? state.componentLookup?.get(n.componentId) : null;
-      const costText = comp ? (comp.cost > 0 ? `+${comp.cost}` : comp.cost < 0 ? `${comp.cost}` : '±0') : '';
+      const opt = isComponent ? currentOption(sim, n.componentId, state) : null;
+      const costText = opt ? `${opt.cost > 0 ? '+' : ''}${opt.cost}/月 · ${opt.label}` : '';
       const badge = n.kind === 'user' ? `<text class="sim-topo-badge" x="${n.x}" y="${n.y + r + 16}">已服務 ${numFmt(state.usersServed || 0)} 人</text>` : '';
       const attrs = isComponent && interactive ? `role="button" tabindex="0" data-toggle="${esc(n.componentId)}"` : '';
       return `<g class="${cls}" data-node="${esc(n.id)}" ${attrs}>
         <circle cx="${n.x}" cy="${n.y}" r="${r}"/>
         <text class="sim-topo-mark" x="${n.x}" y="${n.y + 5}">${isComponent ? (on ? '✓' : '✕') : ''}</text>
         <text class="sim-topo-label" x="${n.x}" y="${n.y + r + 14}">${esc(n.label)}</text>
-        ${costText ? `<text class="sim-topo-cost" x="${n.x}" y="${n.y - r - 6}">${esc(costText)}/月</text>` : ''}
+        ${costText ? `<text class="sim-topo-cost" x="${n.x}" y="${n.y - r - 6}">${esc(costText)}</text>` : ''}
         ${badge}
       </g>`;
     }).join('');
@@ -161,8 +214,11 @@
   function svgTopology(sim, state, { interactive = false, showControls = false } = {}) {
     const topo = sim.topology;
     if (!topo) return '<p class="sim-topo-missing">這個場景還沒有拓樸圖資料。</p>';
-    state.componentLookup = new Map(sim.components.map(c => [c.id, c]));
-    const legend = sim.components.map(c => `<a class="sim-topo-legend-item" data-legend="${esc(c.id)}" href="${reviewHref(sim.chapterId, c.sectionId, c.pageId)}" target="_blank" rel="noreferrer"><span class="sim-legend-mark">${state.active.has(c.id) ? '✅' : '⬜️'}</span> ${esc(c.shortName)} <small>教材對照 →</small></a>`).join('');
+    const legend = sim.components.map(c => {
+      const opt = currentOption(sim, c.id, state);
+      const on = opt.id !== 'off';
+      return `<a class="sim-topo-legend-item" data-legend="${esc(c.id)}" href="${reviewHref(sim.chapterId, c.sectionId, c.pageId)}" target="_blank" rel="noreferrer"><span class="sim-legend-mark">${on ? '✅' : '⬜️'}</span> ${esc(c.shortName)}：<span class="sim-legend-choice">${esc(opt.label)}</span> <small>教材對照 →</small></a>`;
+    }).join('');
     const speedControls = showControls ? `<div class="sim-speed-controls">
         <span class="sim-speed-label">播放速度</span>
         ${SPEED_OPTIONS.map(s => `<button class="button secondary sim-speed-btn ${state.speed === s ? 'active' : ''}" type="button" data-speed="${s}">${s}x</button>`).join('')}
@@ -170,10 +226,10 @@
     return `<div class="sim-topo-wrap ${interactive ? '' : 'locked'}">
       <svg class="sim-topo" viewBox="${esc(topo.viewBox)}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="架構拓樸圖">
         ${regionBoxesSvg(topo)}
-        ${edgesSvg(topo, state.active)}
-        ${nodesSvg(topo, state, interactive)}
+        ${edgesSvg(sim, state)}
+        ${nodesSvg(sim, state, interactive)}
       </svg>
-      ${interactive ? '<p class="sim-topo-hint">點節點可以開關這個能力；圓點連線代表目前流量會不會實際走這條路。</p>' : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前的準備決定。</p>'}
+      ${interactive ? '<p class="sim-topo-hint">點節點可以循環切換這個能力的不同做法（關閉→做法一→做法二→…）；圓點連線代表目前流量會不會實際走這條路。</p>' : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法決定。</p>'}
       ${showControls ? `<div class="sim-topo-controls">
         <button class="button secondary sim-add-users" type="button" data-add="100">${esc(sim.addUsersLabel || '＋100 使用者')}</button>
         <button class="button secondary sim-demo" type="button" data-kind="watch">${esc(sim.demoLabels?.watch || '▶ 模擬一次讀取請求')}</button>
@@ -265,37 +321,40 @@
     return nodeIds.map(id => findNode(topo, id)).filter(Boolean).map(n => ({ x: n.x, y: n.y }));
   }
 
-  // Toggling a capability used to trigger a full render() — that wiped the trace log, killed
-  // any in-flight token animation, and flashed the whole screen on every click. This updates
-  // only the node, its edges, and its legend row in place, so the rest of the screen (and
-  // anything animating) is left alone.
+  // Cycling a capability's option used to trigger a full render() — that wiped the trace log,
+  // killed any in-flight token animation, and flashed the whole screen on every click. This
+  // updates only the node, its edges, and its legend row in place.
   function updateComponentVisual(root, sim, state, componentId) {
     const topo = sim.topology;
     const g = topo.nodes.find(n => n.componentId === componentId);
     if (!g) return;
-    const on = state.active.has(componentId);
+    const opt = currentOption(sim, componentId, state);
+    const on = opt.id !== 'off';
     const nodeEl = root.querySelector(`[data-node="${g.id}"]`);
     if (nodeEl) {
       nodeEl.classList.toggle('on', on);
       nodeEl.classList.toggle('off', !on);
       const mark = nodeEl.querySelector('.sim-topo-mark');
       if (mark) mark.textContent = on ? '✓' : '✕';
+      const costEl = nodeEl.querySelector('.sim-topo-cost');
+      if (costEl) costEl.textContent = `${opt.cost > 0 ? '+' : ''}${opt.cost}/月 · ${opt.label}`;
     }
     topo.edges.forEach(e => {
       if (e.from !== g.id && e.to !== g.id) return;
       const a = findNode(topo, e.from), b = findNode(topo, e.to);
-      const aOn = a.kind !== 'component' || state.active.has(a.componentId);
-      const bOn = b.kind !== 'component' || state.active.has(b.componentId);
-      const reqOn = !e.requiresComponent || state.active.has(e.requiresComponent);
-      const isActive = aOn && bOn && reqOn;
+      const reqOn = !e.requiresComponent || currentOptionId(sim, e.requiresComponent, state) !== 'off';
+      const isActive = nodeIsOn(sim, state, a) && nodeIsOn(sim, state, b) && reqOn;
       const line = root.querySelector(`[data-edge="${e.from}-${e.to}"]`);
       if (line) {
         line.classList.toggle('active', isActive);
         line.classList.toggle('inactive', !isActive);
       }
     });
-    const legendEl = root.querySelector(`[data-legend="${componentId}"] .sim-legend-mark`);
-    if (legendEl) legendEl.textContent = on ? '✅' : '⬜️';
+    const legendEl = root.querySelector(`[data-legend="${componentId}"]`);
+    if (legendEl) {
+      legendEl.querySelector('.sim-legend-mark').textContent = on ? '✅' : '⬜️';
+      legendEl.querySelector('.sim-legend-choice').textContent = opt.label;
+    }
   }
 
   function burstUsers(topo, svgEl) {
@@ -316,11 +375,11 @@
     }
   }
 
-  function wireTopologyControls(root, sim, state, onToggle) {
+  function wireTopologyControls(root, sim, state, onCycle) {
     const svgEl = root.querySelector('svg.sim-topo');
     if (!svgEl) return;
     root.querySelectorAll('[data-toggle]').forEach(g => {
-      const activate = () => onToggle(g.dataset.toggle);
+      const activate = () => onCycle(g.dataset.toggle);
       g.addEventListener('click', activate);
       g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); activate(); } });
     });
@@ -336,7 +395,8 @@
     root.querySelectorAll('.sim-demo').forEach(btn => {
       btn.onclick = () => {
         const kind = btn.dataset.kind;
-        const flowIds = sim.topology.computeFlow(kind, state.active);
+        const ctx = makeChoiceCtx(sim, state);
+        const flowIds = sim.topology.computeFlow(kind, ctx);
         const waypoints = waypointsFor(sim.topology, flowIds);
         svgEl.querySelector('.sim-token-demo')?.remove();
         traceLine(root, `— 開始模擬：${btn.textContent.trim()} —`, 'head');
@@ -360,8 +420,10 @@
   }
 
   // Animates the "does this month's request survive" moment on the event screen: a token
-  // travels the current watch-path and either completes (ok) or stops at the first missing
-  // capability (fail) — this is the causal "what happened because of what I did" visual.
+  // travels the current watch-path and either completes (ok) or stops at the first capability
+  // that's still switched off (fail) — this is the causal "what happened because of what I
+  // did" visual. The *magnitude* of the outcome (which strategy, not just on/off) lives in the
+  // narrative text and score deltas the scenario's own resolve() function returns.
   function animateEventOutcome(root, sim, state, svgEl, event, outcome, done) {
     const topo = sim.topology;
     if (!topo || !svgEl) { setTimeout(done, 200); return; }
@@ -377,14 +439,13 @@
       return;
     }
     // Events can override which nodes the token visits (`demoFlow`) — the default watch/browse
-    // path often doesn't pass through every component (e.g. a retry-budget or session-store
-    // node that sits off to the side), so without an override the "break point" visual
-    // couldn't land on the node that's actually missing.
-    const flowIds = event.demoFlow || topo.computeFlow('watch', state.active);
-    // Only look for a break point when the event actually failed — some events succeed via
-    // an OR of capabilities (e.g. cache alone is enough even without a read replica), so a
-    // "missing" relevant component doesn't always mean the request broke there.
-    const missingId = outcome.ok ? null : (event.relevantComponents || []).find(id => !state.active.has(id));
+    // path often doesn't pass through every component (e.g. a small satellite node that sits
+    // off to the side), so without an override the "break point" visual couldn't land on the
+    // node that's actually missing.
+    const flowIds = event.demoFlow || topo.computeFlow('watch', makeChoiceCtx(sim, state));
+    // Only look for a break point when the event actually failed — some events succeed via an
+    // OR of capabilities, so a "still off" relevant component doesn't always mean it broke there.
+    const missingId = outcome.ok ? null : (event.relevantComponents || []).find(id => currentOptionId(sim, id, state) === 'off');
     const missingNode = missingId ? topo.nodes.find(n => n.componentId === missingId) : null;
     let travelIds = flowIds;
     if (missingNode) {
@@ -404,7 +465,7 @@
       onDone: () => {
         if (missingNode) {
           svgEl.querySelector(`[data-node="${missingNode.id}"]`)?.classList.add('failing');
-          traceLine(root, `⚠️ 在「${missingNode.label}」中斷——這個能力沒有裝。`, 'bad');
+          traceLine(root, `⚠️ 在「${missingNode.label}」中斷——這個能力目前是關閉的。`, 'bad');
         } else if (outcome.ok) {
           waypoints.length && svgEl.querySelectorAll('.sim-topo-node.on').forEach(g => g.classList.add('success'));
           traceLine(root, '✅ 請求順利完成。', 'ok');
@@ -422,10 +483,10 @@
   function renderChunkLab(sim) {
     const cs = sim.chunkSim;
     if (!cs) return '';
-    const resumeComp = sim.components.find(c => c.id === cs.resumeComponentId);
+    const resumeComp = findComponent(sim, cs.resumeComponentId);
     return `<section class="sim-chunklab">
       <h2>🧪 ${esc(cs.label || '上傳穩定性實驗室')}</h2>
-      <p class="sim-chunklab-desc">${esc(cs.desc || `模擬上傳一個大檔案，過程中你可以隨時讓伺服器當機，看復原時是從中斷點繼續，還是整個重傳——結果取決於你現在有沒有裝「${resumeComp?.name || ''}」。`)}</p>
+      <p class="sim-chunklab-desc">${esc(cs.desc || `模擬上傳一個大檔案，過程中你可以隨時讓伺服器當機，看復原時是從中斷點繼續，還是整個重傳——結果取決於你現在有沒有開啟「${resumeComp?.name || ''}」。`)}</p>
       <div class="sim-chunk-track"><div class="sim-chunk-fill" style="width:0%"></div></div>
       <p class="sim-chunk-label">尚未開始</p>
       <div class="sim-chunklab-actions">
@@ -439,9 +500,8 @@
   function wireChunkLab(root, sim, state) {
     const cs = sim.chunkSim;
     if (!cs) return;
-    // A previous mount may have left a ticking interval pointed at now-detached DOM nodes
-    // (e.g. the player toggled a topology node mid-upload, which re-renders this whole
-    // screen) — always clear it before wiring the fresh one.
+    // A previous mount may have left a ticking interval pointed at now-detached DOM nodes —
+    // always clear it before wiring the fresh one.
     if (state.chunkTimer) { clearInterval(state.chunkTimer); state.chunkTimer = null; }
 
     const track = root.querySelector('.sim-chunk-fill');
@@ -503,10 +563,10 @@
     recoverBtn.onclick = () => {
       recoverBtn.disabled = true;
       svgEl?.querySelector(`[data-node="${cs.crashNodeId}"]`)?.classList.remove('failing');
-      const canResume = state.active.has(cs.resumeComponentId);
+      const canResume = currentOptionId(sim, cs.resumeComponentId, state) !== 'off';
       state.chunk.crashed = false;
       if (canResume) {
-        traceLine(root, `✅ 偵測到「${sim.components.find(c => c.id === cs.resumeComponentId)?.name || '斷點續傳'}」：從區塊 ${state.chunk.done + 1}/${state.chunk.total} 繼續，不重傳已完成的部分。`, 'ok');
+        traceLine(root, `✅ 偵測到「${findComponent(sim, cs.resumeComponentId)?.name || '斷點續傳'}」：從區塊 ${state.chunk.done + 1}/${state.chunk.total} 繼續，不重傳已完成的部分。`, 'ok');
       } else {
         traceLine(root, `🔁 沒有斷點續傳機制：必須整份重傳，從區塊 1/${state.chunk.total} 重新開始。`, 'bad');
         state.chunk.resent += state.chunk.done;
@@ -579,9 +639,13 @@
     </section>`;
 
     wireTopologyControls(root, sim, state, componentId => {
-      if (state.active.has(componentId)) state.active.delete(componentId); else state.active.add(componentId);
+      const before = currentOptionId(sim, componentId, state);
+      const next = nextOptionId(sim, componentId, state);
+      state.choice[componentId] = next;
       updateComponentVisual(root, sim, state, componentId);
-      traceLine(root, `${state.active.has(componentId) ? '啟用' : '關閉'}了「${sim.components.find(c => c.id === componentId)?.shortName || componentId}」`, state.active.has(componentId) ? 'ok' : '');
+      const comp = findComponent(sim, componentId);
+      const opt = comp?.options.find(o => o.id === next);
+      traceLine(root, `「${comp?.shortName || componentId}」從「${comp?.options.find(o => o.id === before)?.label || before}」切換成「${opt?.label || next}」`, next === 'off' ? '' : 'ok');
     });
     wireTraceClear(root);
     wireChunkLab(root, sim, state);
@@ -605,9 +669,11 @@
   function renderEvent(root, sim, state) {
     const event = state.pendingEvent;
     const chips = (event.relevantComponents || []).map(id => {
-      const comp = sim.components.find(c => c.id === id);
-      const on = state.active.has(id);
-      return `<span class="sim-chip pending ${on ? 'has' : 'missing'}">${on ? '已裝' : '未裝'} · ${esc(comp?.shortName || id)}</span>`;
+      const comp = findComponent(sim, id);
+      const optId = currentOptionId(sim, id, state);
+      const opt = comp?.options.find(o => o.id === optId);
+      const on = optId !== 'off';
+      return `<span class="sim-chip pending ${on ? 'has' : 'missing'}">${esc(comp?.shortName || id)}：${esc(opt?.label || optId)}</span>`;
     }).join('');
     root.innerHTML = `<section class="sim-screen sim-event">
       <div class="eyebrow">第 ${state.month} 個月 · 事件發生</div>
@@ -615,7 +681,7 @@
       <p class="sim-lede">${esc(event.narrative)}</p>
       ${chips ? `<div class="sim-event-check"><small>這次事件會考驗：</small><div class="sim-log-chips">${chips}</div></div>` : ''}
       ${svgTopology(sim, state, { interactive: false, showControls: false })}
-      <p class="sim-event-hint">結果由你這幾個月裝上的架構能力決定，現在已經來不及調整。</p>
+      <p class="sim-event-hint">結果由你這幾個月選的做法決定，現在已經來不及調整。</p>
       <button class="button sim-resolve" type="button">查看結果</button>
       <div id="simEventResult"></div>
     </section>`;
@@ -624,7 +690,7 @@
     root.querySelector('.sim-resolve').onclick = () => {
       const resolveBtn = root.querySelector('.sim-resolve');
       resolveBtn.disabled = true;
-      const outcome = event.resolve(state.active);
+      const outcome = event.resolve(makeChoiceCtx(sim, state));
       const svgEl = root.querySelector('svg.sim-topo');
       animateEventOutcome(root, sim, state, svgEl, event, outcome, () => {
         state.uptime = clamp(state.uptime + (outcome.uptime || 0));
@@ -638,7 +704,7 @@
           uptime: outcome.uptime || 0,
           qoe: outcome.qoe || 0,
           relevantComponents: event.relevantComponents || [],
-          activeSnapshot: [...state.active]
+          choiceSnapshot: snapshotChoices(sim, state)
         });
         state.history.push({ month: state.month, uptime: state.uptime, qoe: state.qoe });
         const lab = labels(sim);
