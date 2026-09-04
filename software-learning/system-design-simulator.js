@@ -92,28 +92,104 @@
   }
 
   function newState(sim) {
+    const cs = sim.dragViewerSim;
     return {
       month: 0, uptime: 100, qoe: 100, costEff: 100, choice: {}, usersServed: 0, speed: 1,
       chunk: null, chunkTimer: null,
       abr: null, abrTimer: null,
-      dragViewer: sim.dragViewerSim ? {
-        x: sim.dragViewerSim.start.x, y: sim.dragViewerSim.start.y, inZone: false,
-        qualityId: (sim.dragViewerSim.ladder || sim.abrSim?.ladder || []).slice(-1)[0]?.id
+      // Machines the player added by hand with the ＋ buttons on the topology, on top of
+      // whatever baseline the chosen redundancy strategy already gives that node. Keyed by node
+      // id, so each region's pool scales independently (adding Taiwan streaming servers must not
+      // silently also add them in the US).
+      extraInstances: {},
+      dragViewer: cs ? {
+        x: cs.start.x, y: cs.start.y, inZone: false,
+        regionId: cs.homeRegionId || sim.topology?.regionIds?.[0] || null,
+        qualityId: (cs.ladder || sim.abrSim?.ladder || []).slice(-1)[0]?.id
       } : null,
+      // The bad-signal zone is a movable object too, not scenery painted at a fixed spot —
+      // its live position lives here so it survives a full renderPlay remount, exactly like the
+      // avatar's does.
+      badZone: cs?.zone ? { x: cs.zone.x, y: cs.zone.y } : null,
       dragViewerTimer: null,
       log: [], history: [{ month: 0, uptime: 100, qoe: 100 }], phase: 'briefing'
     };
   }
 
+  // ---------- Instances, capacity and load ----------
+  // A pool node's machine count is (strategy baseline) + (machines the player added by hand).
+  // Hand-added machines can never take a node below its strategy's baseline — to go lower you
+  // have to change the strategy, which is the decision that actually carries the trade-off.
+
+  const MAX_INSTANCES = 8;
+
+  function baseInstances(sim, state, node) {
+    if (!node.pool) return 1;
+    return Math.max(1, currentOption(sim, node.componentId, state).instances || 1);
+  }
+
+  function instanceCount(sim, state, node) {
+    if (!node.pool) return 1;
+    return baseInstances(sim, state, node) + Math.max(0, state.extraInstances?.[node.id] || 0);
+  }
+
+  // What fraction of watch traffic never reaches the origin at all, because an edge cache
+  // answered it. Declared by the scenario (`capacity.offloadFrom` names the component whose
+  // current option carries an `offload` figure), so scenarios without a CDN just get 0.
+  function offloadRatio(sim, state) {
+    const id = sim.capacity?.offloadFrom;
+    if (!id) return 0;
+    return currentOption(sim, id, state).offload || 0;
+  }
+
+  // Live load for one node: how many of this month's concurrent viewers actually land on it,
+  // versus how many its current machine count can carry. This is what makes both the CDN
+  // decision and the ＋/－ buttons mean something measurable rather than decorative.
+  function nodeLoad(sim, state, node) {
+    if (!node?.capacityPerInstance || !sim.capacity) return null;
+    const share = sim.capacity.regionShare?.[node.regionKey] ?? (1 / (sim.topology?.regionIds?.length || 1));
+    let demand = sim.viewersAtMonth(state.month) * share;
+    if (node.loadKind === 'stream') demand *= (1 - offloadRatio(sim, state));
+    else if (node.loadKind === 'api') demand *= (sim.capacity.apiRatio ?? 0.2);
+    const capacity = instanceCount(sim, state, node) * node.capacityPerInstance;
+    return { demand: Math.round(demand), capacity, ratio: capacity > 0 ? demand / capacity : Infinity };
+  }
+
+  function overloadedNodes(sim, state) {
+    if (!sim.topology?.nodes) return [];
+    return sim.topology.nodes
+      .map(n => ({ node: n, load: nodeLoad(sim, state, n) }))
+      .filter(x => x.load && x.load.ratio > 1)
+      .sort((a, b) => b.load.ratio - a.load.ratio);
+  }
+
   function weeklyCostPenalty(sim, state) {
     let total = 0;
     sim.components.forEach(c => { total += currentOption(sim, c.id, state).cost || 0; });
+    // Hand-added machines are real machines: they show up on the bill every month, which is the
+    // counterweight that stops "just add servers forever" from being a free win.
+    (sim.topology?.nodes || []).forEach(n => {
+      const extra = Math.max(0, state.extraInstances?.[n.id] || 0);
+      if (extra) total += extra * (n.extraInstanceCost ?? 1);
+    });
     return total;
   }
 
   function applyMonthCost(sim, state) {
     const penalty = weeklyCostPenalty(sim, state);
     state.costEff = clamp(state.costEff - penalty * 0.6);
+  }
+
+  // A month spent over capacity costs playback quality — the whole point of showing a load
+  // ratio is that ignoring it has consequences. Scales with how far over the worst node is, so
+  // being 5% over is a nudge and being 4x over is a disaster.
+  function applyMonthOverload(sim, state) {
+    const over = overloadedNodes(sim, state);
+    if (!over.length) return null;
+    const worst = over[0];
+    const penalty = Math.min(10, Math.max(1, Math.round((worst.load.ratio - 1) * 6)));
+    state.qoe = clamp(state.qoe - penalty);
+    return { count: over.length, worst, penalty };
   }
 
   function meterRow(label, value, tone) {
@@ -154,8 +230,8 @@
   function logEntry(sim, entry) {
     const lab = labels(sim);
     const chips = (entry.relevantComponents || []).map(id => checkChip(sim, id, entry.choiceSnapshot[id])).join('');
-    return `<li class="sim-log-item ${entry.ok ? 'ok' : 'bad'}">
-      <div class="sim-log-head"><span class="sim-log-tag">${entry.ok ? 'PASS' : 'FAIL'}</span><span>第 ${entry.month} 個月 · ${esc(entry.title)}</span></div>
+    return `<li class="sim-log-item ${entry.ok ? 'ok' : 'bad'}${entry.capacityIssue ? ' capacity' : ''}">
+      <div class="sim-log-head"><span class="sim-log-tag">${entry.capacityIssue ? '容量' : entry.ok ? 'PASS' : 'FAIL'}</span><span>第 ${entry.month} 個月 · ${esc(entry.title)}</span></div>
       <p class="sim-log-narrative">${esc(entry.narrative)}</p>
       ${chips ? `<div class="sim-log-chips">${chips}</div>` : ''}
       <p class="sim-log-result">${esc(entry.result)}</p>
@@ -207,8 +283,21 @@
     }).join('');
   }
 
+  // "Is this capability currently switched on" — NOT the same question as "does this box exist".
   function nodeIsOn(sim, state, node) {
     return node.kind !== 'component' || currentOptionId(sim, node.componentId, state) !== 'off';
+  }
+
+  // Does this box physically exist and carry traffic right now? A component declared
+  // `presence: 'always'` (a server pool, a database, a cache) is always there — its option only
+  // decides how well protected it is, so switching that option off must never draw it as a dead
+  // ✕ box. Only a `presence: 'optional'` component (a CDN you haven't bought, an upload bypass
+  // you haven't enabled) genuinely disappears when it's off. Scenarios that don't declare
+  // `presence` keep the original behaviour (off = absent).
+  function nodeIsPresent(sim, state, node) {
+    if (node.kind !== 'component') return true;
+    if (findComponent(sim, node.componentId)?.presence === 'always') return true;
+    return currentOptionId(sim, node.componentId, state) !== 'off';
   }
 
   function edgesSvg(sim, state) {
@@ -235,40 +324,91 @@
   // abstract single dot.
   function clusterPositions(sim, state, node) {
     if (!node.pool) return [{ x: node.x, y: node.y }];
-    const opt = currentOption(sim, node.componentId, state);
-    const count = Math.max(1, opt.instances || 1);
+    const count = instanceCount(sim, state, node);
     const spacing = 26;
     const startX = node.x - (spacing * (count - 1)) / 2;
     return Array.from({ length: count }, (_, i) => ({ x: startX + i * spacing, y: node.y }));
   }
 
+  // The ＋/－ pair that lets the player add or remove machines on a pool node directly on the
+  // diagram. They live inside the node's own <g>, so they're rebuilt whenever the node repaints;
+  // their clicks are handled by one delegated capture-phase listener on the svg (see
+  // wireTopologyControls) rather than per-element listeners that would die on every repaint.
+  function instanceStepperSvg(sim, state, n, count) {
+    const halfW = 13 * (count - 1) + 13;
+    const dx = halfW + 17;
+    const atMax = count >= MAX_INSTANCES;
+    const atMin = (state.extraInstances?.[n.id] || 0) <= 0;
+    const btn = (offset, delta, glyph, disabled, label) => `<g class="sim-node-stepper${disabled ? ' disabled' : ''}" data-instance-delta="${delta}" data-instance-node="${esc(n.id)}" role="button" tabindex="0" aria-label="${esc(label)}">
+          <circle cx="${n.x + offset}" cy="${n.y}" r="9"/>
+          <text x="${n.x + offset}" y="${n.y + 4}">${glyph}</text>
+        </g>`;
+    return btn(-dx, -1, '−', atMin, `${n.label}：減少一台機器`) + btn(dx, 1, '+', atMax, `${n.label}：增加一台機器`);
+  }
+
   function nodeInnerSvg(sim, state, n, interactive) {
     const isComponent = n.kind === 'component';
     const on = nodeIsOn(sim, state, n);
+    const present = nodeIsPresent(sim, state, n);
     const r = n.pool ? 13 : n.size === 'small' ? 15 : n.kind === 'user' ? 25 : 23;
     const labelOffset = n.size === 'small' ? 15 : n.kind === 'user' ? 25 : 23;
     const positions = clusterPositions(sim, state, n);
     const opt = isComponent ? currentOption(sim, n.componentId, state) : null;
     const countNote = n.pool ? `（${positions.length} 台）` : '';
     const costText = opt ? `${opt.cost > 0 ? '+' : ''}${opt.cost}/月 · ${opt.label}${countNote}` : '';
-    const badge = n.kind === 'user' ? `<text class="sim-topo-badge" x="${n.x}" y="${n.y + labelOffset + 16}">已服務 ${numFmt(state.usersServed || 0)} 人</text>` : '';
+    // One line BELOW the node label, not two pixels under it — at +16 against the label's +14
+    // the two strings printed on top of each other and rendered the users node unreadable.
+    const badge = n.kind === 'user' ? `<text class="sim-topo-badge" x="${n.x}" y="${n.y + labelOffset + 30}">已服務 ${numFmt(state.usersServed || 0)} 人</text>` : '';
     const circles = positions.map(p => `<circle cx="${p.x}" cy="${p.y}" r="${r}"/>`).join('');
-    const marks = isComponent ? positions.map(p => `<text class="sim-topo-mark" x="${p.x}" y="${p.y + 5}">${on ? '✓' : '✕'}</text>`).join('') : '';
+    // ✓ protected · ⚠ running but with no redundancy · ✕ not built at all. The old two-state
+    // ✓/✕ was the source of "the server is X, so why is it still sending me data?" — a live
+    // server with no spare capacity is not a dead server, and must not look like one.
+    const glyph = present ? (on ? '✓' : '⚠') : '✕';
+    const marks = isComponent ? positions.map(p => `<text class="sim-topo-mark" x="${p.x}" y="${p.y + 5}">${glyph}</text>`).join('') : '';
+    const load = nodeLoad(sim, state, n);
+    const loadText = load
+      ? `<text class="sim-topo-load${load.ratio > 1 ? ' over' : ''}" x="${n.x}" y="${n.y + labelOffset + 28}">負載 ${numFmt(load.demand)} / ${numFmt(load.capacity)}（${Math.round(load.ratio * 100)}%）</text>`
+      : '';
     return `${circles}${marks}
         <text class="sim-topo-label" x="${n.x}" y="${n.y + labelOffset + 14}">${esc(n.label)}</text>
         ${costText ? `<text class="sim-topo-cost" x="${n.x}" y="${n.y - labelOffset - 6}">${esc(costText)}</text>` : ''}
-        ${badge}`;
+        ${loadText}${badge}
+        ${interactive && n.pool ? instanceStepperSvg(sim, state, n, positions.length) : ''}`;
+  }
+
+  function nodeClassName(sim, state, n, interactive) {
+    const isComponent = n.kind === 'component';
+    const on = nodeIsOn(sim, state, n);
+    const present = nodeIsPresent(sim, state, n);
+    const load = nodeLoad(sim, state, n);
+    return ['sim-topo-node', n.kind, on ? 'on' : 'off', present ? 'present' : 'absent',
+      isComponent && interactive ? 'clickable' : '', n.pool ? 'pool' : '',
+      load && load.ratio > 1 ? 'overloaded' : ''].filter(Boolean).join(' ');
   }
 
   function nodesSvg(sim, state, interactive) {
     const topo = sim.topology;
     return topo.nodes.map(n => {
       const isComponent = n.kind === 'component';
-      const on = nodeIsOn(sim, state, n);
-      const cls = ['sim-topo-node', n.kind, on ? 'on' : 'off', isComponent && interactive ? 'clickable' : '', n.pool ? 'pool' : ''].filter(Boolean).join(' ');
       const attrs = isComponent && interactive ? `role="button" tabindex="0" data-toggle="${esc(n.componentId)}"` : '';
-      return `<g class="${cls}" data-node="${esc(n.id)}" ${attrs}>${nodeInnerSvg(sim, state, n, interactive)}</g>`;
+      return `<g class="${nodeClassName(sim, state, n, interactive)}" data-node="${esc(n.id)}" ${interactive ? 'data-interactive="1"' : ''} ${attrs}>${nodeInnerSvg(sim, state, n, interactive)}</g>`;
     }).join('');
+  }
+
+  // Repaints every node's class + inner markup from current state. Node-scoped (never touches
+  // the <svg> root, the edges, the drag-viewer group or the trace log), and used instead of a
+  // per-node patch because one change can move several nodes' numbers at once — turning the CDN
+  // off, for instance, multiplies every region's streaming-server load, not just one node's.
+  function repaintNodes(root, sim, state) {
+    (sim.topology?.nodes || []).forEach(n => {
+      const el = root.querySelector(`[data-node="${n.id}"]`);
+      if (!el) return;
+      const interactive = el.dataset.interactive === '1';
+      // Animation-only markers are applied imperatively elsewhere; preserve them across repaint.
+      const transient = ['failing', 'stressed', 'success'].filter(c => el.classList.contains(c));
+      el.setAttribute('class', [nodeClassName(sim, state, n, interactive), ...transient].join(' '));
+      el.innerHTML = nodeInnerSvg(sim, state, n, interactive);
+    });
   }
 
   const SPEED_OPTIONS = [0.1, 0.5, 1, 2];
@@ -282,13 +422,18 @@
     if (!cs || !dv) return '';
     const ladder = cs.ladder || sim.abrSim?.ladder || [];
     const qLabel = ladder.find(q => q.id === dv.qualityId)?.label || dv.qualityId || '--';
+    const zonePos = state.badZone || { x: cs.zone.x, y: cs.zone.y };
+    const regionName = sim.topology?.regionLabel?.[dv.regionId] || dv.regionId || '';
     return `
-      <rect class="sim-drag-zone${dv.inZone ? ' active' : ''}" x="${cs.zone.x}" y="${cs.zone.y}" width="${cs.zone.width}" height="${cs.zone.height}" rx="10"/>
-      <text class="sim-drag-zone-label" x="${cs.zone.x + 10}" y="${cs.zone.y + 22}">${esc(cs.zone.label)}</text>
-      <g class="sim-drag-viewer${dv.inZone ? ' in-zone' : ''}" data-drag-viewer tabindex="0" role="button" aria-label="拖曳測試觀眾到訊號不良區，或按 Enter 切換">
+      <g class="sim-drag-zone-g" data-drag-zone tabindex="0" role="button" aria-label="拖曳訊號不良區到你想測試的地區，或用方向鍵移動">
+        <rect class="sim-drag-zone${dv.inZone ? ' active' : ''}" x="${zonePos.x}" y="${zonePos.y}" width="${cs.zone.width}" height="${cs.zone.height}" rx="10"/>
+        <text class="sim-drag-zone-label" x="${zonePos.x + 10}" y="${zonePos.y + 22}">${esc(cs.zone.label)}</text>
+      </g>
+      <g class="sim-drag-viewer${dv.inZone ? ' in-zone' : ''}" data-drag-viewer tabindex="0" role="button" aria-label="拖曳測試觀眾到別的地區或訊號不良區，或按 Enter 切換">
         <circle cx="${dv.x}" cy="${dv.y}" r="14"/>
         <text class="sim-drag-viewer-emoji" x="${dv.x}" y="${dv.y + 5}">🙋</text>
         <text class="sim-drag-viewer-quality q-${esc(dv.qualityId || '')}" x="${dv.x}" y="${dv.y + 30}">${esc(qLabel)}</text>
+        <text class="sim-drag-viewer-region" x="${dv.x}" y="${dv.y + 44}">${esc(regionName ? `由${regionName}服務` : '')}</text>
       </g>`;
   }
 
@@ -311,7 +456,9 @@
         ${nodesSvg(sim, state, interactive)}
         ${interactive && showControls ? dragViewerSvg(sim, state) : ''}
       </svg>
-      ${interactive ? '<p class="sim-topo-hint">點節點可以循環切換這個能力的不同做法（關閉→做法一→做法二→…）；圓點連線代表目前流量會不會實際走這條路。</p>' : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法決定。</p>'}
+      ${interactive
+        ? '<p class="sim-topo-hint">點節點可以循環切換這個能力的不同做法；節點旁的 <b>＋／−</b> 可以直接加開或收掉機器。符號：<b>✓</b> 有保護 · <b>⚠</b> 機器照跑但沒有備援 · <b>✕</b> 這個東西還沒建，流量不會經過它（連線變虛線）。負載超過 100% 會變紅色，代表這個地區的機器已經吃不下這些觀眾。</p>'
+        : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法與當時開的機器數量決定。</p>'}
       ${showControls ? `<div class="sim-topo-controls">
         <button class="button secondary sim-add-users" type="button" data-add="100">${esc(sim.addUsersLabel || '＋100 使用者')}</button>
         <button class="button secondary sim-demo" type="button" data-kind="watch">${esc(sim.demoLabels?.watch || '▶ 模擬一次讀取請求')}</button>
@@ -456,17 +603,10 @@
     if (!nodes.length) return;
     const opt = currentOption(sim, componentId, state);
     const on = opt.id !== 'off';
-    // A capability can now be physically present at more than one node (e.g. the same CDN
-    // strategy rendered once per region) — every one of them shares this one on/off state and
-    // instance count, so all of them need to be repainted, not just whichever was declared first.
-    nodes.forEach(g => {
-      const nodeEl = root.querySelector(`[data-node="${g.id}"]`);
-      if (!nodeEl) return;
-      nodeEl.classList.toggle('on', on);
-      nodeEl.classList.toggle('off', !on);
-      const interactive = nodeEl.hasAttribute('data-toggle');
-      nodeEl.innerHTML = nodeInnerSvg(sim, state, g, interactive);
-    });
+    // Every node is repainted, not just the ones carrying this component: one capability change
+    // can move numbers on unrelated boxes (turning the CDN off multiplies every region's
+    // streaming-server load), and a diagram showing stale load figures is worse than none.
+    repaintNodes(root, sim, state);
     // Only edges that explicitly require this component ever change state when it's toggled —
     // every other edge is a static structural connection (see the note in edgesSvg above).
     topo.edges.forEach(e => {
@@ -542,9 +682,26 @@
     traceLine(root, `其中約 ${numFmt(count)} 位使用者立刻開始觀看內容${breakdown}`);
   }
 
-  function wireTopologyControls(root, sim, state, onCycle) {
+  function wireTopologyControls(root, sim, state, onCycle, onInstanceDelta) {
     const svgEl = root.querySelector('svg.sim-topo');
     if (!svgEl) return;
+    // The ＋/− buttons sit INSIDE the node <g> that already has its own "cycle this capability"
+    // click handler, and they get rebuilt on every repaint. Both problems are solved by one
+    // delegated listener in the CAPTURE phase on the svg: capture reaches the svg before the
+    // node's own bubbling handler, so stopPropagation here genuinely prevents a stray option
+    // cycle, and nothing is bound to the short-lived stepper elements themselves.
+    if (onInstanceDelta) {
+      const handleStepper = evt => {
+        const btn = evt.target.closest?.('[data-instance-delta]');
+        if (!btn) return;
+        if (evt.type === 'keydown' && evt.key !== 'Enter' && evt.key !== ' ') return;
+        evt.stopPropagation();
+        evt.preventDefault();
+        onInstanceDelta(btn.dataset.instanceNode, Number(btn.dataset.instanceDelta));
+      };
+      svgEl.addEventListener('click', handleStepper, true);
+      svgEl.addEventListener('keydown', handleStepper, true);
+    }
     root.querySelectorAll('[data-toggle]').forEach(g => {
       const activate = () => onCycle(g.dataset.toggle);
       g.addEventListener('click', activate);
@@ -996,12 +1153,31 @@
     const svgEl = root.querySelector('svg.sim-topo');
     const g = root.querySelector('[data-drag-viewer]');
     if (!svgEl || !g) return;
+    const topo = sim.topology;
     const circle = g.querySelector('circle');
     const emojiText = g.querySelector('.sim-drag-viewer-emoji');
     const qualityText = g.querySelector('.sim-drag-viewer-quality');
+    const regionText = g.querySelector('.sim-drag-viewer-region');
+    const zoneG = root.querySelector('[data-drag-zone]');
     const zoneRect = root.querySelector('.sim-drag-zone');
+    const zoneLabel = root.querySelector('.sim-drag-zone-label');
+    if (!state.badZone) state.badZone = { x: cs.zone.x, y: cs.zone.y };
+    if (!state.dragViewer.regionId) state.dragViewer.regionId = cs.homeRegionId || topo?.regionIds?.[0] || null;
 
-    const inZone = (x, y) => x >= cs.zone.x && x <= cs.zone.x + cs.zone.width && y >= cs.zone.y && y <= cs.zone.y + cs.zone.height;
+    const inZone = (x, y) => x >= state.badZone.x && x <= state.badZone.x + cs.zone.width
+      && y >= state.badZone.y && y <= state.badZone.y + cs.zone.height;
+
+    const refreshZoneFlag = () => {
+      const was = state.dragViewer.inZone;
+      state.dragViewer.inZone = inZone(state.dragViewer.x, state.dragViewer.y);
+      g.classList.toggle('in-zone', state.dragViewer.inZone);
+      zoneRect?.classList.toggle('active', state.dragViewer.inZone);
+      if (state.dragViewer.inZone !== was) {
+        traceLine(root, state.dragViewer.inZone
+          ? '🙋 測試觀眾現在位於訊號不良區——之後的片段會照這裡量到的頻寬重新決定畫質。'
+          : '🙋 測試觀眾離開了訊號不良區，頻寬恢復正常。', state.dragViewer.inZone ? 'bad' : 'ok');
+      }
+    };
 
     const setPos = (x, y) => {
       state.dragViewer.x = x;
@@ -1012,58 +1188,108 @@
       emojiText.setAttribute('y', y + 5);
       qualityText.setAttribute('x', x);
       qualityText.setAttribute('y', y + 30);
-      const wasInZone = state.dragViewer.inZone;
-      state.dragViewer.inZone = inZone(x, y);
-      g.classList.toggle('in-zone', state.dragViewer.inZone);
-      zoneRect?.classList.toggle('active', state.dragViewer.inZone);
-      if (state.dragViewer.inZone !== wasInZone) {
-        traceLine(root, state.dragViewer.inZone
-          ? '🙋 測試觀眾被拖進了訊號不良區——之後的片段會照這裡量到的頻寬重新決定畫質。'
-          : '🙋 測試觀眾離開了訊號不良區，頻寬恢復正常。', state.dragViewer.inZone ? 'bad' : 'ok');
+      regionText?.setAttribute('x', x);
+      regionText?.setAttribute('y', y + 44);
+      // This viewer belongs to whichever region's drawn box they are standing in. Step outside
+      // every box and nothing hands them over to someone else — a device does not lose its
+      // region by sitting between two rectangles — so the last region keeps serving them.
+      const hit = regionIdAtPoint(topo, x, y);
+      if (hit && hit !== state.dragViewer.regionId) {
+        state.dragViewer.regionId = hit;
+        if (regionText) regionText.textContent = `由${topo.regionLabel?.[hit] || hit}服務`;
+        state.dragViewer.lastPathKind = null;
+        traceLine(root, `🙋 測試觀眾移動到「${esc(topo.regionLabel?.[hit] || hit)}」，改由這一區的節點服務。`, 'head');
       }
+      refreshZoneFlag();
     };
 
-    let dragging = false;
-    g.addEventListener('pointerdown', evt => {
-      dragging = true;
-      g.classList.add('dragging');
-      g.setPointerCapture?.(evt.pointerId);
+    const setZonePos = (x, y) => {
+      state.badZone.x = x;
+      state.badZone.y = y;
+      zoneRect?.setAttribute('x', x);
+      zoneRect?.setAttribute('y', y);
+      zoneLabel?.setAttribute('x', x + 10);
+      zoneLabel?.setAttribute('y', y + 22);
+      refreshZoneFlag();
+    };
+
+    // One shared drag state for both movable objects: whichever was grabbed last owns the
+    // pointer until it's released. `grabDX/DY` keeps the zone from jumping so its top-left
+    // corner snaps under the cursor when you grab it by the middle.
+    let dragTarget = null;
+    let grabDX = 0, grabDY = 0;
+    const beginDrag = (target, el, evt, originX, originY) => {
+      dragTarget = target;
+      const p = svgCoordsFromEvent(svgEl, evt);
+      grabDX = p.x - originX;
+      grabDY = p.y - originY;
+      el.classList.add('dragging');
+      el.setPointerCapture?.(evt.pointerId);
       evt.preventDefault();
-    });
+    };
+    g.addEventListener('pointerdown', evt => beginDrag('viewer', g, evt, state.dragViewer.x, state.dragViewer.y));
+    zoneG?.addEventListener('pointerdown', evt => beginDrag('zone', zoneG, evt, state.badZone.x, state.badZone.y));
     const endDrag = evt => {
-      if (!dragging) return;
-      dragging = false;
+      if (!dragTarget) return;
+      dragTarget = null;
       g.classList.remove('dragging');
+      zoneG?.classList.remove('dragging');
       g.releasePointerCapture?.(evt.pointerId);
+      zoneG?.releasePointerCapture?.(evt.pointerId);
     };
     svgEl.addEventListener('pointermove', evt => {
-      if (!dragging) return;
+      if (!dragTarget) return;
       const p = svgCoordsFromEvent(svgEl, evt);
-      setPos(p.x, p.y);
+      if (dragTarget === 'viewer') setPos(p.x - grabDX, p.y - grabDY);
+      else setZonePos(p.x - grabDX, p.y - grabDY);
     });
     svgEl.addEventListener('pointerup', endDrag);
     svgEl.addEventListener('pointerleave', endDrag);
-    // Keyboard equivalent of dragging: jump in and out of the zone. Also the path the automated
-    // tests drive through, since it needs no coordinate-space conversion to verify.
+    // Keyboard equivalents of both drags — also the path the automated tests drive through,
+    // since neither needs any coordinate-space conversion to verify.
     g.addEventListener('keydown', evt => {
       if (evt.key !== 'Enter' && evt.key !== ' ') return;
       evt.preventDefault();
       const target = state.dragViewer.inZone
         ? cs.start
-        : { x: cs.zone.x + cs.zone.width / 2, y: cs.zone.y + cs.zone.height / 2 };
+        : { x: state.badZone.x + cs.zone.width / 2, y: state.badZone.y + cs.zone.height / 2 };
       setPos(target.x, target.y);
+    });
+    zoneG?.addEventListener('keydown', evt => {
+      const step = { ArrowLeft: [-20, 0], ArrowRight: [20, 0], ArrowUp: [0, -20], ArrowDown: [0, 20] }[evt.key];
+      if (!step) return;
+      evt.preventDefault();
+      setZonePos(state.badZone.x + step[0], state.badZone.y + step[1]);
     });
 
     const ladder = cs.ladder || sim.abrSim?.ladder || [];
     const poorRange = cs.poorMbpsRange || sim.abrSim?.poorMbpsRange || [0.4, 1.6];
     const goodRange = cs.goodMbpsRange || sim.abrSim?.goodMbpsRange || [4.0, 7.5];
     const tickMs = cs.tickMs || sim.abrSim?.tickMs || 900;
-    const topo = sim.topology;
 
     const tick = () => {
-      const [lo, hi] = state.dragViewer.inZone ? poorRange : goodRange;
-      const measured = lo + Math.random() * (hi - lo);
-      const curIdx = Math.max(0, ladder.findIndex(q => q.id === state.dragViewer.qualityId));
+      const dv = state.dragViewer;
+      const r = dv.regionId;
+      const ctx = makeChoiceCtx(sim, state);
+      // The segment this viewer is about to receive takes the SAME path every other watch
+      // request takes — resolved from the scenario's own computeFlow for this viewer's region.
+      // So when the CDN is on and this segment hits the edge, the packet genuinely leaves the
+      // CDN node; when it misses, it genuinely comes from the streaming servers; and when there
+      // is no CDN at all, the CDN node is not on the path and nothing comes out of it.
+      const flowIds = (topo?.computeFlow ? topo.computeFlow('watch', ctx, r) : []) || [];
+      const servedFromOrigin = flowIds.includes(`streamServer_${r}`);
+      const originNode = findNode(topo, `streamServer_${r}`);
+
+      // Being served from an overloaded origin is not free: a streaming tier carrying more
+      // viewers than it has capacity for delivers each of them less bandwidth, which the ABR
+      // logic below then reacts to by dropping quality — the same causal chain as the bad-signal
+      // zone, but caused by an architecture decision instead of by where the viewer is standing.
+      const load = servedFromOrigin ? nodeLoad(sim, state, originNode) : null;
+      const overloadFactor = load && load.ratio > 1 ? Math.max(0.15, 1 - (load.ratio - 1) * 0.5) : 1;
+
+      const [lo, hi] = dv.inZone ? poorRange : goodRange;
+      const measured = (lo + Math.random() * (hi - lo)) * overloadFactor;
+      const curIdx = Math.max(0, ladder.findIndex(q => q.id === dv.qualityId));
       let sustainableIdx = 0;
       for (let i = ladder.length - 1; i >= 0; i--) {
         if (measured >= ladder[i].mbps * 0.9) { sustainableIdx = i; break; }
@@ -1073,37 +1299,56 @@
       else if (curIdx < ladder.length - 1 && measured > ladder[curIdx + 1].mbps * 1.3) nextIdx = curIdx + 1;
       else nextIdx = curIdx;
       if (nextIdx !== curIdx) {
-        state.dragViewer.qualityId = ladder[nextIdx].id;
+        dv.qualityId = ladder[nextIdx].id;
         qualityText.textContent = ladder[nextIdx].label;
         qualityText.setAttribute('class', `sim-drag-viewer-quality q-${ladder[nextIdx].id}`);
         traceLine(root, `🙋 測試觀眾：量測頻寬 ${measured.toFixed(1)} Mbps，畫質${nextIdx < curIdx ? '降為' : '回升為'}「${ladder[nextIdx].label}」。`, nextIdx < curIdx ? 'bad' : 'ok');
       }
-      // Which region serves this viewer is decided by which region's own drawn box they're
-      // physically standing in — not by pixel-distance to some server icon, which would be an
-      // arbitrary artifact of canvas layout. Outside every region's box, the request falls back
-      // to the home/master region, the same default computeFlow itself uses elsewhere.
-      const regionId = regionIdAtPoint(topo, state.dragViewer.x, state.dragViewer.y) || 'us';
-      if (regionId !== state.dragViewer.servedRegionId) {
-        state.dragViewer.servedRegionId = regionId;
-        traceLine(root, `🙋 測試觀眾目前由「${esc(topo.regionLabel?.[regionId] || regionId)}」地區的串流伺服器服務。`, '');
+
+      // Announce where the bytes are coming from only when that actually changes, otherwise
+      // every single tick would spam the log with the same line.
+      const regionName = topo?.regionLabel?.[r] || r;
+      const edgeCacheId = sim.capacity?.offloadFrom;
+      const hasEdgeCache = edgeCacheId ? ctx.has(edgeCacheId) : false;
+      const pathKind = !flowIds.length ? 'none' : servedFromOrigin ? (hasEdgeCache ? 'miss' : 'noCdn') : 'edge';
+      const overKind = overloadFactor < 1 ? 'over' : 'ok';
+      const kindKey = `${r}|${pathKind}|${overKind}`;
+      if (kindKey !== dv.lastPathKind) {
+        dv.lastPathKind = kindKey;
+        if (pathKind === 'edge') traceLine(root, `🙋 這段影片在「${esc(regionName)}」的 CDN 邊緣節點命中，直接從 CDN 送出，完全沒有碰到後面的串流伺服器。`, 'ok');
+        else if (pathKind === 'miss') traceLine(root, `🙋 CDN 沒有這部影片，這段回源到「${esc(regionName)}」的串流伺服器，再經 CDN 送出。`, '');
+        else if (pathKind === 'noCdn') traceLine(root, `🙋 目前沒有建 CDN，每一段都直接從「${esc(regionName)}」的串流伺服器送出。`, '');
+        if (overloadFactor < 1) {
+          traceLine(root, `⚠️「${esc(originNode?.label || regionName)}」已超載（負載 ${Math.round(load.ratio * 100)}%），分給每位觀眾的頻寬被壓縮，畫質會被迫下降——加開機器或用 CDN 分流才救得回來。`, 'bad');
+        }
       }
-      // The actual point of this probe: a real packet, sized by the quality just decided,
-      // visibly traveling from that region's streaming server to wherever the viewer currently
-      // sits — not just a text label next to them. Fires every tick regardless of whether
-      // quality changed, so playback reads as continuous, not just reactive.
-      const source = findNode(topo, `streamServer_${regionId}`);
-      if (source) {
-        spawnToken(svgEl, [{ x: source.x, y: source.y }, { x: state.dragViewer.x, y: state.dragViewer.y }], {
-          tokenClass: 'sim-token-segment',
-          className: `q-${ladder[nextIdx].id}`,
-          radius: 5 + nextIdx * 4,
-          durationMs: (tickMs * 0.85) / (state.speed || 1),
-          onDone: circle => circle?.remove()
-        });
+
+      // A real packet, sized by the quality just decided, traveling the real path and ending at
+      // wherever this viewer is currently standing (every `users_<region>` waypoint on the path
+      // is literally this avatar, so both ends of the round trip land on them).
+      if (flowIds.length >= 2) {
+        const pts = flowIds.map(id => {
+          if (id === `users_${r}`) return { x: dv.x, y: dv.y };
+          const n = findNode(topo, id);
+          if (!n) return null;
+          const ps = clusterPositions(sim, state, n);
+          return ps[Math.floor(Math.random() * ps.length)];
+        }).filter(Boolean);
+        if (pts.length >= 2) {
+          spawnToken(svgEl, pts, {
+            tokenClass: 'sim-token-segment',
+            className: `q-${ladder[nextIdx].id}`,
+            radius: 5 + nextIdx * 4,
+            weights: hopWeights(topo, flowIds),
+            durationMs: (tickMs * 0.9) / (state.speed || 1),
+            onDone: c => c?.remove()
+          });
+        }
       }
     };
 
     qualityText.textContent = ladder.find(q => q.id === state.dragViewer.qualityId)?.label || state.dragViewer.qualityId || '--';
+    refreshZoneFlag();
     state.dragViewerTimer = setInterval(tick, tickMs / (state.speed || 1));
   }
 
@@ -1121,7 +1366,7 @@
       <div class="eyebrow">系統設計模擬關卡 · 對應第 ${chapterOrder(sim.chapterId)} 章</div>
       <h1>${esc(sim.title)}</h1>
       <p class="sim-lede">${esc(sim.subtitle)}</p>
-      <ul class="sim-briefing-list">${sim.briefing.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+      <ul class="sim-briefing-list">${sim.briefing.map(t => `<li>${esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</li>`).join('')}</ul>
       <button class="button sim-start" type="button">開始這一年</button>
       <a class="button secondary" href="system-design-chapter.html?chapter=${encodeURIComponent(sim.chapterId)}">先回教材複習</a>
     </section>`;
@@ -1129,6 +1374,22 @@
       state.phase = 'play';
       render(root, sim, state);
     };
+  }
+
+  // The "your architecture currently cannot carry this month's traffic" banner. Rendered from
+  // the same nodeLoad numbers the diagram draws, so the two can never disagree.
+  function overloadBannerHtml(sim, state) {
+    const over = overloadedNodes(sim, state);
+    if (!over.length) return '';
+    const list = over.slice(0, 3).map(x => `${esc(x.node.label)}（${Math.round(x.load.ratio * 100)}%）`).join('、');
+    return `<div class="sim-hint bad">⚠️ 目前有 ${over.length} 個節點超載：${list}${over.length > 3 ? ' 等' : ''}。再推進一個月會扣播放品質分數——用節點旁的 ＋ 加開機器，或改用 CDN 把觀看流量分流到邊緣節點。</div>`;
+  }
+
+  function refreshLoadSummary(root, sim, state) {
+    const box = root.querySelector('[data-load-summary]');
+    if (box) box.innerHTML = overloadBannerHtml(sim, state);
+    const cost = root.querySelector('[data-cost-readout]');
+    if (cost) cost.textContent = String(weeklyCostPenalty(sim, state));
   }
 
   function renderPlay(root, sim, state) {
@@ -1139,8 +1400,9 @@
       <header class="sim-dashboard-head">
         <div class="eyebrow">${esc(sim.title)}</div>
         <h1>第 ${state.month} / ${sim.months} 個月</h1>
-        <p class="sim-viewers">${esc(sim.viewersLabel || '目前尖峰同時使用人數估計')}：<strong>${numFmt(viewers)}</strong></p>
+        <p class="sim-viewers">${esc(sim.viewersLabel || '目前尖峰同時使用人數估計')}：<strong>${numFmt(viewers)}</strong>　·　每月營運成本指數：<strong data-cost-readout>${weeklyCostPenalty(sim, state)}</strong></p>
       </header>
+      <div data-load-summary>${overloadBannerHtml(sim, state)}</div>
       <div class="sim-meters">
         ${meterRow(lab.uptime, state.uptime, state.uptime >= 80 ? 'good' : state.uptime >= 50 ? 'warn' : 'bad')}
         ${meterRow(lab.qoe, state.qoe, state.qoe >= 80 ? 'good' : state.qoe >= 50 ? 'warn' : 'bad')}
@@ -1163,6 +1425,32 @@
       const comp = findComponent(sim, componentId);
       const opt = comp?.options.find(o => o.id === next);
       traceLine(root, `「${comp?.shortName || componentId}」從「${comp?.options.find(o => o.id === before)?.label || before}」切換成「${opt?.label || next}」`, next === 'off' ? '' : 'ok');
+      // Changing a strategy can change instance counts and, through the CDN, every region's
+      // load — refresh the overload banner and the cost readout, not just the diagram.
+      refreshLoadSummary(root, sim, state);
+      // The test viewer's probe only announces where its bytes come from when that changes;
+      // clearing the marker here makes it re-announce right after you flip a capability, which
+      // is exactly the moment you want to see "…now it comes from the CDN instead" in the log.
+      if (state.dragViewer) state.dragViewer.lastPathKind = null;
+    }, (nodeId, delta) => {
+      const node = findNode(sim.topology, nodeId);
+      if (!node) return;
+      const base = baseInstances(sim, state, node);
+      const curExtra = Math.max(0, state.extraInstances[nodeId] || 0);
+      const nextExtra = Math.max(0, Math.min(MAX_INSTANCES - base, curExtra + delta));
+      if (nextExtra === curExtra) {
+        traceLine(root, delta > 0
+          ? `「${node.label}」已經到這個模擬的機器數上限（${MAX_INSTANCES} 台）。`
+          : `「${node.label}」已經是目前備援策略的基本台數，要再減少請先切換這個節點的備援策略。`, 'bad');
+        return;
+      }
+      state.extraInstances[nodeId] = nextExtra;
+      repaintNodes(root, sim, state);
+      refreshLoadSummary(root, sim, state);
+      const load = nodeLoad(sim, state, node);
+      traceLine(root, `「${node.label}」${delta > 0 ? '加開' : '收掉'}一台機器，現在共 ${base + nextExtra} 台${
+        load ? `，負載變成 ${Math.round(load.ratio * 100)}%` : ''
+      }（每台每月成本 ${node.extraInstanceCost ?? 1}）。`, delta > 0 ? 'ok' : '');
     });
     wireTraceClear(root);
     wireChunkLab(root, sim, state);
@@ -1174,8 +1462,22 @@
         state.phase = 'summary';
         return render(root, sim, state);
       }
+      // Overload is charged for the month you just finished — i.e. against the capacity you
+      // actually had while those viewers were watching — before the traffic estimate steps up.
+      const overload = applyMonthOverload(sim, state);
       state.month += 1;
       applyMonthCost(sim, state);
+      if (overload) {
+        state.log.push({
+          month: state.month - 1,
+          title: '容量不足：節點超載',
+          narrative: `這個月有 ${overload.count} 個節點的負載超過容量，最嚴重的是「${overload.worst.node.label}」（${Math.round(overload.worst.load.ratio * 100)}%）。`,
+          result: '超過容量的機器沒辦法給每位觀眾足夠的頻寬，觀眾端表現為緩衝變久、畫質被迫下降。加開機器或把觀看流量分流到 CDN 邊緣節點都能解決。',
+          ok: false, uptime: 0, qoe: -overload.penalty,
+          relevantComponents: [], choiceSnapshot: snapshotChoices(sim, state),
+          capacityIssue: true
+        });
+      }
       const event = sim.events.find(e => e.month === state.month);
       if (event) {
         state.pendingEvent = event;
@@ -1669,7 +1971,10 @@
 
   // Exposed only for the automated test harness (jsdom can't fast-forward real timers, so the
   // pure geometry used by the token animation needs to be reachable and testable in isolation).
-  window.__simTestHooks = { pointAlongPath, waypointsFor, clusterPositions, hopWeights };
+  window.__simTestHooks = {
+    pointAlongPath, waypointsFor, clusterPositions, hopWeights,
+    instanceCount, nodeLoad, overloadedNodes, weeklyCostPenalty, regionIdAtPoint, nodeIsPresent
+  };
 
   boot();
 })();

@@ -40,7 +40,8 @@ body[data-book-page="simulator"]{background:radial-gradient(circle at top,#17182
 .sim-comp p{margin:0 0 10px;color:#d7d7e2;font-size:.86rem;line-height:1.6}
 .sim-ref-link{color:var(--accent);font-size:.78rem;font-weight:700;text-decoration:none}
 .sim-ref-link:hover{text-decoration:underline}
-.sim-hint{padding:12px 14px;margin-bottom:16px;background:rgba(250,204,21,.08);border:1px solid rgba(250,204,21,.28);border-radius:12px;color:#fde68a;font-size:.86rem}
+.sim-hint{padding:12px 14px;margin-bottom:16px;background:rgba(250,204,21,.08);border:1px solid rgba(250,204,21,.28);border-radius:12px;color:#fde68a;font-size:.86rem;line-height:1.6}
+.sim-hint.bad{background:rgba(251,113,133,.09);border-color:rgba(251,113,133,.35);color:#fca5b1}
 .sim-advance{display:block;margin-bottom:24px}
 .sim-log h2{font-size:1.05rem;margin:0 0 12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .sim-log ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
@@ -75,7 +76,12 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-topo-node.fixed circle{stroke:var(--accent);fill:rgba(110,168,254,.12)}
 .sim-topo-node.user circle{stroke:var(--accent-2);fill:rgba(139,92,246,.16)}
 .sim-topo-node.component.on circle{stroke:var(--sim-good);fill:rgba(74,222,128,.12)}
-.sim-topo-node.component.off circle{stroke:#55556b;fill:#16161f;opacity:.65}
+/* "off but still physically there" (a live server with no redundancy) must look ALIVE — amber,
+   full opacity — not like the dead grey ghost that "not built at all" gets. Conflating the two
+   is what made a running streaming server look like it had crashed. */
+.sim-topo-node.component.off.present circle{stroke:var(--sim-warn);fill:rgba(250,204,21,.1);opacity:1}
+.sim-topo-node.component.off.absent circle{stroke:#55556b;fill:#16161f;opacity:.6;stroke-dasharray:4 4}
+.sim-topo-node.overloaded circle{stroke:var(--sim-bad);fill:rgba(251,113,133,.16)}
 .sim-topo-node.clickable circle{cursor:pointer}
 .sim-topo-node.clickable:hover circle,.sim-topo-node.clickable:focus circle{stroke-width:3.5;filter:drop-shadow(0 0 6px rgba(110,168,254,.55));outline:none}
 .sim-topo-node.failing circle{stroke:var(--sim-bad);fill:rgba(251,113,133,.22);animation:simTopoFail .5s ease}
@@ -83,11 +89,20 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-topo-node.success circle{stroke:var(--sim-good);filter:drop-shadow(0 0 8px rgba(74,222,128,.6))}
 .sim-topo-mark{text-anchor:middle;font-size:14px;font-weight:800;pointer-events:none}
 .sim-topo-node.component.on .sim-topo-mark{fill:var(--sim-good)}
-.sim-topo-node.component.off .sim-topo-mark{fill:var(--sim-bad);opacity:.75}
+.sim-topo-node.component.off.present .sim-topo-mark{fill:var(--sim-warn)}
+.sim-topo-node.component.off.absent .sim-topo-mark{fill:var(--sim-bad);opacity:.75}
 .sim-topo-node.fixed .sim-topo-mark,.sim-topo-node.user .sim-topo-mark{display:none}
 .sim-topo-label{text-anchor:middle;font-size:12px;fill:#d7d7e2;font-weight:600;pointer-events:none}
 .sim-topo-cost{text-anchor:middle;font-size:10px;fill:var(--muted);pointer-events:none}
 .sim-topo-badge{text-anchor:middle;font-size:11px;fill:var(--accent-2);font-weight:700;pointer-events:none}
+.sim-topo-load{text-anchor:middle;font-size:9.5px;fill:#7f7f95;pointer-events:none;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.sim-topo-load.over{fill:var(--sim-bad);font-weight:800}
+.sim-node-stepper{cursor:pointer}
+.sim-node-stepper circle{fill:#1b1b27;stroke:#4a4a66;stroke-width:1.5}
+.sim-node-stepper text{text-anchor:middle;font-size:13px;font-weight:800;fill:#c7c7d4;pointer-events:none}
+.sim-node-stepper:hover circle,.sim-node-stepper:focus circle{stroke:var(--accent);fill:rgba(110,168,254,.2);outline:none}
+.sim-node-stepper.disabled circle{opacity:.35}
+.sim-node-stepper.disabled text{opacity:.35}
 .sim-token,.sim-token-demo,.sim-token-event{fill:var(--accent);stroke:#0a0a10;stroke-width:1.5}
 .sim-token-event.ok{fill:var(--sim-good)}
 .sim-token-event.bad{fill:var(--sim-bad)}
@@ -148,9 +163,12 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-abr-seg.q-360p{background:var(--sim-bad)}
 .sim-abr-seg.stalled{outline:2px solid #fff;outline-offset:1px}
 .sim-abrlab-actions{display:flex;gap:10px;flex-wrap:wrap}
+.sim-drag-zone-g{cursor:grab;touch-action:none}
+.sim-drag-zone-g.dragging{cursor:grabbing}
+.sim-drag-zone-g:hover .sim-drag-zone,.sim-drag-zone-g:focus .sim-drag-zone{fill:rgba(251,113,133,.18);outline:none}
 .sim-drag-zone{fill:rgba(251,113,133,.08);stroke:var(--sim-bad);stroke-dasharray:5 4;stroke-width:1.5;transition:fill .2s ease}
 .sim-drag-zone.active{fill:rgba(251,113,133,.22)}
-.sim-drag-zone-label{fill:#fca5b1;font-size:11px;font-weight:700}
+.sim-drag-zone-label{fill:#fca5b1;font-size:11px;font-weight:700;pointer-events:none}
 .sim-drag-viewer{cursor:grab;touch-action:none}
 .sim-drag-viewer.dragging{cursor:grabbing}
 .sim-drag-viewer circle{fill:rgba(110,168,254,.18);stroke:var(--accent);stroke-width:2;transition:stroke .2s ease,fill .2s ease}
@@ -160,6 +178,9 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-drag-viewer-quality{text-anchor:middle;font-size:11px;font-weight:800;pointer-events:none;fill:var(--sim-good)}
 .sim-drag-viewer-quality.q-480p{fill:var(--sim-warn)}
 .sim-drag-viewer-quality.q-360p{fill:var(--sim-bad)}
+.sim-drag-viewer-region{text-anchor:middle;font-size:9.5px;font-weight:700;pointer-events:none;fill:#c4b5fd}
+.sim-log-item.capacity{border-left-color:var(--sim-warn)}
+.sim-log-item.capacity .sim-log-tag{background:rgba(250,204,21,.16);color:var(--sim-warn)}
 .sim-sandbox-layout{display:grid;grid-template-columns:160px 1fr;gap:16px;margin:0 0 18px}
 .sim-sandbox-palette{display:flex;flex-direction:column;gap:8px}
 .sim-palette-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border:1px solid var(--border);border-radius:12px;background:var(--panel-2);cursor:grab;user-select:none;touch-action:none;font-size:.74rem;color:#d7d7e2;text-align:center}
