@@ -5,7 +5,7 @@ const MC=(id,question,page,explanation,correct,wrong)=>({id,question,reviewPageI
 chapter.sections.push(
 {
  id:'sd14-s07',order:7,title:'CDN、Origin 與 Hot Video',duration:'38–55 分鐘',summary:'把 viewer traffic 從 origin 移到 edge；理解 cache hit、origin shield、popular video、cold miss 與 signed delivery。',
- research:[{label:'ByteByteGo — CDN in YouTube design',url:'https://bytebytego.com/courses/system-design-interview/design-youtube'}],
+ research:[{label:'Understanding the characteristics of internet short video sharing（影片受歡迎程度與存取模式的實測研究）',url:'https://arxiv.org/pdf/0707.3670.pdf'}],
  pages:[
   {id:'sd14-s07-p01',title:'Playback Bytes 主要走 CDN',blocks:[
    {type:'diagram',nodes:[['Viewer','manifest/segment'],['Edge CDN','hot chunks'],['Origin Shield','optional'],['Object Storage','source of truth']],caption:'API server 不承擔大部分 video egress。'}
@@ -26,7 +26,7 @@ chapter.sections.push(
 },
 {
  id:'sd14-s08',order:8,title:'Playback Flow：Manifest、Segments、ABR 與 Startup Latency',duration:'38–54 分鐘',summary:'從點擊 Play 到第一個 frame，拆 manifest、auth、edge lookup、segment download、buffer 與 quality switch。',
- research:[{label:'ByteByteGo — Video streaming flow',url:'https://bytebytego.com/courses/system-design-interview/design-youtube'}],
+ research:[{label:'YouTube scalability talk by early YouTube employee（YouTube 早期員工的擴展性演講）',url:'https://www.youtube.com/watch?v=w5WVu624fY8'}],
  pages:[
   {id:'sd14-s08-p01',title:'Startup Path 要短',blocks:[
    {type:'stepper',steps:[['Get metadata','visibility + manifest URL'],['Fetch manifest','renditions'],['Choose initial bitrate','保守起播'],['Fetch first segment','prefer nearby edge'],['Decode','first frame'],['Adapt','subsequent segments']]}
@@ -79,48 +79,53 @@ chapter.sections.push(
  ]
 },
 {
- id:'sd14-s10',order:10,title:'Cost Engineering：Storage、Transcoding、CDN Egress',duration:'40–56 分鐘',summary:'影片平台要用架構控制成本：cold rendition、codec ROI、transcode priority、cache hit、lifecycle 與 regional egress。',
- research:[{label:'ByteByteGo — YouTube cost considerations',url:'https://bytebytego.com/courses/system-design-interview/design-youtube'}],
+ id:'sd14-s10',order:10,title:'節省成本的最佳化做法',duration:'40–56 分鐘',summary:'CDN 是很重要但成本很高的一環，書裡給了四個實際降低成本的做法，其中第一個就是模擬關卡「CDN 只服務熱門內容」的原型。',
+ research:[{label:'Content Popularity for Open Connect（Netflix 內容受歡迎程度研究）',url:'https://netflixtechblog.com/content-popularity-for-open-connect-b86d56f613b'}],
  pages:[
-  {id:'sd14-s10-p01',title:'不是所有影片都值得產生所有 Rendition',blocks:[
-   {type:'p',text:'長尾影片可能幾乎沒人看；可先產生基本格式，熱門度上升再補昂貴 codec/4K rendition，降低 wasted compute/storage。'}
+  {id:'sd14-s10-p01',title:'CDN 是我們計算中一個很重要的構成元素',blocks:[
+   {type:'p',text:'CDN 可以確保影片在全球範圍內快速傳遞到使用者的設備中，達到低延遲的播放效果，不過 CDN 的成本很昂貴。影片庫裡有一小部分影片非常受歡迎，同時卻也有大量影片幾乎沒什麼人在看。基於這樣的觀察，我們可以只針對真正受歡迎的內容使用 CDN：'},
+   {type:'diagram',nodes:[['使用者','觀眾'],['CDN','只提供最受歡迎的影片'],['自家 Video 伺服器','提供其他所有影片']],caption:'圖 14-27：只在 CDN 提供最受歡迎的影片，其他影片則由我們自己的高容量影片伺服器來提供服務。'}
   ]},
-  {id:'sd14-s10-p02',title:'Codec 有 Compute vs Egress Trade-off',blocks:[
-   {type:'compare',items:[['更高壓縮 codec','transcode CPU/GPU 更貴，但每次播放 bytes 更少。'],['舊 codec','encode 便宜、device support 廣，但 egress 可能更高。']]}
+  {id:'sd14-s10-p02',title:'針對長尾內容的做法',blocks:[
+   {type:'bullets',items:['針對沒那麼受歡迎的內容，我們或許並不需要儲存很多不同編碼的影片版本，可以根據實際的觀看情況，決定要不要幫比較短的冷門影片進行編碼。','有些影片只在特定地區特別受歡迎，這些影片就不必分配到其他地區了。']}
   ]},
-  {id:'sd14-s10-p03',title:'Hot/Cold Tier',blocks:[
-   {type:'bullets',items:['hot renditions CDN/fast storage','cold source archive','rare 4K can rehydrate/on-demand','lifecycle by retention/legal requirements','thumbnail/manifest small but very hot']}
+  {id:'sd14-s10-p03',title:'自建 CDN 並與 ISP 合作',blocks:[
+   {type:'p',text:'建立自己的 CDN（例如 Netflix），並與 ISP（網路服務提供商）合作。打造自己的 CDN 將是一個龐大的專案，不過這對於媒體公司來說，或許是有意義的做法：可以跟 Comcast、AT&T、Verizon 這類 ISP 合作，這裡所說的 ISP 有可能是世界各地都有據點的網路供應商，而且都與使用者很接近。只要與 ISP 合作，就可以改善觀看體驗，並減少頻寬費用。'}
   ]}],
  quiz:[
-  MC('sd14-s10-q1','為何長尾影片不一定先做所有 codec？','sd14-s10-p01','可能花很多 compute/storage 但從沒被看。','可依 popularity lazy/eager transcoding。',[["因為長尾影片不能播放","可播放基本版本。"],["因為 codec 只給熱門影片法律允許","不是。"],["只為減 metadata","不是。"]]),
-  MC('sd14-s10-q2','更高壓縮 codec 的典型 trade-off？','sd14-s10-p02','Encode 更貴，但 playback egress 可下降。','Compute cost vs bandwidth cost。',[["兩者都必然下降","不一定。"],["只影響 title","不是。"],["不影響 device compatibility","也可能影響。"]]),
-  MC('sd14-s10-q3','Hot rendition 最適合？','sd14-s10-p03','放 CDN/fast tier，提高 hit與低 latency。','Hot tier / edge cache。',[["只放離線磁帶","太慢。"],["每次重新 encode","浪費。"],["只存 metadata","缺 bytes。"]]),
-  MC('sd14-s10-q4','成本優化最不成熟做法？','sd14-s10-p03','不看 access pattern 就一律刪 source/rendition。','應以 popularity、retention、recovery requirement 驅動 lifecycle。',[["觀察 egress per rendition","合理。"],["量測 transcode minutes","合理。"],["追 CDN hit ratio","合理。"]])
+  MC('sd14-s10-q1','書中提出的第一個節省成本做法是什麼？','sd14-s10-p01','只在 CDN 提供最受歡迎的影片，其他影片則由自己的高容量影片伺服器提供服務。','CDN 只服務最受歡迎的內容，冷門內容改由自己的伺服器提供。',[["把所有影片都放進 CDN","這正是成本過高的做法，書中建議反過來做。"],["完全不使用 CDN","CDN 對熱門內容仍然很有價值，只是不該用在冷門內容上。"],["把所有影片都刪除只留熱門的","書中沒有建議刪除內容，只是改變提供服務的位置。"]]),
+  MC('sd14-s10-q2','針對長尾（冷門）影片，書中建議的做法是什麼？','sd14-s10-p02','可以根據實際觀看情況，決定要不要幫比較短的冷門影片編碼，不必先產生所有版本。','依實際觀看情況決定是否編碼，不必一律預先產生多種畫質版本。',[["一律產生所有畫質版本","這樣會浪費計算與儲存資源，正是要避免的。"],["一律拒絕上傳冷門影片","書中沒有這樣的限制。"],["把冷門影片畫質都調成最低","書中談的是「要不要編碼」，不是強制降畫質。"]]),
+  MC('sd14-s10-q3','為什麼「只在特定地區受歡迎的影片」不必分配到其他地區？','sd14-s10-p02','那些地區的使用者根本不會去看，分配過去只是浪費頻寬與儲存成本。','其他地區的使用者不會觀看，分配過去沒有效益，只會增加成本。',[["因為版權法律禁止跨區","書中談的是成本考量，不是法律限制。"],["因為影片格式不相容","跟格式無關，是使用地區的問題。"],["因為 CDN 節點數量有限","書中的重點是效益，不是節點數量限制。"]]),
+  MC('sd14-s10-q4','自建 CDN 並與 ISP 合作的做法，主要適合什麼情境？','sd14-s10-p03','書中提到這對媒體公司來說可能是有意義的大型專案，例如 Netflix 就是這樣做的。','規模夠大、值得投入龐大專案成本的媒體公司（例如 Netflix 這樣的案例）。',[["適合所有規模的新創公司","書中明確說這是「龐大的專案」，不是任何規模都划算。"],["這樣做完全不需要跟 ISP 談合作","恰好相反，重點就是要跟 ISP 合作。"],["這個做法會讓延遲變高","目的是讓 CDN 節點更接近使用者，藉此降低延遲。"]])
  ]
 },
 {
- id:'sd14-s11',order:11,title:'Security、Copyright、Moderation 與 Access Control',duration:'38–54 分鐘',summary:'Upload pipeline 同時是 untrusted content ingestion；處理 malware、copyright、privacy、signed URL、takedown 與 sensitive metadata。',
- research:[{label:'ByteByteGo — Video takedowns / encryption',url:'https://bytebytego.com/courses/system-design-interview/design-youtube'}],
+ id:'sd14-s11',order:11,title:'安全性最佳化：預簽名上傳網址與保護你的影片',duration:'38–54 分鐘',summary:'安全性是任何產品最重要的一個面向——先看客戶端怎麼安全地把影片直接傳到儲存系統，再看已發布的影片如何防止被任意盜版。',
+ research:[{label:'Delegate access with a shared access signature（Microsoft 對預簽名網址的官方說明）',url:'https://docs.microsoft.com/en-us/rest/api/storageservices/delegate-access-with-shared-access-signature'}],
  pages:[
-  {id:'sd14-s11-p01',title:'Upload 端把 File 當 Untrusted Input',blocks:[
-   {type:'bullets',items:['MIME/container validation','resource limits / decompression bomb','malware scanning','copyright fingerprint','adult/illegal content moderation','metadata sanitization']}
+  {id:'sd14-s11-p01',title:'上傳端不能什麼都信任',blocks:[
+   {type:'p',text:'上傳流程收到的是使用者提供的檔案，屬於不受信任的輸入來源，一般會做以下這些檢查：'},
+   {type:'bullets',items:['檔案格式／容器格式驗證，避免收到偽裝成影片的其他檔案。','限制單次上傳的資源用量，避免異常檔案拖垮處理程序。','掃描惡意內容。','比對版權資料庫，偵測可能侵權的內容。','審核色情或其他違法內容。']}
   ]},
-  {id:'sd14-s11-p02',title:'Private/Unlisted Video 不能只靠難猜 URL',blocks:[
-   {type:'p',text:'Playback request 要經 authorization，CDN 可使用短效 signed URL/cookie/token；source object 不公開 bucket。'}
+  {id:'sd14-s11-p02',title:'安全性最佳化：預簽名上傳網址',blocks:[
+   {type:'p',text:'安全性是任何產品最重要的其中一個面向。為了確保只有經過授權的使用者可以把影片上傳到正確的位置，我們導入所謂的預簽名網址（pre-signed URL）。'},
+   {type:'diagram',nodes:[['使用者','客戶端'],['API 伺服器','驗證並簽發網址'],['原始儲存系統','接收實際的影片檔案']],caption:'圖 14-26：上傳流程改成先跟 API 伺服器要一個「通行證」，再拿著它直接把影片送到儲存系統。'},
+   {type:'stepper',steps:[['1. 請求上傳','客戶端向 API 伺服器發出 HTTP 請求，以取得預簽名網址。'],['2. 取得預簽名網址','API 伺服器把存取權限提供給指定的物件，這個說法「預簽名網址」裡所說的物件，其實是把存取權限授予檔案上傳到 Amazon S3 時會用到的一個術語。其他雲端服務供應商可能會採用其他的名稱，例如 Microsoft Azure BLOB 儲存系統也支援相同的功能，稱其名稱為「共享存取簽章」（Shared Access Signature）。'],['3. 上傳影片','客戶端一收到預簽名網址，就用這個預簽名網址來上傳影片，直接送到原始儲存系統，不必再經過 API 伺服器中轉。']]}
   ]},
-  {id:'sd14-s11-p03',title:'Takedown 要能快速 Stop Serving',blocks:[
-   {type:'stepper',steps:[['Policy decision','video blocked'],['Metadata','visibility=blocked'],['CDN','purge/invalidate token'],['Search/feed','remove discovery'],['Audit','retain evidence per policy']]}
+  {id:'sd14-s11-p03',title:'保護你的影片',blocks:[
+   {type:'p',text:'許多內容創作者並不願意自己在網路上發佈的原始影片被任意盜版。為了保護那些受版權保護的影片，我們有以下三種安全性選項可供選擇：'},
+   {type:'compare',items:[['DRM（Digital Rights Management；數位版權管理）系統','目前三個主要的 DRM 系統分別是 Apple FairPlay、Google Widevine、Microsoft PlayReady。你可以對影片進行加密，並設定授權策略。'],['AES 加密','你可以對影片進行加密，只有已授權使用者才能觀看到加密過的影片。'],['視覺浮水印','這是在影片的畫面疊加一層圖片（可以是你的公司 logo 或名稱），來做為浮水印標識資訊。']]}
   ]}],
  quiz:[
-  MC('sd14-s11-q1','為何 upload worker 要 resource limits？','sd14-s11-p01','惡意/損壞媒體可能耗盡 CPU/RAM/disk。','Untrusted content sandbox/quota。',[["只因影片太熱門","不是。"],["只為縮短 title","無關。"],["因為 CDN 要求","不是核心。"]]),
-  MC('sd14-s11-q2','Unlisted URL 很長是否等於 authorization？','sd14-s11-p02','不是；URL secrecy 不能取代 access control。','Private content 要真正 auth/signed access。',[["等於強 ACL","錯。"],["CDN 不支援 token","可支援多種 access pattern。"],["只需 robots.txt","無法保護 private bytes。"]]),
-  MC('sd14-s11-q3','Takedown 後只改 DB flag 可能還看到影片，為何？','sd14-s11-p03','CDN edge 仍可能持有 cached segments。','需要 purge/invalidate/short auth TTL。',[["DB 一定沒寫成功","不一定。"],["因為 transcoding 自動恢復","不是。"],["因為 title cache only","不是唯一。"]]),
-  MC('sd14-s11-q4','Copyright fingerprint 最適合放哪？','sd14-s11-p01','Upload/processing pipeline 非同步檢查。','Ingest pipeline 與 publish policy 整合。',[["每個 viewer 播放時重新掃整支","太貴。"],["只放 client","可被繞過。"],["只放 DNS","無關。"]])
+  MC('sd14-s11-q1','上傳端為什麼要對使用者上傳的檔案做資源限制與格式驗證？','sd14-s11-p01','使用者提供的檔案屬於不受信任的輸入來源，需要驗證與限制才能避免被異常/惡意內容拖垮。','使用者上傳的內容是不受信任的輸入，需要驗證與限制資源用量。',[["只是為了縮短檔案名稱","跟檔案名稱無關。"],["因為 CDN 硬性要求","這是上傳端本身該做的安全把關，不是 CDN 的要求。"],["只影響熱門影片","跟影片是否熱門無關，任何上傳都要檢查。"]]),
+  MC('sd14-s11-q2','預簽名網址（pre-signed URL）流程的三個步驟依序是？','sd14-s11-p02','客戶端請求上傳→API 伺服器回傳預簽名網址→客戶端用這個網址直接上傳到原始儲存系統。','請求上傳、取得預簽名網址、直接上傳影片。',[["直接上傳、事後驗證、事後刪除","預簽名網址是「先驗證再上傳」，不是先上傳後驗證。"],["註冊帳號、登入、上傳","這題談的是上傳授權機制，不是帳號註冊流程。"],["上傳、轉碼、發佈","這是後續的處理流程，不是預簽名網址本身的三步驟。"]]),
+  MC('sd14-s11-q3','Microsoft Azure BLOB 儲存系統把「預簽名網址」這個概念稱為什麼？','sd14-s11-p02','書中提到 Azure 用「共享存取簽章」（Shared Access Signature）稱呼相同概念的功能。','共享存取簽章（Shared Access Signature）。',[["Signed Cookie","這是書中沒有提到的另一種機制名稱。"],["OAuth Token","OAuth 是另一套授權標準，不是書中提到的 Azure 對應名稱。"],["CDN Token","書中提到的是儲存系統層級的授權機制，不是 CDN token。"]]),
+  MC('sd14-s11-q4','書中提到保護已發布影片的三種安全性選項是？','sd14-s11-p03','DRM 系統、AES 加密、視覺浮水印，各自的保護方式不同。','DRM 系統、AES 加密、視覺浮水印。',[["防火牆、VPN、密碼","這些是一般網路安全機制，不是書中談影片保護的三個選項。"],["備份、複寫、快照","這些是資料可靠性做法，跟版權保護是不同的問題。"],["負載平衡、自動擴縮容、監控","這些是可用性/擴展性做法，不是版權保護做法。"]])
  ]
 },
 {
  id:'sd14-s12',order:12,title:'Multi-Region、Observability 與 Live Streaming 邊界',duration:'42–58 分鐘',summary:'完成全球 upload/playback routing、replicated metadata、CDN、transcode locality、DR 與 QoE telemetry；最後區分 VOD 與 Live。',
- research:[{label:'ByteByteGo — YouTube wrap-up / live streaming',url:'https://bytebytego.com/courses/system-design-interview/design-youtube'}],
+ research:[],
  pages:[
   {id:'sd14-s12-p01',title:'Region 不是每個 Component 都 Active-Active',blocks:[
    {type:'bullets',items:['Playback CDN 全球 edge。','Upload 可就近 ingress，再跨 region durable replicate。','Metadata 可 home-region + replica 或 globally distributed DB。','Transcode jobs 優先靠近 source/storage/GPU pool。']}
