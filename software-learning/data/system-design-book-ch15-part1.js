@@ -1,135 +1,162 @@
 (() => {
 const chapter=window.SYSTEM_DESIGN_CHAPTER_15={
  id:'sd-book-15',order:15,title:'設計 Google Drive',
- subtitle:'從 Resumable Upload、Object Storage、Metadata、Block Sync、Change Log、Offline Conflict、Sharing、Notification 到 Multi-Region，設計可靠檔案同步平台。',
- objective:'完成後，你能把 File Bytes、Metadata、Sync State、Change Feed 與 Notification 分離，解釋 upload/download/sync/conflict/versioning/ACL 與 offline recovery。',
+ subtitle:'從 10 GB 的單檔上限、500 PB 的總容量、4 MB 的區塊、pending → uploaded 的狀態機，到區塊伺服器的切分／壓縮／加密、差異同步、長輪詢通知與整套故障處理，設計一個檔案永遠不會遺失的雲端硬碟。',
+ objective:'完成後，你能說出一次上傳為什麼要拆成「寫 metadata」與「傳位元組」兩條平行路徑，能解釋 pending 這個中間狀態存在的理由，並在區塊伺服器、雲端儲存、metadata 資料庫任何一個掛掉時，說出正在上傳的檔案會發生什麼事。',
  sections:[],finalExam:[]
 };
 const O=(id,text,correct,misconception='')=>({id,text,correct,misconception});
 const MC=(id,question,page,explanation,correct,wrong)=>({id,question,reviewPageId:page,explanation,options:[O(id+'-c',correct,true),...wrong.map((x,i)=>O(id+'-w'+(i+1),x[0],false,x[1]))]});
 chapter.sections.push(
+
 {
- id:'sd15-s01',order:1,title:'需求與 Scope：Upload、Download、Sync、Share、Offline',duration:'36–52 分鐘',summary:'先釐清 Drive 與單純 Object Storage 的差異：多裝置一致視圖、資料夾/metadata、版本、分享與 offline sync。',
- research:[{label:'ByteByteGo — Design Google Drive',url:'https://bytebytego.com/courses/system-design-interview/design-google-drive'}],
+ id:'sd15-s01',order:1,title:'第一步驟——瞭解問題並確立設計範圍',duration:'32–46 分鐘',summary:'把「做一個 Google Drive」縮小成六個功能，並把「資料丟失不可接受」寫成第一條非功能需求。',
+ research:[{label:'Google Drive',url:'https://www.google.com/drive/'}],
  pages:[
-  {id:'sd15-s01-p01',title:'Drive 題真正難的是 Sync',blocks:[
-   {type:'compare',items:[['Object Storage','以 object key 存/取 bytes。'],['Drive','還要檔名/資料夾/ACL/version/change log/multi-device/offline。'],['Dropbox-like Sync','本機檔案系統與雲端狀態雙向收斂。']]},
-   {type:'callout',title:'本章 Scope',text:'Upload/download、sync across devices、sharing、file version/history、offline changes；協作編輯器不是本題核心。'}
+  {id:'sd15-s01-p01',title:'先問清楚，再開始設計',blocks:[
+   {type:'lead',text:'Google Drive 是一種檔案儲存與同步服務，可以把檔案、照片、影片存到雲端，並從任何電腦、手機與平板存取，也能輕鬆分享給別人。設計它是一個很大的專案，所以先提出問題把範圍縮小，是非常重要的一件事。'},
+   {type:'compare',items:[['最重要的功能','上傳與下載檔案、檔案同步、通知。'],['平台','行動 App 與 Web 應用程式兩種都要做。'],['檔案格式','任何檔案類型都要支援。'],['加密','儲存系統裡的檔案都必須加密。']]},
+   {type:'callout',title:'兩個把設計釘死的數字',text:'單一檔案必須小於等於 10 GB；每天有 1,000 萬活躍使用者。前者決定了「大檔案怎麼傳」是一定要回答的問題，後者決定了流量的量級。'}
   ]},
-  {id:'sd15-s01-p02',title:'Functional Requirements',blocks:[
-   {type:'bullets',items:['Upload large files reliably。','Download / preview。','Sync changes across devices。','Create/move/rename/delete files/folders。','Share with users/links。','Version history / conflict handling。']}
+  {id:'sd15-s01-p02',title:'六個要做的功能，一個明確不做的',blocks:[
+   {type:'bullets',items:['添加檔案——最簡單的方式就是把檔案拖放到 Google Drive 中。','下載檔案。','跨多設備同步檔案：只要把檔案加到其中一部設備，就會自動同步到其他設備。','查看檔案修訂記錄。','與朋友、家人、同事共享檔案。','檔案被編輯、刪除或與你共享時，發送通知。']},
+   {type:'callout',title:'明確排除',text:'Google 文件的編輯與協作——讓多人同時編輯同一份文件，已經超出這一題的設計範圍。把它講出來，才有時間把上傳、同步與故障處理講深。'}
   ]},
-  {id:'sd15-s01-p03',title:'Non-functional Requirements',blocks:[
-   {type:'compare',items:[['Durability','檔案不可因單機故障消失。'],['Sync Latency','裝置幾秒內看到更新。'],['Availability','暫時部分依賴失敗仍可操作/重試。'],['Security','ACL、encryption、audit。'],['Bandwidth Efficiency','只傳必要 bytes / delta。']]}
+  {id:'sd15-s01-p03',title:'非功能需求：可靠性排第一',blocks:[
+   {type:'compare',items:[['可靠性','對儲存系統來說極為重要。資料丟失是不可接受的。'],['快速的同步速度','如果檔案同步太耗時，使用者很快就會因為不耐煩而放棄這個產品。'],['頻寬使用率','如果佔用大量不必要的網路頻寬，使用者一定會很不滿意，尤其手機使用流量有限的方案時。'],['可擴展性','系統應該有能力處理很大的流量。'],['高可用性','某些伺服器離線、變慢或出現網路錯誤時，使用者應該還是能正常使用系統。']]},
+   {type:'p',text:'「資料丟失是不可接受的」這一句話，之後會直接推導出三個設計：區塊必須先確實寫入儲存系統才能把檔案狀態改成已上傳、檔案要跨區域複製、以及每一種元件故障都要有接手的人。'}
   ]}],
  quiz:[
-  MC('sd15-s01-q1','Drive 與純 Object Storage 最大額外複雜度？','sd15-s01-p01','多裝置 metadata/change/conflict sync。','需要 sync state、change feed、ACL/version。',[["Drive 不能存 bytes","可以。"],["Object storage 一定沒有 durability","通常也有。"],["只差 UI icon","不是。"]]),
-  MC('sd15-s01-q2','Offline device 回線後最核心需求？','sd15-s01-p02','把本機累積變更與 server changes 合併/解衝突。','Catch-up + conflict resolution。',[["直接覆蓋 server 全部資料","危險。"],["丟掉 offline changes","不符合。"],["只重新登入","不夠。"]]),
-  MC('sd15-s01-q3','Drive capacity 不能只估 API QPS，還要？','sd15-s01-p03','File bytes、sync traffic、versions、change events。','Storage/bandwidth/version amplification。',[["只看 folder count","不足。"],["只看 CSS size","無關。"],["只看 login latency","不是主量級。"]]),
-  MC('sd15-s01-q4','協作文字 OT/CRDT 是否本章必做？','sd15-s01-p01','不一定；Drive file sync 可先視 whole-file/version conflict。','先鎖定 file sync，real-time editor 是另一題。',[["一定要做完整 Google Docs","scope 爆炸。"],["Drive 不需要任何 conflict","錯。"],["只能處理 text file","不是。"]])
+  MC('sd15-s01-q1','這一題的單一檔案大小上限是？','sd15-s01-p01','面試官明確給了 10 GB 的上限。','10 GB。',[["沒有上限","題目有明確限制。"],["500 KB","那是平均檔案大小的假設。"],["4 MB","那是區塊的大小。"]]),
+  MC('sd15-s01-q2','本章明確排除了哪一項功能？','sd15-s01-p02','多人同時編輯同一份文件超出設計範圍。','Google 文件的編輯與協作。',[["檔案同步","這是核心功能。"],["檔案修訂記錄","這是要做的功能。"],["共享檔案","這是要做的功能。"]]),
+  MC('sd15-s01-q3','排在第一位的非功能需求是？','sd15-s01-p03','對儲存系統來說，資料丟失是不可接受的。','可靠性。',[["同步速度","重要，但排在可靠性之後。"],["頻寬使用率","重要，但不是第一。"],["可擴展性","重要，但不是第一。"]]),
+  MC('sd15-s01-q4','為什麼「頻寬使用率」會被列進非功能需求？','sd15-s01-p03','手機常使用流量有限的方案，浪費頻寬使用者一定不滿意。','行動裝置的流量成本是使用者實際感受得到的。',[["因為伺服器頻寬很貴","那是成本問題，這裡講的是使用者體驗。"],["因為法規要求","題目沒有這個前提。"],["因為要支援加密","加密與頻寬無直接關係。"]])
  ]
 },
+
 {
- id:'sd15-s02',order:2,title:'Back-of-the-envelope：Bytes、Versions、Sync Events',duration:'34–48 分鐘',summary:'用 users × files × average size × versions 估 storage，用 uploads/downloads/sync notifications 估 throughput。',
- research:[{label:'ByteByteGo — Google Drive estimation',url:'https://bytebytego.com/courses/system-design-interview/design-google-drive'}],
+ id:'sd15-s02',order:2,title:'粗略的估算：500 PB 與 480 QPS',duration:'30–44 分鐘',summary:'用註冊人數乘可用空間得到總容量，用活躍人數乘每日上傳次數得到寫入 QPS——兩個數字，兩種完全不同的瓶頸。',
+ research:[{label:'Amazon S3',url:'https://aws.amazon.com/s3/'}],
  pages:[
-  {id:'sd15-s02-p01',title:'Storage = Current + Versions + Replication',blocks:[
-   {type:'code',text:'logical_bytes = users × avg_files × avg_file_size\nphysical ≈ logical × version_factor × replication_factor'},
-   {type:'p',text:'Version history、trash retention、replication、erasure coding、thumbnail/preview 都會增加 physical footprint。'}
+  {id:'sd15-s02-p01',title:'把假設全部寫出來',blocks:[
+   {type:'bullets',items:['5,000 萬名註冊使用者，1,000 萬每日活躍使用者（DAU）。','每位使用者有 10 GB 的可用空間。','假設使用者每天上傳 2 個檔案，平均檔案大小為 500 KB。','讀寫比率為 1 : 1。']},
+   {type:'p',text:'估算的價值不在於數字有多準，而在於每一個數字都能追溯到一個寫出來的假設。需求一變，你就能立刻重推，而不是重背。'}
   ]},
-  {id:'sd15-s02-p02',title:'Sync Traffic 不是等於 Upload Traffic',blocks:[
-   {type:'bullets',items:['One upload may notify N devices/collaborators。','Metadata-only rename 不應重新傳整個 file bytes。','Mobile background sync 有電量/網路限制。','大量 reconnect devices 可造成 catch-up read spike。']}
+  {id:'sd15-s02-p02',title:'容量：5,000 萬 × 10 GB = 500 PB',blocks:[
+   {type:'code',text:'所需配置的總空間\n  = 註冊使用者數 × 每人可用空間\n  = 5,000 萬 × 10 GB\n  = 500 PB'},
+   {type:'callout',title:'注意分母是註冊人數，不是活躍人數',text:'空間是「配置」給每一個註冊帳號的，就算他今天沒登入，那 10 GB 也得留著。這就是為什麼容量用 5,000 萬算，而 QPS 用 1,000 萬算。'}
   ]},
-  {id:'sd15-s02-p03',title:'Large File 與 Tiny File 是不同 Bottleneck',blocks:[
-   {type:'compare',items:[['Large files','bandwidth、resumable upload、chunk retry。'],['Tiny files','metadata QPS、per-object overhead、directory listing。']]}
+  {id:'sd15-s02-p03',title:'吞吐量：上傳 QPS 240，峰值 480',blocks:[
+   {type:'code',text:'上傳 API 的 QPS\n  = 1,000 萬 DAU × 2 次上傳 / 24 小時 / 3,600 秒\n  ≈ 240\n\n峰值 QPS = QPS × 2 = 480'},
+   {type:'p',text:'240 QPS 是一個很小的數字——幾台機器就吃得下。這正是這一題的關鍵：Google Drive 的難點從來不在請求數，而在每個請求後面帶著的位元組量、以及那些位元組絕對不能弄丟。'}
   ]}],
  quiz:[
-  MC('sd15-s02-q1','為何 physical storage > logical user bytes？','sd15-s02-p01','版本、replication、preview 等放大。','Version/replication overhead。',[["因為 metadata 不可存","不是。"],["因為 object storage 會隨機複製無限次","不是。"],["只因 filename Unicode","不是。"]]),
-  MC('sd15-s02-q2','Rename 一個 10GB file 是否應重新 upload 10GB？','sd15-s02-p02','不應；rename 是 metadata change。','Bytes 與 metadata 分離。',[["一定要重傳","浪費。"],["Drive 不支援 rename","錯。"],["只要壓縮即可","仍不該傳 bytes。"]]),
-  MC('sd15-s02-q3','大量 devices 同時重連最可能造成？','sd15-s02-p02','Change catch-up / metadata read spike。','Reconnect storm / sync backlog。',[["Object bytes 自動消失","不會。"],["ACL 永久失效","不一定。"],["只有 DNS 增加","不只。"]]),
-  MC('sd15-s02-q4','Tiny file workload 最容易卡？','sd15-s02-p03','大量 metadata/object operations 而非純 bandwidth。','Metadata QPS / per-object overhead。',[["只卡 egress Mbps","不一定。"],["一定需要 GPU","不需要。"],["只卡 transcoding","不是影片。"]])
+  MC('sd15-s02-q1','500 PB 這個總容量是怎麼算的？','sd15-s02-p02','配置給每一個註冊帳號的空間都要留著。','5,000 萬註冊使用者 × 每人 10 GB。',[["1,000 萬 DAU × 10 GB","空間是配置給註冊帳號，不是只給今天活躍的人。"],["每天上傳量 × 365","那是年增量不是總配置。"],["500 KB × 上傳次數","那是每日新增資料量。"]]),
+  MC('sd15-s02-q2','上傳 API 的峰值 QPS 約為？','sd15-s02-p03','平均 240，峰值取 2 倍。','480。',[["240","那是平均值。"],["2,400","高估了一個數量級。"],["48","低估了。"]]),
+  MC('sd15-s02-q3','240 QPS 這個數字告訴我們什麼？','sd15-s02-p03','請求數本身很小，難點在位元組量與不能遺失。','這一題的瓶頸不是 QPS。',[["需要幾千台 API 伺服器","240 QPS 不需要。"],["必須立刻分片資料庫","不是由這個數字決定的。"],["必須用 CDN","上傳流量不走 CDN。"]]),
+  MC('sd15-s02-q4','讀寫比率 1 : 1 的意義是？','sd15-s02-p01','下載與上傳的量級相當，兩條路徑都要認真設計。','讀取路徑不能被當成次要問題。',[["讀取遠多於寫入，可以只優化讀","比率是 1:1。"],["寫入遠多於讀取","比率是 1:1。"],["代表快取命中率是 50%","與快取無關。"]])
  ]
 },
+
 {
- id:'sd15-s03',order:3,title:'High-Level Design：Metadata、Blob、Sync、Notification 分層',duration:'38–54 分鐘',summary:'把 metadata source of truth、binary object storage、change log/sync service、notification signal 與 client local DB 分開。',
- research:[{label:'ByteByteGo — Google Drive high-level design',url:'https://bytebytego.com/courses/system-design-interview/design-google-drive'}],
+ id:'sd15-s03',order:3,title:'從一台伺服器開始：名稱空間與三個 API',duration:'34–48 分鐘',summary:'先在單一伺服器上把東西做出來，看清楚檔案怎麼被定位，以及上傳、下載、查修訂記錄這三支 API 長什麼樣。',
+ research:[{label:'Google Drive API — Manage uploads',url:'https://developers.google.com/workspace/drive/api/guides/manage-uploads'}],
  pages:[
-  {id:'sd15-s03-p01',title:'四個核心資料面',blocks:[
-   {type:'diagram',nodes:[['Client','local DB + files'],['API/Metadata','file tree/ACL/version'],['Object Storage','chunks/objects'],['Change Log','ordered deltas'],['Notification','wake clients']],caption:'Notification 是 signal；真正同步內容由 change log/metadata 取得。'}
+  {id:'sd15-s03-p01',title:'單一伺服器的起手式',blocks:[
+   {type:'bullets',items:['一部 Web 伺服器，可用來上傳、下載檔案。','一個資料庫，可用來追蹤 metadata 詮釋資料（使用者資訊、登入資訊、檔案資訊等等）。','一套儲存系統，可用來儲存檔案。先配置 1 TB 的儲存空間。']},
+   {type:'p',text:'刻意從最簡單的做法開始，再逐步擴大規模——這樣每一個新元件都是被某個具體問題逼出來的，而不是一開始就畫一張大圖。'}
   ]},
-  {id:'sd15-s03-p02',title:'Metadata DB 是命名空間 Source of Truth',blocks:[
-   {type:'bullets',items:['file_id / parent_id / name','owner / ACL','current_version','size / checksum','state: active/trash/deleted','created/modified revision']}
+  {id:'sd15-s03-p02',title:'名稱空間：檔案怎麼被唯一定位',blocks:[
+   {type:'code',text:'drive/\n├── user1/            ← 名稱空間（namespace）\n│   ├── recipes/\n│   └── chicken_soup.txt\n├── user2/\n│   ├── football.mov\n│   └── sports.txt\n└── user3/\n    └── best_pic_ever.png'},
+   {type:'p',text:'在 drive/ 目錄下有一個目錄列表，稱為名稱空間。每個名稱空間都包含該使用者上傳的所有檔案。伺服器上的檔案名稱與原始檔案名稱保持相同。每個檔案或資料夾都可以結合名稱空間與相對路徑，作為唯一的識別方式。'}
   ]},
-  {id:'sd15-s03-p03',title:'Object Storage 不應用 Path 當唯一 Key',blocks:[
-   {type:'p',text:'Rename/move 若 blob key 綁 /folder/name，會迫使搬大物件。更常用 immutable content/object ID，path tree 由 metadata 管理。'}
+  {id:'sd15-s03-p03',title:'三支 API：上傳、下載、取得修訂資訊',blocks:[
+   {type:'stepper',steps:[['簡單上傳','檔案比較小的時候用這種上傳類型。'],['斷點續傳','檔案比較大、而且網路中斷的可能性很高時用這種。三個步驟：發送初始請求取得可續傳網址 → 上傳資料並監控上傳狀態 → 如果被打斷，就從斷點繼續上傳。']]},
+   {type:'code',text:'上傳（可續傳）\n  https://api.example.com/files/upload?uploadType=resumable\n  參數：uploadType=resumable、data（所要上傳的本地檔案）\n\n下載\n  https://api.example.com/files/download\n  { "path": "/recipes/soup/best_soup.txt" }\n\n取得修訂資訊\n  https://api.example.com/files/list_revisions\n  { "path": "/recipes/soup/best_soup.txt", "limit": 20 }'},
+   {type:'callout',title:'安全性',text:'所有 API 都需要進行使用者身份驗證，並使用 HTTPS。這裡會採用 SSL 來保護客戶端與後端伺服器之間的資料傳輸。'}
   ]}],
  quiz:[
-  MC('sd15-s03-q1','Notification 在 sync 架構中最安全的角色？','sd15-s03-p01','提醒 client 有變更，再由 change log 拉完整狀態。','Wake-up signal，而非唯一 source of truth。',[["通知 payload 就是唯一歷史","可能漏/重送。"],["取代 metadata DB","不是。"],["取代 object storage","不是。"]]),
-  MC('sd15-s03-q2','Folder hierarchy 最適合主要由哪層管理？','sd15-s03-p02','parent_id/name/ACL 是 metadata。','Metadata DB。',[["直接從 object bytes 推導","不合理。"],["只靠 CDN","不是。"],["只靠 client memory","不一致。"]]),
-  MC('sd15-s03-q3','Blob key 若直接等於完整 path 的缺點？','sd15-s03-p03','Rename/move 可能變成昂貴 blob copy。','Path 與 object identity 過度耦合。',[["無法下載","仍可。"],["不能做 ACL","可但複雜。"],["只會影響 UI","也影響 data movement。"]]),
-  MC('sd15-s03-q4','current_version 放 metadata 的意義？','sd15-s03-p02','指出 file logical identity 目前引用哪個 immutable content/version。','支援 atomic version switch/history。',[["代表 user app 版本","不是。"],["等於 chunk size","不是。"],["等於 CDN TTL","不是。"]])
+  MC('sd15-s03-q1','檔案在單一伺服器版本裡是怎麼被唯一識別的？','sd15-s03-p02','名稱空間對應使用者，相對路徑對應檔案位置。','名稱空間 + 相對路徑。',[["只用檔案名稱","不同使用者可能有同名檔案。"],["用檔案的雜湊值","那是區塊層級的識別。"],["用上傳時間戳","不保證唯一。"]]),
+  MC('sd15-s03-q2','什麼情況下該用斷點續傳而不是簡單上傳？','sd15-s03-p03','檔案比較大、而且網路中斷的可能性很高。','大檔案 + 不穩定的網路。',[["任何情況都該用","小檔案用簡單上傳就好。"],["只有文字檔要用","與檔案類型無關。"],["只有分享檔案時要用","與分享無關。"]]),
+  MC('sd15-s03-q3','斷點續傳的第一個步驟是？','sd15-s03-p03','要先拿到一個可以續傳的網址。','發送初始請求，取得可續傳網址。',[["直接開始傳位元組","沒有續傳網址就無法恢復。"],["先計算整個檔案的雜湊","不是第一步。"],["先通知其他裝置","不是上傳流程的第一步。"]]),
+  MC('sd15-s03-q4','為什麼要先做單一伺服器版本？','sd15-s03-p01','每個新元件都應該是被具體問題逼出來的。','讓後續每一次擴展都有明確的理由。',[["因為單一伺服器就夠用","很快就會空間不足。"],["因為面試官規定","要能自己說出理由。"],["為了省錢","理由不是成本。"]])
  ]
 },
+
 {
- id:'sd15-s04',order:4,title:'Resumable Upload：Session、Chunk、Checksum、Finalize',duration:'40–58 分鐘',summary:'沿用大型檔案可靠傳輸模式：建立 session、傳 chunks、查 offset、重試、checksum，最後 metadata commit 新 version。',
- research:[{label:'Google Drive API — Resumable uploads',url:'https://developers.google.com/workspace/drive/api/guides/manage-uploads'}],
+ id:'sd15-s04',order:4,title:'擺脫單一伺服器的限制：分片、S3 與解耦',duration:'36–50 分鐘',summary:'空間滿了先想到分片，但分片救不了「單一儲存伺服器壞掉就丟資料」——這一步真正的答案是把檔案交給有跨區複製的物件儲存。',
+ research:[{label:'Amazon S3 — Replication',url:'https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html'}],
  pages:[
-  {id:'sd15-s04-p01',title:'Drive 官方也支援 Resumable Upload',blocks:[
-   {type:'stepper',steps:[['Create session','建立 resumable URI。'],['Upload','傳完整檔或 chunks。'],['Resume','通信中斷後續傳。'],['Verify','size/checksum。'],['Commit','建立/切換 file version。']]}
+  {id:'sd15-s04-p01',title:'先是空間滿了',blocks:[
+   {type:'p',text:'隨著上傳的檔案越來越多，最後一定會收到空間已滿的警告：1 TB 只剩下 10 MB。使用者無法再上傳檔案了。第一個想到的解決方案，就是對資料進行分片（shard），然後儲存到多個儲存伺服器中。'},
+   {type:'code',text:'使用者_id % 4\n   ├── 伺服器 #1\n   ├── 伺服器 #2\n   ├── 伺服器 #3\n   └── 伺服器 #4'},
+   {type:'p',text:'你花了整夜設定好分片並嚴密監視，一切再度順利運作。但心裡還是有點擔心：萬一儲存伺服器出問題，還是有可能造成潛在的資料損失。'}
   ]},
-  {id:'sd15-s04-p02',title:'Chunk Upload 與 Metadata Commit 要分兩階段',blocks:[
-   {type:'p',text:'某些 chunks 已上傳不代表新版本完整。只有所有 required chunks durable 且 hash/size 驗證通過後，metadata current_version 才能 atomic 指向新 content。'}
+  {id:'sd15-s04-p02',title:'分片解決容量，不解決耐久性',blocks:[
+   {type:'callout',title:'這是本節最重要的一句話',text:'分片讓你放得下，但沒有讓你放得住。容量與耐久性是兩個不同的問題，用同一個手段解決其中一個，不代表另一個也解決了。'},
+   {type:'p',text:'許多居於領先地位的公司（例如 Netflix 與 Airbnb）都運用 Amazon S3 來處理資料儲存。S3 是一種物件儲存服務，可提供產業領先的可擴展性、資料可用性、安全性與效能表現。'},
+   {type:'compare',items:[['同區域複製','把資料複製到同一個區域內的多個儲存桶，防止單機故障。'],['跨區域複製','複製到另一個地理區域，連整個區域出事都還有資料。']]},
+   {type:'p',text:'檔案若能儲存在多個區域中，就能提供冗餘（redundant）的效果，可防止資料丟失並確保可用性。這裡的一個儲存桶（bucket），就相當於檔案系統中的一個資料夾。'}
   ]},
-  {id:'sd15-s04-p03',title:'Orphan Chunks 需要 GC',blocks:[
-   {type:'p',text:'Client 建 session 後消失會留下未 finalize chunks。Upload session TTL + reference counting / background GC 回收未被任何 committed version 引用的 bytes。'}
+  {id:'sd15-s04-p03',title:'順手把其他單點也解掉',blocks:[
+   {type:'compare',items:[['負載平衡器','分配網路流量，確保平均分配；某部 Web 伺服器出問題時可以重新分配流量。'],['Web 伺服器','有了負載平衡器之後，就可以根據流量負載輕鬆添加／移除更多 Web 伺服器。'],['metadata 資料庫','把資料庫移出伺服器可避免單點故障，同時設定複製與分片以滿足可用性與可擴展性。'],['檔案儲存系統','採用 S3；為了確保可用性與耐久性，檔案會被複製到兩個不同的地理區域。']]},
+   {type:'p',text:'套用這些改進之後，Web 伺服器、metadata 資料庫與檔案儲存系統就與單一伺服器解耦了——每一層都可以獨立擴展、獨立故障、獨立修復。'}
   ]}],
  quiz:[
-  MC('sd15-s04-q1','Resumable upload 最大價值？','sd15-s04-p01','中斷後可續傳，不需重傳大型檔案。','可靠且省 bandwidth。',[["讓 file 自動分享","無關。"],["取消 checksum","相反。"],["取代 metadata","不是。"]]),
-  MC('sd15-s04-q2','為何 chunk 完成不立刻切 current_version？','sd15-s04-p02','可能只是部分 chunks，讀者會看到 incomplete version。','Finalize 全部 bytes 後 atomic metadata commit。',[["因為 metadata 不能更新","可以。"],["因為 chunk 沒有 ID","可以有。"],["只為 delay UI","不是。"]]),
-  MC('sd15-s04-q3','Upload session abandoned 的 bytes 怎麼辦？','sd15-s04-p03','TTL + GC orphan chunks。','回收未被 committed version 引用的資料。',[["永久保留所有 orphan","浪費。"],["直接刪所有同 user bytes","危險。"],["交給 CDN","不是。"]]),
-  MC('sd15-s04-q4','Finalize 前 checksum 不符應？','sd15-s04-p01','不要 publish version，重傳損壞 chunks/失敗。','Integrity failure，拒絕 commit。',[["仍然 READY","會 corrupt。"],["只改 filename","無效。"],["只增加 ACL","無關。"]])
+  MC('sd15-s04-q1','分片解決了什麼問題，又沒解決什麼問題？','sd15-s04-p02','分片讓你放得下，但沒有讓你放得住。','解決容量，不解決耐久性。',[["兩個都解決了","單一儲存伺服器壞掉仍會丟資料。"],["解決耐久性但不解決容量","剛好相反。"],["兩個都沒解決","它確實解決了容量。"]]),
+  MC('sd15-s04-q2','為什麼要把檔案複製到兩個不同的地理區域？','sd15-s04-p02','連整個區域出事都還有資料。','提供冗餘，防止資料丟失並確保可用性。',[["為了加快上傳速度","跨區複製不會讓上傳更快。"],["為了節省成本","複製會增加成本。"],["為了符合檔案大小上限","與大小無關。"]]),
+  MC('sd15-s04-q3','把 metadata 資料庫移出伺服器的主要理由？','sd15-s04-p03','資料庫留在單機上就是一個單點故障。','避免單點故障，並可獨立設定複製與分片。',[["為了讓資料庫變快","主要理由是可用性。"],["因為資料庫太大","不是主因。"],["為了支援加密","與加密無關。"]]),
+  MC('sd15-s04-q4','儲存桶（bucket）相當於什麼？','sd15-s04-p02','S3 用桶來組織物件。','檔案系統中的一個資料夾。',[["一台伺服器","桶是邏輯容器不是機器。"],["一個區塊","區塊是檔案切出來的片段。"],["一個使用者帳號","不是。"]])
  ]
 },
+
 {
- id:'sd15-s05',order:5,title:'Block Sync 與 Content Hash：只傳改變部分',duration:'42–60 分鐘',summary:'對大型檔案使用 chunk/block hash，避免只改 1MB 卻重傳 10GB；理解 dedup、chunking 與安全/隱私 trade-off。',
- research:[{label:'ByteByteGo — Google Drive block servers',url:'https://bytebytego.com/courses/system-design-interview/design-google-drive'}],
+ id:'sd15-s05',order:5,title:'同步衝突：先到的先贏，後到的收到通知',duration:'30–42 分鐘',summary:'兩個人同時改同一個檔案一定會發生。策略很簡單：先處理到的版本為準，晚到的收到衝突通知，並且兩份都留著讓使用者自己決定。',
+ research:[{label:'Differential Synchronization',url:'https://neil.fraser.name/writing/sync/'}],
  pages:[
-  {id:'sd15-s05-p01',title:'Whole-file Sync 的浪費',blocks:[
-   {type:'p',text:'10GB VM image 只改 4MB，如果每次整檔 upload，bandwidth、時間、mobile battery 都極差。Block sync 先比較 chunks/content hashes，只上傳缺少或改變的 blocks。'}
+  {id:'sd15-s05-p01',title:'衝突是常態，不是例外',blocks:[
+   {type:'p',text:'對於大型儲存系統來說，時不時總會遇到同步衝突的問題。如果有兩個使用者同時修改同一個檔案或資料夾，就會發生衝突的情況。'},
+   {type:'stepper',steps:[['兩人同時修改','使用者 1 與使用者 2 都嘗試在同一時間修改同一個檔案。'],['系統先處理到使用者 1','使用者 1 的修改操作會被順利接受，狀態顯示為「已同步」。'],['使用者 2 遇到衝突','系統回給使用者 2 一個「有衝突」的結果。']]}
   ]},
-  {id:'sd15-s05-p02',title:'Chunk Map',blocks:[
-   {type:'code',text:'version V7\n[chunkA hash=aa..]\n[chunkB hash=bb..]\n[chunkC hash=cc..]\nmetadata → ordered chunk IDs'},
-   {type:'p',text:'File version 可由 ordered chunk refs 組成；未變 chunks 被新版本重用。'}
+  {id:'sd15-s05-p02',title:'解法：把兩份都攤開來給使用者看',blocks:[
+   {type:'p',text:'系統會把同一個檔案的兩個副本都顯示出來：一個是使用者 2 本機裡的副本，另一個是伺服器上的最新版本。使用者 2 可以選擇合併這兩個檔案，也可以選擇用某個版本覆蓋掉另一個版本。'},
+   {type:'code',text:'SystemDesignInterview\nSystemDesignInterview_user2_conflicted_copy_2019-05-01   ⚠'},
+   {type:'callout',title:'為什麼不自動合併就好',text:'因為系統無法知道哪一份才是使用者想要的。把決定權交回給人，比替他猜錯要安全得多——這與「資料丟失不可接受」是同一條原則。'}
   ]},
-  {id:'sd15-s05-p03',title:'Dedup 不等於無風險',blocks:[
-   {type:'bullets',items:['Content hash collision 要用強 hash/size verify。','Cross-user dedup 可能洩漏「某內容是否存在」資訊。','Encrypted-per-user content 會限制 global dedup。','Reference counting/GC 要避免仍被舊 version 引用的 chunk 被刪。']}
+  {id:'sd15-s05-p03',title:'這條策略的邊界',blocks:[
+   {type:'p',text:'如果有多個使用者同時編輯同一份文件，要保持文件同步就成為一項更難的挑戰——那需要差異同步或 CRDT 這類技術。而在這一題裡，我們已經在第一步明確把「多人即時協作編輯」排除在範圍外。'},
+   {type:'p',text:'認清楚一個策略適用到哪裡為止，跟知道它怎麼運作一樣重要。'}
   ]}],
  quiz:[
-  MC('sd15-s05-q1','Block sync 最直接降低？','sd15-s05-p01','小改動時避免重傳整檔。','Bandwidth/time。',[["Metadata 完全不需要","仍需要。"],["所有 conflict 消失","不會。"],["ACL 不需要","仍需要。"]]),
-  MC('sd15-s05-q2','File version 用 ordered chunk IDs 表示的好處？','sd15-s05-p02','未變 chunks 可共享，版本組合清楚。','Content-addressed/reusable blocks。',[["Chunk 順序不重要","通常重要。"],["所有 chunks 可隨機刪","不行。"],["不需 checksum","仍需要。"]]),
-  MC('sd15-s05-q3','Cross-user dedup 的 privacy concern？','sd15-s05-p03','可能透過 dedup timing/existence oracle 推測他人已有內容。','內容存在性洩漏。',[["只增加 storage","相反可能省 storage。"],["只影響 UI","不是。"],["完全沒有 security impact","不一定。"]]),
-  MC('sd15-s05-q4','GC chunk 前最重要？','sd15-s05-p03','確認沒有任何 committed/current/history version 引用。','Reference reachability/count。',[["只看 chunk age","可能仍被引用。"],["只看 filename","無關。"],["只看 last downloader","不足。"]])
+  MC('sd15-s05-q1','兩人同時修改同一個檔案時，本章採用的策略是？','sd15-s05-p01','先處理到的為準。','先處理的第一個版本為準，晚到的收到衝突通知。',[["後到的覆蓋先到的","會讓先提交的人資料消失。"],["兩份都丟棄","違反資料不可丟失。"],["隨機選一份","不可預測。"]]),
+  MC('sd15-s05-q2','系統怎麼處理那個發生衝突的使用者？','sd15-s05-p02','兩個版本都保留，讓使用者自己決定。','把本機副本與伺服器最新版本都顯示出來。',[["直接丟掉他的修改","資料丟失不可接受。"],["自動合併，不通知他","可能合併錯誤且他不知情。"],["鎖住檔案不讓他編輯","題目沒有採用鎖定策略。"]]),
+  MC('sd15-s05-q3','為什麼不乾脆自動合併就好？','sd15-s05-p02','系統無法知道哪一份才是使用者想要的。','把決定權交回給人比替他猜錯安全。',[["因為合併演算法不存在","存在，但不保證正確。"],["因為合併太慢","主要理由不是效能。"],["因為檔案太大","與大小無關。"]]),
+  MC('sd15-s05-q4','多人即時協作編輯在這一題的定位是？','sd15-s05-p03','第一步就明確排除了。','超出設計範圍，需要另一套技術。',[["本章的核心功能","被明確排除。"],["用衝突副本就能解決","即時協作需要不同的方法。"],["只要加鎖就能解決","不是本章的解法。"]])
  ]
 },
+
 {
- id:'sd15-s06',order:6,title:'Metadata Versioning：Atomic Commit、Rename、Delete、Trash',duration:'38–54 分鐘',summary:'讓 file logical identity 穩定，content version immutable；move/rename 只改 metadata，delete/trash 用 state/revision 傳播。',
- research:[{label:'Google Drive API — Files resource',url:'https://developers.google.com/workspace/drive/api/reference/rest/v3/files'}],
+ id:'sd15-s06',order:6,title:'高階設計：十個構成元素各自負責什麼',duration:'38–54 分鐘',summary:'把整張圖攤開，一個一個講清楚。重點不是背下十個方塊，而是看出「上傳位元組」與「其他所有工作」被刻意分成了兩條線。',
+ research:[{label:'How We\'ve Scaled Dropbox',url:'https://www.youtube.com/watch?v=PE4gwstWhmc'}],
  pages:[
-  {id:'sd15-s06-p01',title:'File ID 穩定，Version ID 變化',blocks:[
-   {type:'compare',items:[['file_id','邏輯文件身份，rename/move 後不變。'],['version_id','每次 content commit 新版本。'],['chunk/object IDs','immutable bytes blocks。']]}
+  {id:'sd15-s06-p01',title:'整張圖',blocks:[
+   {type:'code',text:'                          使用者（瀏覽器／行動 App）\n                    ┌───────────┼────────────── 長輪詢 ──────┐\n                    ▼           ▼                            ▼\n              區塊伺服器    負載平衡器                     通知服務 ──▶ 離線備份佇列\n                    │           │                            ▲\n                    │           ▼                            │\n                    │      API 伺服器 ───────────────────────┘\n                    │        │      │\n                    ▼        ▼      ▼\n              雲端儲存系統  Metadata  Metadata\n                    │        快取      資料庫\n                    ▼\n              冷儲存系統'},
+   {type:'callout',title:'先看出這一件事',text:'使用者有兩條往下的線：一條進負載平衡器與 API 伺服器，另一條直接進區塊伺服器。API 伺服器負責的是「上傳流程以外幾乎所有的其他工作」——真正的檔案位元組不經過它。'}
   ]},
-  {id:'sd15-s06-p02',title:'Rename/Move 是 Metadata Transaction',blocks:[
-   {type:'p',text:'更新 parent_id/name/revision，寫 change event；不必搬 binary。Directory uniqueness rule（同 parent 是否允許同名）由產品定義。'}
+  {id:'sd15-s06-p02',title:'負責搬位元組的那三個',blocks:[
+   {type:'compare',items:[['區塊伺服器','把檔案切成一個一個的區塊，再上傳到雲端儲存系統。每個區塊都有唯一而不重複的雜湊值，保存在 metadata 資料庫中。要重建檔案時，區塊會以特定順序重新連結起來。'],['雲端儲存系統','檔案會先被切分成許多比較小的區塊，然後再保存到雲端儲存系統中。'],['冷儲存系統','特別設計用來儲存比較不活躍的資料，也就是長時間不會被存取的檔案。']]},
+   {type:'callout',title:'區塊大小',text:'可以用 Dropbox 的設定作為參考：區塊最大尺寸設定為 4 MB。一個 10 GB 的檔案，就是 2,560 個區塊。'}
   ]},
-  {id:'sd15-s06-p03',title:'Delete 先 Tombstone，再 GC',blocks:[
-   {type:'stepper',steps:[['Trash/Delete','metadata state + revision'],['Sync','其他 devices 收到 deletion event'],['Retention','保留復原窗口'],['GC','確認 retention/refs 後移除 bytes']]}
+  {id:'sd15-s06-p03',title:'負責其他所有事的那些',blocks:[
+   {type:'compare',items:[['負載平衡器','在 API 伺服器之間平均分配請求。'],['API 伺服器','上傳流程以外幾乎所有的其他工作：驗證身份、管理個人檔案、更新檔案的 metadata。'],['metadata 資料庫','儲存使用者、檔案、區塊、版本等等的 metadata。檔案本身全都存在雲端，資料庫內容只包含 metadata。'],['metadata 快取','有些 metadata 會進行快取，以便能夠快速檢索。'],['通知服務','一個發佈者／訂閱者系統，在添加／編輯／刪除檔案時通知相關客戶端，讓他們下載最新的變動。'],['離線備份佇列','客戶端離線而無法下載最新變動時，先把相關資訊儲存起來，隨後客戶端再度連線時就進行同步。']]}
   ]}],
  quiz:[
-  MC('sd15-s06-q1','Rename 後應變的是 file_id 還是 metadata？','sd15-s06-p01','file_id 穩定，name/parent/revision 變。','Metadata 變，logical ID 不變。',[["每次 rename 產生新 file_id","會破壞 sync refs。"],["重寫所有 bytes","不需要。"],["只改 client UI 不寫 server","其他裝置看不到。"]]),
-  MC('sd15-s06-q2','Version ID 為何 immutable？','sd15-s06-p01','方便 history、checksum、cache、conflict base revision。','每次修改建立新版本，不原地改舊版本。',[["為了不能 rollback","相反可 rollback。"],["為了省 storage 到 0","不是。"],["只為排序 folder","不是。"]]),
-  MC('sd15-s06-q3','Delete 為何先 tombstone？','sd15-s06-p03','離線/其他 device 需要知道這筆刪除，而不是資料憑空消失。','讓 deletion 可同步/復原，再延後 GC。',[["因為 object storage 不能 delete","可以。"],["只為 audit UI","不只。"],["讓 bytes 永不刪","仍可 GC。"]]),
-  MC('sd15-s06-q4','Move folder 最重要 atomicity？','sd15-s06-p02','namespace metadata 更新與 revision/change event 一致。','避免一半 client 看舊 parent、一半看無法解釋狀態。',[["所有 child bytes 必須搬物理位置","不一定。"],["一定全檔重傳","不需要。"],["只改 CDN cache","不是 source of truth。"]])
+  MC('sd15-s06-q1','區塊伺服器的職責是？','sd15-s06-p02','把檔案切成區塊再上傳到雲端儲存。','切分檔案成區塊並上傳。',[["驗證使用者身份","那是 API 伺服器的工作。"],["通知其他客戶端","那是通知服務。"],["儲存 metadata","那是 metadata 資料庫。"]]),
+  MC('sd15-s06-q2','API 伺服器負責什麼？','sd15-s06-p03','它負責上傳流程以外幾乎所有的其他工作。','驗證身份、管理個人檔案、更新 metadata。',[["搬運檔案的位元組","那走區塊伺服器。"],["儲存檔案內容","檔案在雲端儲存系統。"],["把檔案切成區塊","那是區塊伺服器。"]]),
+  MC('sd15-s06-q3','本章參考的區塊最大尺寸是？','sd15-s06-p02','用 Dropbox 的設定作為參考。','4 MB。',[["10 GB","那是單檔上限。"],["500 KB","那是平均檔案大小。"],["256 KB","不是本章採用的數字。"]]),
+  MC('sd15-s06-q4','離線備份佇列存在的理由？','sd15-s06-p03','客戶端離線時變動不能就這樣消失。','先把變動存起來，客戶端回線後再同步。',[["加速上傳","與上傳速度無關。"],["儲存檔案位元組","它存的是變動資訊。"],["取代 metadata 資料庫","不是。"]])
  ]
 }
+
 );
 })();

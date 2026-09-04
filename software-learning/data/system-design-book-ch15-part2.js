@@ -3,132 +3,153 @@ const chapter=window.SYSTEM_DESIGN_CHAPTER_15;if(!chapter)return;
 const O=(id,text,correct,misconception='')=>({id,text,correct,misconception});
 const MC=(id,question,page,explanation,correct,wrong)=>({id,question,reviewPageId:page,explanation,options:[O(id+'-c',correct,true),...wrong.map((x,i)=>O(id+'-w'+(i+1),x[0],false,x[1]))]});
 chapter.sections.push(
+
 {
- id:'sd15-s07',order:7,title:'Change Log 與 Incremental Sync：Page Token 是 Client Cursor',duration:'42–60 分鐘',summary:'用 per-user/per-drive ordered change feed 讓裝置只抓「上次之後」的 metadata changes；token/cursor 是恢復同步的關鍵。',
- research:[{label:'Google Drive API — changes.getStartPageToken',url:'https://developers.google.com/workspace/drive/api/reference/rest/v3/changes/getStartPageToken'},{label:'Google Drive API — changes.list',url:'https://developers.google.com/workspace/drive/api/reference/rest/v3/changes/list'}],
+ id:'sd15-s07',order:7,title:'區塊伺服器：切分、壓縮、加密，以及只傳變動的部分',duration:'38–54 分鐘',summary:'對定期更新的大型檔案來說，每次都重傳整份是災難。兩個最佳化把流量壓下來：差異同步與壓縮。',
+ research:[{label:'The rsync algorithm',url:'https://rsync.samba.org/tech_report/'},{label:'librsync',url:'https://github.com/librsync/librsync'}],
  pages:[
-  {id:'sd15-s07-p01',title:'Full Scan 不可擴展',blocks:[
-   {type:'p',text:'每次 App 開啟都 list 使用者全部 1M files 再比 modified_time 會浪費 DB/network。更好的方式是 durable ordered change log + cursor/page token。'}
+  {id:'sd15-s07-p01',title:'兩個最佳化的做法',blocks:[
+   {type:'p',text:'對於定期更新的大型檔案來說，如果每次變動都要重新發送整個檔案，肯定會佔用大量的頻寬。這裡提出兩種最佳化的做法，希望能夠最大程度減少傳輸的網路流量。'},
+   {type:'compare',items:[['差異同步（delta sync）','如果檔案有變動，就用同步演算法只同步修改有變動的區塊，而不需要修改整個檔案。'],['壓縮','針對區塊套用壓縮，顯著減小資料的大小。可根據檔案類型運用不同的壓縮演算法——例如 gzip 與 bzip2 可用於文字檔，圖片與影片則需要不同的壓縮演算法。']]}
   ]},
-  {id:'sd15-s07-p02',title:'Cursor Flow',blocks:[
-   {type:'stepper',steps:[['Bootstrap','拿 startPageToken / full snapshot。'],['Listen','收到 push 或定期 wake。'],['List changes','pageToken=T123。'],['Apply','依 revision 更新 local DB。'],['Advance','成功套用後存 newStartPageToken。']]}
+  {id:'sd15-s07-p02',title:'新檔案的四個步驟',blocks:[
+   {type:'stepper',steps:[['切分','把檔案切分成比較小的好幾個區塊。'],['壓縮','運用壓縮演算法對每個區塊進行壓縮。'],['加密','為了確保安全性，每個區塊在發送到雲端儲存系統之前都會進行加密。'],['上傳','區塊全都會被上傳到雲端儲存系統。']]},
+   {type:'callout',title:'注意順序',text:'先壓縮再加密。加密後的資料接近隨機，幾乎壓不動；順序反過來，壓縮這一步就等於白做。'}
   ]},
-  {id:'sd15-s07-p03',title:'Cursor 只能在 Apply 成功後前進',blocks:[
-   {type:'callout',title:'Exactly-once-like Client Apply',text:'如果先存新 token 再 crash，會永久跳過尚未套用 changes；應先 idempotent apply，再 durable advance cursor。'},
-   {type:'p',text:'Change event 可重送，因此 local apply 需用 file_id + revision/version 判斷重複/舊事件。'}
+  {id:'sd15-s07-p03',title:'已上傳過的檔案：只傳改變的區塊',blocks:[
+   {type:'code',text:'區塊伺服器（本機端的 10 個區塊）        雲端儲存系統\n  #1  [#2]  #3   #4  [#5]                  只上傳       [#2]\n  #6   #7   #8   #9   #10       ──── 變動過的區塊 ────▶  [#5]'},
+   {type:'p',text:'如果是之前上傳過的檔案，系統並不會把整個檔案重新上傳到儲存系統，而是只傳輸其中修改過的區塊。上圖中「區塊 2」與「區塊 5」就代表變動過的區塊，因此只有這兩個區塊會被上傳。'},
+   {type:'callout',title:'把數字放進來想',text:'一個 10 GB 的檔案有 2,560 個區塊。改了其中兩個，差異同步要傳 8 MB；不做差異同步要傳 10 GB。差了一千多倍。'}
   ]}],
  quiz:[
-  MC('sd15-s07-q1','Change token 最大價值？','sd15-s07-p01','避免每次全量掃描所有 files。','增量抓上次 cursor 之後的 changes。',[["取代 object storage","不是。"],["取代 ACL","不是。"],["讓 conflict 不存在","仍可能。"]]),
-  MC('sd15-s07-q2','Client 何時 durable 保存新 token？','sd15-s07-p03','成功 apply 對應 changes 後。','Apply first, then advance cursor。',[["收到 response header 前","可能跳資料。"],["永遠不存","每次重播。"],["只在 logout","太慢。"]]),
-  MC('sd15-s07-q3','Change event 重送怎麼辦？','sd15-s07-p03','依 revision/version idempotent apply。','重複 change 不應重複副作用。',[["每次建立新 file_id","會錯。"],["直接丟棄所有事件","會漏。"],["相信 webhook exactly once","不能。"]]),
-  MC('sd15-s07-q4','Bootstrap new device 只拿未來 start token 夠嗎？','sd15-s07-p02','不夠，還需要 current snapshot/metadata，token 只追之後 changes。','先建立 base state，再追增量。',[["夠，token 包含全部 bytes","不是。"],["只需 push notification","沒有目前狀態。"],["只需 object list","還缺 metadata/ACL。"]])
+  MC('sd15-s07-q1','區塊伺服器處理新檔案的正確順序是？','sd15-s07-p02','壓縮後的資料才好加密，反過來壓不動。','切分 → 壓縮 → 加密 → 上傳。',[["切分 → 加密 → 壓縮 → 上傳","加密後的資料幾乎壓不動。"],["壓縮 → 切分 → 加密 → 上傳","要先切分才能逐區塊處理。"],["加密 → 切分 → 上傳 → 壓縮","順序完全錯誤。"]]),
+  MC('sd15-s07-q2','差異同步解決什麼問題？','sd15-s07-p01','大檔案的小改動不必重傳整份。','只同步有變動的區塊。',[["讓檔案更安全","那是加密。"],["讓檔案變小","那是壓縮。"],["避免衝突","那是衝突偵測。"]]),
+  MC('sd15-s07-q3','為什麼要先壓縮再加密？','sd15-s07-p02','加密後的資料接近隨機，壓縮率趨近於零。','順序反過來壓縮就白做了。',[["因為加密比較慢","不是順序的理由。"],["因為壓縮需要金鑰","壓縮不需要金鑰。"],["兩者順序無所謂","有明確差別。"]]),
+  MC('sd15-s07-q4','一個 10 GB 的檔案改了兩個區塊，差異同步要傳多少？','sd15-s07-p03','區塊 4 MB，兩個就是 8 MB。','約 8 MB。',[["10 GB","那是不做差異同步的情況。"],["4 MB","那是一個區塊。"],["500 KB","那是平均檔案大小。"]])
  ]
 },
+
 {
- id:'sd15-s08',order:8,title:'Push Notification：Wake-up Signal，不是 Change Payload Source',duration:'34–50 分鐘',summary:'用 watch/webhook 降低 polling；通知可能重複/延遲，因此真正 correctness 仍由 durable change list/cursor 保證。',
- research:[{label:'Google Drive API — Notifications for resource changes',url:'https://developers.google.com/workspace/drive/api/guides/push'},{label:'Google Drive API — changes.watch',url:'https://developers.google.com/workspace/drive/api/reference/rest/v3/changes/watch'}],
+ id:'sd15-s08',order:8,title:'高度一致性與 metadata 資料表結構',duration:'36–52 分鐘',summary:'不同裝置同時看同一個檔案，內容不一致是不可接受的——這一條直接決定了快取策略與資料庫的選型。',
+ research:[{label:'ACID',url:'https://en.wikipedia.org/wiki/ACID'}],
  pages:[
-  {id:'sd15-s08-p01',title:'Notification 只告訴你「有事發生」',blocks:[
-   {type:'diagram',nodes:[['Server change','revision 208'],['Webhook/Push','wake device/backend'],['Client','changes.list cursor=201'],['Apply','202..208'],['Cursor','save 208']],caption:'Push 不需要承載所有 change details。'}
+  {id:'sd15-s08-p01',title:'為什麼這裡不能接受終究一致性',blocks:[
+   {type:'p',text:'預設情況下，我們的系統對一致性有很高的要求。不同客戶端同時顯示同一個檔案時，內容不一致是不可接受的。系統針對 metadata 快取與資料庫層，都必須提供很高的一致性。'},
+   {type:'p',text:'但預設情況下，記憶體快取會採用終究一致性（eventual consistency）模型，也就是說不同的副本有可能具有不同的資料。'},
+   {type:'bullets',items:['快取副本與 master 主資料庫的資料必須保持一致。','在寫入資料庫時快取內容就會失效，這樣可確保快取與資料庫保有相同的值。']}
   ]},
-  {id:'sd15-s08-p02',title:'Push Channel 有 Lifecycle',blocks:[
-   {type:'bullets',items:['channel expiration / renew','auth/verification token','duplicate/out-of-order notification tolerance','webhook retries','fallback periodic poll/catch-up']}
+  {id:'sd15-s08-p02',title:'所以選了關聯式資料庫',blocks:[
+   {type:'p',text:'關聯式資料庫要實現高度一致性並不困難，因為它會一直維護著資料的 ACID（Atomicity 原子性、Consistency 一致性、Isolation 隔離性、Durability 耐久性）這幾個屬性。'},
+   {type:'p',text:'不過在預設情況下，NoSQL 資料庫並不會支援 ACID 這幾個屬性，必須另外透過程式碼的方式才能把 ACID 屬性整合到同步邏輯中。我們的設計選擇採用關聯式資料庫，因為它天生具有 ACID 的原生支援。'},
+   {type:'callout',title:'和第 14 章對照著看',text:'影片平台可以接受觀看數晚幾秒更新，所以那裡選了為高寫入優化的儲存；雲端硬碟不能接受兩台裝置看到不同的檔案，所以這裡選了 ACID。同樣的問題，不同的需求，不同的答案。'}
   ]},
-  {id:'sd15-s08-p03',title:'Lost Push 不應造成 Lost Data',blocks:[
-   {type:'p',text:'裝置若錯過 push，下一次啟動/heartbeat/periodic sync 仍從 cursor 拉 change log。Notification 提升 freshness，不承擔 durability。'}
+  {id:'sd15-s08-p03',title:'metadata 的六張表',blocks:[
+   {type:'code',text:'user(user_id, user_name, created_at)\ndevice(device_id, user_id, last_logged_in_at)\nworkspace(id, owner_id, is_shared, created_at)\nfile(id, file_name, relative_path, is_directory,\n     lastest_version, checksum, workspace_id,\n     created_at, last_modified)\nfile_version(id, file_id, device_id, version_number, last_modified)\nblock(block_id, file_version_id, block_order)'},
+   {type:'compare',items:[['user','使用者名稱、電子郵件、個人檔案照片等基本資訊。'],['device','同一個使用者可擁有很多個設備。'],['workspace','使用者的根目錄。'],['file','最新檔案相關的所有資訊。'],['file_version','檔案的版本歷史。每一行資料都是唯讀的，讓修訂歷史維持完整性。'],['block','檔案區塊的所有資訊。只要以正確的順序連結所有相應的區塊，就可以重建出任何版本的檔案。']]}
   ]}],
  quiz:[
-  MC('sd15-s08-q1','Push notification 最安全定位？','sd15-s08-p01','喚醒 client 去拉 durable changes。','Signal，不是唯一 change data。',[["唯一 source of truth","容易因漏通知丟狀態。"],["取代 cursor","不應。"],["直接放 file bytes","不適合。"]]),
-  MC('sd15-s08-q2','Webhook 漏一則通知是否應永久漏 sync？','sd15-s08-p03','不應；cursor catch-up 可補。','Periodic/reconnect changes.list 修復。',[["應，notification 必須 exactly once","不可靠假設。"],["只能 full reinstall App","過度。"],["刪 local DB","不必要。"]]),
-  MC('sd15-s08-q3','Notification channel expiration 要？','sd15-s08-p02','在到期前 renew/recreate。','管理 channel lifecycle。',[["忽略，永不過期","錯。"],["改 file_id","無關。"],["只增 cache TTL","不解。"]]),
-  MC('sd15-s08-q4','Webhook token 的用途？','sd15-s08-p02','驗證/路由 channel，不應放敏感 OAuth secret。','防 spoof / route notification。',[["儲存 file bytes","不是。"],["取代 TLS","不是。"],["當 user password","不應。"]])
+  MC('sd15-s08-q1','為什麼這一題選了關聯式資料庫？','sd15-s08-p02','高度一致性是硬需求。','它天生具有 ACID 的原生支援。',[["因為它比較快","不是選它的理由。"],["因為它可以存檔案","檔案存在雲端儲存。"],["因為 NoSQL 無法水平擴展","NoSQL 擴展性通常更好，理由是 ACID。"]]),
+  MC('sd15-s08-q2','寫入資料庫時對快取要做什麼？','sd15-s08-p01','否則快取會回舊值。','讓快取內容失效。',[["延長快取時間","會讓不一致更久。"],["什麼都不用做","快取會與資料庫不一致。"],["把快取切成唯讀","不解決一致性。"]]),
+  MC('sd15-s08-q3','file_version 資料表為什麼每一行都是唯讀的？','sd15-s08-p03','原地修改舊版本會破壞歷史。','讓檔案修訂歷史維持一定的完整性。',[["為了節省空間","唯讀不會省空間。"],["為了加快查詢","不是主要理由。"],["因為資料庫不支援更新","支援，是設計選擇。"]]),
+  MC('sd15-s08-q4','要重建某個版本的檔案，需要什麼？','sd15-s08-p03','block 表存了 block_order。','以正確的順序連結該版本的所有區塊。',[["只要檔案名稱","不足以取得內容。"],["只要最新版本的區塊","舊版本需要它自己的區塊。"],["只要 checksum","校驗值不含內容。"]])
  ]
 },
+
 {
- id:'sd15-s09',order:9,title:'Offline Conflict：Base Revision、Optimistic Concurrency、Keep Both',duration:'42–60 分鐘',summary:'兩裝置離線修改同一 file 時，不能靠 last-write-wins 無腦覆蓋；以 base revision 偵測 concurrent edit，再依檔案類型決策。',
- research:[{label:'ByteByteGo — Google Drive sync conflicts',url:'https://bytebytego.com/courses/system-design-interview/design-google-drive'}],
+ id:'sd15-s09',order:9,title:'上傳流程：兩條平行的路，與 pending 這個狀態',duration:'40–56 分鐘',summary:'一次上傳其實同時送出兩個請求——一個寫 metadata，一個搬位元組。中間那個 pending 狀態，就是「位元組還沒到齊」的誠實表示。',
+ research:[{label:'Google Drive API — Manage uploads',url:'https://developers.google.com/workspace/drive/api/guides/manage-uploads'}],
  pages:[
-  {id:'sd15-s09-p01',title:'Conflict 的定義',blocks:[
-   {type:'code',text:'Server current revision = 10\nLaptop edit base_revision = 10 → commit revision 11\nPhone offline edit base_revision = 10 → server is now 11 → conflict'},
-   {type:'p',text:'Phone 的修改不是「舊」而已，而是基於同一 ancestor 的 concurrent branch。'}
+  {id:'sd15-s09-p01',title:'兩個請求同時出發',blocks:[
+   {type:'lead',text:'有兩個請求以平行的方式發送出來：一個是添加檔案的 metadata 詮釋資料，另一個是把檔案上傳到雲端儲存系統。這兩個請求都是源自於客戶端 #1。'},
+   {type:'stepper',steps:[['1. 添加 metadata','客戶端 1 發送出一個請求，要添加新檔案的 metadata。'],['2. 狀態設為 pending','把新檔案的 metadata 保存到 metadata 資料庫，然後把檔案上傳狀態修改為「pending」（待處理）。'],['3. 通報通知服務','向通知服務發出通報，添加了一個新檔案。'],['4. 通知客戶端 2','通知服務會通報相關客戶端，有個新檔案正在上傳中。']]}
   ]},
-  {id:'sd15-s09-p02',title:'Whole-file 常用 Keep Both / Conflict Copy',blocks:[
-   {type:'compare',items:[['Binary/Office file','難自動 merge，保留 server + conflict copy。'],['Plain text','可嘗試 3-way merge。'],['Collaborative document','需要 OT/CRDT/operation log，是另一層系統。']]}
+  {id:'sd15-s09-p02',title:'另一條路：位元組',blocks:[
+   {type:'stepper',steps:[['2.1 上傳檔案內容','客戶端 #1 把檔案內容上傳到區塊伺服器。'],['2.2 切分並上傳','區塊伺服器把檔案切分成好幾個區塊，並進行壓縮、加密，然後再上傳到雲端儲存系統。'],['2.3 回調','檔案上傳之後，雲端儲存系統會觸發上傳完成的回調程序（callback），這個請求會被發送到 API 伺服器。'],['2.4 狀態改為 uploaded','metadata 資料庫內的檔案狀態修改為「uploaded」（已上傳）。'],['2.5 通報通知服務','向通知服務發出通報，檔案狀態已被修改為 uploaded。'],['2.6 通知客戶端 2','通知服務會通報相關客戶端，檔案已完整上傳。']]}
   ]},
-  {id:'sd15-s09-p03',title:'LWW 很簡單，但可能默默丟資料',blocks:[
-   {type:'p',text:'單純比較 client timestamp 會受 clock skew，且「較晚」不等於應該覆蓋另一人的工作。重要檔案至少需 revision precondition / ETag / version check。'}
+  {id:'sd15-s09-p03',title:'pending 為什麼一定要存在',blocks:[
+   {type:'callout',title:'這是本章最值得記住的一個設計',text:'檔案的 metadata 先寫進去（所以別的裝置馬上知道「有這個檔案，正在上傳」），但狀態是 pending；只有雲端儲存系統確認所有位元組都收下了，回調才會把狀態翻成 uploaded。'},
+   {type:'compare',items:[['如果沒有 pending','metadata 一寫入就顯示成可用，別的裝置去下載會拿到不完整或根本不存在的內容。'],['如果不先寫 metadata','其他裝置在整個上傳期間完全不知道有這個檔案，使用者會覺得同步很慢。']]},
+   {type:'p',text:'換句話說，pending 讓系統可以同時做到「立刻讓別人知道」與「絕不讓別人讀到半個檔案」。這也直接回答了那個關鍵問題：位元組傳到一半伺服器掛了，檔案不會被當成已完成——它會停在 pending，而不是變成一個壞掉的檔案。'}
   ]}],
  quiz:[
-  MC('sd15-s09-q1','Conflict detection 最重要欄位？','sd15-s09-p01','Client edit 的 base revision 與 server current revision。','Version/revision precondition。',[["只看 filename","不足。"],["只看 client clock","不可靠。"],["只看 file size","不能判 concurrent edit。"]]),
-  MC('sd15-s09-q2','Binary file concurrent edit 常見安全策略？','sd15-s09-p02','Keep both / conflict copy。','避免靜默覆蓋。',[["永遠 byte-level merge","通常不可行。"],["直接丟 client 版本","可能丟資料。"],["用 DNS 合併","無關。"]]),
-  MC('sd15-s09-q3','LWW by client timestamp 最大風險？','sd15-s09-p03','Clock skew + 靜默遺失 concurrent update。','不能把較晚時間當成正確版本。',[["一定提高 durability","不一定。"],["只影響 UI 排序","也影響 data loss。"],["Server 沒有 clock","不是。"]]),
-  MC('sd15-s09-q4','Google Docs 類即時共同編輯為何另題？','sd15-s09-p02','需要 operation-level concurrency/merge，而非 whole-file version。','OT/CRDT/operation log 複雜度更高。',[["因為文字不能存 object storage","不是。"],["因為不能 offline","也可設計。"],["只差 UI","不是。"]])
+  MC('sd15-s09-q1','一次上傳同時送出的兩個平行請求是？','sd15-s09-p01','兩個都源自客戶端 #1。','添加檔案 metadata，以及把檔案上傳到雲端儲存。',[["上傳與下載","下載是另一個流程。"],["通知與備份","那是後續步驟。"],["加密與壓縮","那是區塊伺服器內部的步驟。"]]),
+  MC('sd15-s09-q2','檔案狀態什麼時候才會從 pending 變成 uploaded？','sd15-s09-p02','要等雲端儲存確認收下所有區塊。','雲端儲存系統觸發上傳完成的回調之後。',[["metadata 寫入資料庫時","那時位元組還沒送完。"],["區塊伺服器開始切分時","才剛開始。"],["通知服務發出通知時","通知是結果不是原因。"]]),
+  MC('sd15-s09-q3','位元組傳到一半伺服器掛了，檔案會怎樣？','sd15-s09-p03','回調永遠不會發生，狀態就不會翻成 uploaded。','停在 pending，不會被當成已完成的檔案。',[["變成一個壞掉但可下載的檔案","pending 就是為了防止這件事。"],["metadata 會自動被刪除","不會自動刪除。"],["其他裝置會下載到半個檔案","狀態不是 uploaded 就不會被當成可用。"]]),
+  MC('sd15-s09-q4','為什麼要先寫 metadata 再傳位元組，而不是等傳完再寫？','sd15-s09-p03','兩件事要同時成立。','讓其他裝置立刻知道有檔案正在上傳，同時不讓他們讀到半個檔案。',[["因為 metadata 比較小","不是理由。"],["因為資料庫比較快","不是理由。"],["因為區塊伺服器需要 metadata 才能切分","切分不需要先寫入資料庫。"]])
  ]
 },
+
 {
- id:'sd15-s10',order:10,title:'Sharing、ACL、Link Sharing 與 Security Boundary',duration:'38–56 分鐘',summary:'設計 user/group ACL、link token、inheritance、revocation、audit 與 signed download；cache 不能繞過權限。',
- research:[{label:'Google Drive API — Permissions resource',url:'https://developers.google.com/workspace/drive/api/reference/rest/v3/permissions'}],
+ id:'sd15-s10',order:10,title:'下載流程與通知服務：為什麼選長輪詢',duration:'36–52 分鐘',summary:'別人改了檔案，你怎麼知道？線上就推播、離線就進佇列；而在推播的兩種做法裡，這一題刻意選了比較「舊」的那個。',
+ research:[{label:'Dropbox tech talk — long polling',url:'https://www.youtube.com/watch?v=PE4gwstWhmc'}],
  pages:[
-  {id:'sd15-s10-p01',title:'Authorization 在 Metadata Plane',blocks:[
-   {type:'bullets',items:['owner','reader/editor roles','user/group/domain/link principals','folder inheritance / shared drive policy','revocation revision']}
+  {id:'sd15-s10-p01',title:'客戶端怎麼知道有變動',blocks:[
+   {type:'compare',items:[['客戶端在線上','通知服務會通知它某個地方進行了修改，所以它必須去下載最新的資料。'],['客戶端不在線上','變動過的資料會保存到快取中；當客戶端再次上線時，就會下載最新的變動。']]},
+   {type:'p',text:'客戶端一旦知道檔案有變動，就會先透過 API 伺服器請求 metadata，然後再下載變動過的區塊，以構建出相應的檔案。'}
   ]},
-  {id:'sd15-s10-p02',title:'Signed Download URL 要短效',blocks:[
-   {type:'p',text:'Client 先向 API 驗 ACL，再取得短效 signed URL 直讀 object/CDN。撤權後要讓 token 很快過期，或支援 revocation/versioned auth。'}
+  {id:'sd15-s10-p02',title:'下載流程的九個步驟',blocks:[
+   {type:'stepper',steps:[['1','通知服務通報客戶端 #2，檔案在其他位置被改動了。'],['2','客戶端 #2 發送請求以取得 metadata。'],['3','API 伺服器向 metadata 資料庫請求變動相關的 metadata。'],['4','metadata 被送回到 API 伺服器。'],['5','客戶端 #2 取得 metadata。'],['6','客戶端向區塊伺服器發送請求，以下載所需的區塊。'],['7','區塊伺服器從雲端儲存系統下載一些區塊。'],['8','雲端儲存系統把區塊送回區塊伺服器。'],['9','客戶端 #2 下載所有新區塊，再重新構建出整個檔案。']]}
   ]},
-  {id:'sd15-s10-p03',title:'Cache Key 必須包含 Auth Context 或只 Cache Public Data',blocks:[
-   {type:'callout',title:'嚴重漏洞',text:'若 private file response 只以 file_id 做 shared cache key，A 使用者的授權結果可能被 B 命中。'},
-   {type:'bullets',items:['cache authorization decision 短 TTL','permission revision in key','private bytes signed token','audit share/download events']}
+  {id:'sd15-s10-p03',title:'長輪詢 vs WebSocket：為什麼選了長輪詢',blocks:[
+   {type:'compare',items:[['通訊是單向的','通知服務並不需要雙向通訊。伺服器會把檔案變動的資訊發送給客戶端，不過並不會有反向的通訊。'],['頻率不高也不突發','WebSocket 很適合用來進行雙向即時溝通（例如聊天 App）。不過對於 Google Drive 來說，通知的頻率比較低，而且也不會突然有資料暴多的情況。']]},
+   {type:'p',text:'透過長輪詢的做法，每個客戶端都會建立一個連往通知服務的長輪詢連結。如果偵測到檔案有變動，客戶端就會關閉長輪詢連結——關閉這個連結就表示客戶端必須連接到 metadata 伺服器，以下載到最新的變動。如果收到了回應，或是連結已經超時，客戶端就會立即發送新請求，以重新讓連結保持開啟的狀態。'},
+   {type:'callout',title:'選技術的方式',text:'不是選最新的，而是選最貼合流量形狀的。單向、低頻、不突發——這三個特性讓長輪詢在這裡足夠，而且更簡單。'}
   ]}],
  quiz:[
-  MC('sd15-s10-q1','Private file direct download 前要？','sd15-s10-p02','API 驗 ACL 再發短效 signed URL/token。','Authorization first。',[["只知道 object key 就能下載","不安全。"],["只靠檔名難猜","不是 auth。"],["只靠 CDN hit","不代表有權。"]]),
-  MC('sd15-s10-q2','撤權後 signed URL 有效 7 天，問題？','sd15-s10-p02','被撤權者仍可持 token 下載很久。','Token TTL / revocation window 太大。',[["提高 availability","不是主要。"],["只影響 metadata","也影響 bytes。"],["沒有問題","有 security window。"]]),
-  MC('sd15-s10-q3','ACL cache 只用 file_id key 的風險？','sd15-s10-p03','不同 requester auth context 混淆。','Authorization cache leak。',[["只會 cache miss","可能更嚴重。"],["只讓 DB 變慢","不是。"],["file_id 太短","不是根因。"]]),
-  MC('sd15-s10-q4','Link sharing token 應具備？','sd15-s10-p01','高 entropy、可撤銷/過期、scope 清楚。','不可猜且可治理。',[["用遞增 1,2,3","易猜。"],["永久有效最好","風險高。"],["放 user password 在 URL","嚴重問題。"]])
+  MC('sd15-s10-q1','客戶端離線時，變動會怎麼處理？','sd15-s10-p01','離線備份佇列先存起來。','保存到快取／佇列中，等客戶端再次上線時下載。',[["直接丟棄","會造成資料不同步。"],["強制客戶端上線","做不到。"],["由其他客戶端代為接收","不是設計方式。"]]),
+  MC('sd15-s10-q2','下載流程中，客戶端拿到 metadata 之後做什麼？','sd15-s10-p02','有 metadata 才知道要抓哪些區塊。','向區塊伺服器請求下載所需的區塊。',[["直接向雲端儲存下載","客戶端經由區塊伺服器。"],["重新上傳整個檔案","那是上傳流程。"],["通知其他客戶端","不是它的職責。"]]),
+  MC('sd15-s10-q3','為什麼選長輪詢而不是 WebSocket？','sd15-s10-p03','通知服務只需要伺服器推給客戶端。','通訊是單向的，而且通知頻率低、不突發。',[["因為 WebSocket 不可靠","它很可靠，只是不需要。"],["因為長輪詢比較即時","WebSocket 更即時。"],["因為長輪詢比較省頻寬","不是主要理由。"]]),
+  MC('sd15-s10-q4','客戶端偵測到檔案有變動時，會對長輪詢連結做什麼？','sd15-s10-p03','關閉連結代表要去抓最新變動。','關閉它，然後去 metadata 伺服器下載變動，再重新建立連結。',[["一直保持不動","那就無法取得變動。"],["改成 WebSocket","不會切換協定。"],["等待伺服器主動推送檔案","伺服器只推通知不推檔案。"]])
  ]
 },
+
 {
- id:'sd15-s11',order:11,title:'Client Sync Engine：Local DB、File Watcher、Offline Queue、Reconnect',duration:'42–60 分鐘',summary:'真正 Drive client 需要本機 metadata index、filesystem watcher、upload queue、server cursor 與 retry/backoff；不能每次只掃資料夾。',
- research:[{label:'ByteByteGo — Google Drive sync flow',url:'https://bytebytego.com/courses/system-design-interview/design-google-drive'}],
+ id:'sd15-s11',order:11,title:'節省儲存空間：去重、版本上限與冷儲存',duration:'32–46 分鐘',summary:'支援版本歷史又要跨區複製，儲存空間很快就會被塞爆。三個技術把帳單壓下來，而且都不必犧牲可靠性。',
+ research:[{label:'Amazon S3 Glacier',url:'https://aws.amazon.com/glacier/faqs/'}],
  pages:[
-  {id:'sd15-s11-p01',title:'Client 也有一個小型 Database',blocks:[
-   {type:'bullets',items:['file_id ↔ local path','server revision','local content hash','sync state/pending op','last change token','conflict status']}
+  {id:'sd15-s11-p01',title:'問題：版本歷史 × 多資料中心',blocks:[
+   {type:'p',text:'為了支援檔案版本歷史記錄並確保一定的可靠性，我們會把同一個檔案的多個版本儲存在多個資料中心。如果很頻繁備份所有檔案的修訂資訊，儲存空間很快就會被塞爆。'},
+   {type:'p',text:'注意這裡的乘法效應：版本數 × 複本數。留 10 個版本、複製到 2 個區域，實際佔用就是邏輯大小的 20 倍。'}
   ]},
-  {id:'sd15-s11-p02',title:'兩條同步方向',blocks:[
-   {type:'compare',items:[['Local → Cloud','Filesystem watcher → debounce → hash/chunk → upload → commit。'],['Cloud → Local','Push/wake → changes.list → metadata diff → download missing content → atomic local replace。']]}
+  {id:'sd15-s11-p02',title:'三個降低成本的技術',blocks:[
+   {type:'compare',items:[['消除重複資料區塊','在帳號的這個層級上消除冗餘的區塊，是一種可節省空間的簡便方法。如果兩個區塊具有相同的雜湊值，就代表是相同的區塊。'],['採用智慧型資料備份策略','設定限制：針對所要儲存的版本數量設定限制，超過限制時最老的版本就會被新版本替換掉。'],['只保留有價值的版本','有些檔案經常需要大量修改，如果保存每一個編輯版本，可能短時間內就保存 1,000 次以上。可以限制版本數量，也可以給新版本比較高的權重。']]},
+   {type:'p',text:'透過實驗有助於確定所要保存的最佳版本數量——這是一個可以量測、可以調整的參數，而不是拍腦袋決定的常數。'}
   ]},
-  {id:'sd15-s11-p03',title:'Offline Queue 也要 Idempotent',blocks:[
-   {type:'p',text:'Rename/upload/delete operation 可帶 client_op_id；網路 timeout 重送時 server 不應建立兩個版本或重複 delete。'},
-   {type:'callout',title:'Atomic Local Replace',text:'下載新檔先寫 temp + checksum，再 rename replace，避免 crash 留半檔。'}
+  {id:'sd15-s11-p03',title:'冷儲存',blocks:[
+   {type:'p',text:'我們可以把比較不常使用的資料移到冷儲存系統。冷資料（cold data）指的是好幾個月甚至好幾年都沒被用到的資料。像 Amazon S3 的 glacier（冰川）就屬於這樣的冷儲存系統，其價格比 S3 便宜很多。'},
+   {type:'callout',title:'代價是什麼',text:'便宜換來的是取回速度。冷儲存適合「幾乎不會被讀，但絕對不能丟」的資料——舊版本正是最典型的例子。'}
   ]}],
  quiz:[
-  MC('sd15-s11-q1','Client local DB 為何重要？','sd15-s11-p01','保存 server revision/cursor/local mapping，避免每次全掃與支援 offline。','Sync engine 的 durable local state。',[["只為 UI theme","不是。"],["取代 cloud metadata DB","不是。"],["只存 password","不應。"]]),
-  MC('sd15-s11-q2','Local watcher event 為何要 debounce？','sd15-s11-p02','某些 editor save 會產生多次暫存/rename/write event。','合併短時間 filesystem noise。',[["讓 conflict 消失","不會。"],["讓 file 不需 hash","仍可能需要。"],["因為 watcher 不可靠所以不用","仍可配 periodic scan。"]]),
-  MC('sd15-s11-q3','client_op_id 解什麼？','sd15-s11-p03','Retry ambiguous outcome 時 server 可 dedup。','Idempotent offline operation。',[["讓網路永不斷","不會。"],["取代 file_id","不是。"],["只做 analytics","不只。"]]),
-  MC('sd15-s11-q4','下載到一半 App crash，怎麼避免本機原檔被毀？','sd15-s11-p03','寫 temp、驗 checksum、atomic rename replace。','Two-phase local replace。',[["直接覆寫原檔 streaming","crash 可能半檔。"],["刪除舊檔後再下載","風險更高。"],["只靠 UI progress","沒保護資料。"]])
+  MC('sd15-s11-q1','怎麼判斷兩個區塊是相同的區塊？','sd15-s11-p02','雜湊值相同即視為相同區塊。','比對區塊的雜湊值。',[["比對檔案名稱","不同檔案可以有相同區塊。"],["比對上傳時間","無關。"],["比對檔案大小","大小相同不代表內容相同。"]]),
+  MC('sd15-s11-q2','版本數量設定上限時，超過限制會怎樣？','sd15-s11-p02','用固定的版本數量換取可控的儲存成本。','最老的版本會被新版本替換掉。',[["拒絕新的上傳","不合理。"],["刪除整個檔案","會造成資料丟失。"],["自動移到冷儲存並全部保留","那是另一個技術。"]]),
+  MC('sd15-s11-q3','冷儲存最適合放什麼資料？','sd15-s11-p03','幾乎不會被讀，但絕對不能丟。','好幾個月甚至好幾年都沒被存取的資料，例如舊版本。',[["最新版本的檔案","經常被讀取。"],["metadata","需要快速查詢。"],["正在上傳中的區塊","需要立即可用。"]]),
+  MC('sd15-s11-q4','為什麼版本歷史會讓儲存成本暴增？','sd15-s11-p01','兩個倍數相乘。','版本數會再乘上跨資料中心的複本數。',[["因為版本比原檔大","版本不會比較大。"],["因為版本不能壓縮","可以壓縮。"],["因為版本要存在冷儲存","冷儲存反而更便宜。"]])
  ]
 },
+
 {
- id:'sd15-s12',order:12,title:'Multi-Region、Durability、Backup、Observability 與完整收尾',duration:'42–60 分鐘',summary:'把 metadata replication、object durability、change log ordering、regional routing、DR、security/audit 與 sync SLI 串成可營運系統。',
- research:[{label:'ByteByteGo — Google Drive wrap-up',url:'https://bytebytego.com/courses/system-design-interview/design-google-drive'}],
+ id:'sd15-s12',order:12,title:'故障處理，以及第四步驟——匯整總結',duration:'40–56 分鐘',summary:'把每一個方塊都問一次「它掛了會怎樣」，再回頭談這個設計還有哪些可以走的路。',
+ research:[{label:'Dropbox security white paper',url:'https://www.dropbox.com/static/business/resources/Security_Whitepaper.pdf'}],
  pages:[
-  {id:'sd15-s12-p01',title:'Bytes 與 Metadata 的 DR 策略可以不同',blocks:[
-   {type:'compare',items:[['Object bytes','multi-AZ/region replication or erasure coding、checksum、version history。'],['Metadata','transactional DB replication、backup/PITR。'],['Change Log','durable ordered stream，cursor 可 replay。']]}
+  {id:'sd15-s12-p01',title:'每個元件掛掉時怎麼辦',blocks:[
+   {type:'compare',items:[['負載平衡器故障','第二個負載平衡器接手流量分配。負載平衡器之間通常用 heartbeat（心跳）相互監視；某個負載平衡器過了一段時間沒發送心跳，就會被認為發生了故障。'],['區塊伺服器故障','其他伺服器要接手那些未完成或待處理的工作。'],['雲端儲存系統故障','S3 儲存桶會在不同區域進行多次複製。如果檔案在某個區域無法使用，還是可以從其他區域取得。'],['API 伺服器故障','API 伺服器提供的是一種無狀態的服務。故障時流量會被負載平衡器重定向到其他 API 伺服器。'],['metadata 快取故障','快取伺服器會被複製很多次。某個節點故障時還是可以從其他節點取得資料，並啟動一部新的快取伺服器替換掉故障的那部。']]}
   ]},
-  {id:'sd15-s12-p02',title:'Sync SLI',blocks:[
-   {type:'bullets',items:['upload success/resume rate','change propagation latency','sync backlog age','conflict rate','download checksum failures','notification-to-sync lag','orphan bytes / GC lag','ACL denied/invalid token rate']}
+  {id:'sd15-s12-p02',title:'比較麻煩的那幾個',blocks:[
+   {type:'compare',items:[['metadata 資料庫 Master 故障','把其中一個 slave 提升為新的 master，並啟動另一個新的 slave 節點。'],['metadata 資料庫 Slave 故障','用另一個 slave 進行讀取操作，並啟動另一個資料庫伺服器替換掉故障的那部。'],['通知服務故障','每個線上使用者都與通知伺服器保持著一個長輪詢連結。根據 2012 年 Dropbox 的演講，他們每部機器開啟的連接數量超過一百萬。伺服器故障時所有長輪詢連結都會丟失，客戶端必須重新連接到其他伺服器——一旦失去連接，就很難讓所有丟失的連結立刻重新連上線，這將是一個相對較慢的程序。'],['離線備份佇列故障','這些佇列會被複製很多次。某個佇列出問題時，這個佇列的使用者可能就需要重新訂閱其他的備份佇列。']]},
+   {type:'callout',title:'注意通知服務那一條',text:'其他元件故障後恢復都很快，唯獨通知服務是「重連很慢」——因為一台機器上有上百萬條連線，全部同時要重連。這是設計上真實存在的一個粗糙邊角。'}
   ]},
-  {id:'sd15-s12-p03',title:'Region Failure 時 Client 可 Catch Up',blocks:[
-   {type:'p',text:'Client 本身已有 local state/cursor；切 region 後只要 metadata/change log 的 global ordering/replication語意清楚，就能從上次 cursor catch up，而不是整個 Drive 重下載。'}
-  ]},
-  {id:'sd15-s12-p04',title:'完整 Drive Interview Checklist',blocks:[
-   {type:'code',text:'□ scope + storage/sync estimate\n□ metadata vs blob separation\n□ resumable/chunk upload\n□ block sync + checksum\n□ immutable version + tombstone\n□ change log + cursor\n□ push as signal\n□ offline conflict\n□ ACL/signed access\n□ client local DB/idempotency\n□ DR + observability'}
+  {id:'sd15-s12-p03',title:'第四步驟——匯整總結',blocks:[
+   {type:'p',text:'這個設計結合高度一致性、低網路頻寬與快速同步的能力，包含兩個流程：管理檔案的 metadata，以及檔案的同步。通知服務是另一個重要的構成元素，這裡運用長輪詢讓客戶端維持檔案變動的最新狀態。'},
+   {type:'compare',items:[['另一個設計選擇：直傳雲端儲存','把檔案直接從客戶端上傳到雲端儲存系統，不經過區塊伺服器。優勢是上傳更快，因為檔案只需傳輸一次。'],['缺點一：邏輯要做很多份','必須針對 iOS、Android、Web 各自實作出相同的分群（chunking）、壓縮與加密邏輯。這很容易出錯，而且往往需要很大的工程努力。在原本的設計中，所有這些邏輯全都集中在區塊伺服器一個地方。'],['缺點二：安全性','由於客戶端很容易被駭客入侵或操縱，因此在客戶端實作加密邏輯，並不是很理想的做法。']]},
+   {type:'p',text:'另一個有趣的進化方式，是把線上／離線邏輯轉移到單獨的服務，稱之為連線狀態服務（presence service）。只要把它移出通知伺服器，連線／離線功能就可以輕鬆整合到其他服務之中。'}
   ]}],
  quiz:[
-  MC('sd15-s12-q1','Object replication 能取代 metadata backup 嗎？','sd15-s12-p01','不能，兩者資料/故障模式不同。','Bytes 與 metadata 都要自己的 durability/restore。',[["可以，只要 bytes 在就行","會丟 path/ACL/version。"],["Metadata 不需要 backup","錯。"],["只需 client cache","不可靠。"]]),
-  MC('sd15-s12-q2','衡量 sync 健康最直接？','sd15-s12-p02','Change propagation latency / backlog age。','從 server change 到 device apply 的延遲。',[["只看 API CPU","不足。"],["只看 object count","不是。"],["只看 login success","太局部。"]]),
-  MC('sd15-s12-q3','Region failover 後為何不必全量下載？','sd15-s12-p03','Client 有 base state + cursor，可 replay deltas。','Incremental catch-up。',[["因為 region 共享 RAM","不是。"],["因為 push 包全部 bytes","不是。"],["因為 file 永不改","錯。"]]),
-  MC('sd15-s12-q4','完整 Drive 題最核心 correctness？','sd15-s12-p04','Bytes/version/metadata/change cursor 必須一致，offline retry/ conflict 不丟資料。','Durable version commit + replayable change sync + conflict-safe client。',[["只選 object storage 品牌","太局部。"],["只做 CDN","不是核心。"],["只做漂亮 folder tree","不足。"]])
+  MC('sd15-s12-q1','區塊伺服器故障時要怎麼處理？','sd15-s12-p01','未完成的工作不能就這樣消失。','其他伺服器接手那些未完成或待處理的工作。',[["等它自己恢復","上傳會一直卡住。"],["刪除未完成的上傳","違反資料不可丟失。"],["由客戶端重新切分","切分邏輯在伺服器端。"]]),
+  MC('sd15-s12-q2','metadata 資料庫的 master 故障時？','sd15-s12-p02','需要有東西頂替寫入。','把其中一個 slave 提升為新的 master，並啟動新的 slave。',[["等 master 修好","寫入會全部停擺。"],["改由快取承擔寫入","快取不是持久化儲存。"],["直接切換到另一個區域的資料庫","本章的做法是 slave 升等。"]]),
+  MC('sd15-s12-q3','通知服務故障為什麼特別麻煩？','sd15-s12-p02','一台機器上有上百萬條長輪詢連線。','所有長輪詢連結同時丟失，全部重連是很慢的程序。',[["因為它存了檔案","它不存檔案。"],["因為它是唯一的單點","它可以有多台。"],["因為它需要 ACID","它不需要。"]]),
+  MC('sd15-s12-q4','客戶端直傳雲端儲存的最大缺點是什麼？','sd15-s12-p03','分群、壓縮、加密要在 iOS／Android／Web 各做一次，而且客戶端容易被操縱。','邏輯重複實作容易出錯，且客戶端做加密不安全。',[["上傳會變慢","直傳其實更快。"],["無法支援大檔案","仍可支援。"],["雲端儲存不接受客戶端連線","技術上可以。"]])
  ]
 }
+
 );
 })();

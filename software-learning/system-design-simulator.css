@@ -288,3 +288,57 @@ svg.sim-sandbox-svg{width:100%;height:auto;display:block;background:#0a0a10;bord
   .result-actions .button{width:100%}
 }
 @media(max-width:620px){.sim-comp-grid{grid-template-columns:1fr}.sim-topo-controls,.sim-chunklab-actions,.sim-abrlab-actions,.sim-sandbox-toolbar{flex-direction:column}.sim-topo-controls .button,.sim-chunklab-actions .button,.sim-abrlab-actions .button,.sim-sandbox-toolbar .button,.sim-sandbox-toolbar select{width:100%}.sim-sandbox-layout{grid-template-columns:1fr}.sim-sandbox-palette{flex-direction:row;flex-wrap:wrap}.sim-palette-item{flex:1 1 72px}}
+
+/* ---------- 上傳可視化實驗室 ---------- */
+.sim-uploadlab{margin-top:20px;padding:20px;background:rgba(22,22,31,.94);border:1px solid var(--border);border-radius:18px}
+.sim-uploadlab h2{margin:0 0 6px;font-size:1.08rem}
+.sim-uploadlab-desc{margin:0 0 16px;color:var(--muted);font-size:.86rem;line-height:1.7}
+.sim-ul-filerow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
+.sim-ul-filerow label{color:var(--muted);font-size:.8rem}
+.sim-ul-file{padding:7px 10px;background:var(--panel-2);color:inherit;border:1px solid var(--border);border-radius:9px;font-size:.84rem}
+
+.sim-ul-pipeline{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.sim-ul-lane{flex:1 1 150px;min-width:130px;padding:11px 12px;background:var(--panel-2);border:1px solid var(--border);border-radius:12px;display:grid;gap:5px;align-content:start}
+.sim-ul-lane b{font-size:.84rem}
+.sim-ul-lane-state{color:var(--muted);font-size:.74rem}
+.sim-ul-lane.dead{border-color:var(--sim-bad);background:rgba(248,113,113,.1)}
+.sim-ul-lane.dead .sim-ul-lane-state{color:var(--sim-bad);font-weight:700}
+.sim-ul-kill{margin-top:2px;padding:4px 8px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:.72rem;cursor:pointer}
+.sim-ul-kill:hover{border-color:var(--sim-bad);color:var(--sim-bad)}
+.sim-ul-arrow{align-self:center;color:var(--accent);font-size:1.1rem}
+
+.sim-ul-grid{display:flex;flex-wrap:wrap;gap:3px;padding:12px;background:#0b0b12;border:1px solid var(--border);border-radius:12px;min-height:56px}
+.sim-ul-cell{width:14px;height:14px;border-radius:3px;background:#2a2a3a;transition:background .18s ease}
+.sim-ul-cell.s-split{background:#3f4a6b}
+.sim-ul-cell.s-compressed{background:#4a5f8f}
+.sim-ul-cell.s-encrypted{background:#5b76b8}
+.sim-ul-cell.s-inflight{background:var(--accent);animation:simUlPulse .7s ease-in-out infinite}
+.sim-ul-cell.s-stored{background:#4ade80}
+.sim-ul-cell.s-lost{background:var(--sim-bad)}
+.sim-ul-cell.s-skipped{background:#1f3a52}
+.sim-ul-cell.s-deduped{background:#8b5cf6}
+@keyframes simUlPulse{0%,100%{opacity:1}50%{opacity:.45}}
+.sim-ul-gridnote{margin:8px 0 14px;color:var(--muted);font-size:.76rem}
+
+.sim-ul-status{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:9px;margin-bottom:14px}
+.sim-ul-card{padding:11px 13px;background:var(--panel-2);border:1px solid var(--border);border-radius:11px}
+.sim-ul-card small{display:block;color:var(--muted);font-size:.72rem;margin-bottom:5px}
+.sim-ul-card strong{font-size:.86rem;line-height:1.45;font-variant-numeric:tabular-nums}
+.sim-ul-card strong.ok{color:#4ade80}
+.sim-ul-card strong.warn{color:var(--sim-warn)}
+
+.sim-ul-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:0;list-style:none;color:var(--muted);font-size:.73rem}
+.sim-ul-legend li{display:flex;align-items:center;gap:5px}
+.sim-ul-legend i{width:10px;height:10px;border-radius:2px;background:#2a2a3a}
+.sim-ul-legend i.s-split{background:#3f4a6b}.sim-ul-legend i.s-compressed{background:#4a5f8f}
+.sim-ul-legend i.s-encrypted{background:#5b76b8}.sim-ul-legend i.s-inflight{background:var(--accent)}
+.sim-ul-legend i.s-stored{background:#4ade80}.sim-ul-legend i.s-lost{background:var(--sim-bad)}
+.sim-ul-legend i.s-skipped{background:#1f3a52}.sim-ul-legend i.s-deduped{background:#8b5cf6}
+
+@media(max-width:760px){
+  .sim-uploadlab{padding:14px}
+  .sim-ul-arrow{display:none}
+  .sim-ul-lane{flex:1 1 100%}
+  .sim-ul-filerow .button,.sim-ul-file{width:100%}
+  .sim-ul-cell{width:12px;height:12px}
+}

@@ -1491,6 +1491,339 @@
     }
   }
 
+  // ---------- Upload visualisation lab ----------
+  // The whole point of this panel is to answer one question honestly and visually: when a
+  // server dies while a large file is uploading, what exactly survives? It models the three
+  // things the chapter says happen in parallel —
+  //   1. the BYTES:    file → blocks → 壓縮 → 加密 → 上傳 → 已確實寫入雲端儲存
+  //   2. the METADATA: 一開始就寫入並標成 pending，只有雲端儲存的回調才能翻成 uploaded
+  //   3. the PEOPLE:   另一台裝置透過通知服務看到的狀態
+  // — and lets the player kill any of the three servers mid-flight to see which blocks are
+  // durable, which are lost, and why a half-uploaded file never becomes downloadable.
+
+  const UL_STAGES = ['split', 'compressed', 'encrypted', 'inflight'];
+  const ulBytes = n => (n >= 1024 * 1024 * 1024
+    ? `${(n / 1024 / 1024 / 1024).toFixed(n >= 10 * 1024 * 1024 * 1024 ? 0 : 1)} GB`
+    : n >= 1024 * 1024 ? `${Math.round(n / 1024 / 1024)} MB` : `${Math.round(n / 1024)} KB`);
+
+  function renderUploadLab(sim) {
+    const ul = sim.uploadLab;
+    if (!ul) return '';
+    const files = ul.files || [];
+    return `<section class="sim-uploadlab" data-upload-lab>
+      <h2>📤 ${esc(ul.label || '上傳可視化實驗室')}</h2>
+      <p class="sim-uploadlab-desc">${esc(ul.desc || '完整演一次上傳：檔案被切成區塊、逐塊壓縮加密送進雲端儲存，同時另一條路先把 metadata 寫成 pending。你可以在任何時候把某一台伺服器打掛，看看已經寫進去的區塊、正在傳的區塊與檔案狀態各自會怎樣。')}</p>
+
+      <div class="sim-ul-filerow">
+        <label>選一個要上傳的檔案</label>
+        <select class="sim-ul-file" aria-label="選擇檔案">
+          ${files.map((f, i) => `<option value="${esc(f.id)}"${i === 0 ? ' selected' : ''}>${esc(f.name)}（${ulBytes(f.bytes)}）</option>`).join('')}
+        </select>
+        <button class="button secondary sim-ul-start" type="button">▶ 開始上傳</button>
+        <button class="button secondary sim-ul-edit" type="button" disabled>✏️ 改幾個區塊後再傳一次</button>
+        <button class="button secondary sim-ul-reset" type="button">↺ 重來</button>
+      </div>
+
+      <div class="sim-ul-pipeline">
+        <div class="sim-ul-lane" data-ul-lane="client"><b>客戶端 #1</b><span class="sim-ul-lane-state" data-ul-state="client">待命</span></div>
+        <span class="sim-ul-arrow">→</span>
+        <div class="sim-ul-lane" data-ul-lane="blockServer"><b>區塊伺服器</b><span class="sim-ul-lane-state" data-ul-state="blockServer">待命</span><button class="sim-ul-kill" type="button" data-ul-kill="blockServer">💥 打掛</button></div>
+        <span class="sim-ul-arrow">→</span>
+        <div class="sim-ul-lane" data-ul-lane="storage"><b>雲端儲存系統</b><span class="sim-ul-lane-state" data-ul-state="storage">待命</span><button class="sim-ul-kill" type="button" data-ul-kill="storage">💥 打掛</button></div>
+        <span class="sim-ul-arrow">→</span>
+        <div class="sim-ul-lane" data-ul-lane="api"><b>API 伺服器</b><span class="sim-ul-lane-state" data-ul-state="api">待命</span><button class="sim-ul-kill" type="button" data-ul-kill="api">💥 打掛</button></div>
+      </div>
+
+      <div class="sim-ul-grid" data-ul-grid role="img" aria-label="區塊上傳狀態"></div>
+      <p class="sim-ul-gridnote" data-ul-gridnote></p>
+
+      <div class="sim-ul-status">
+        <div class="sim-ul-card"><small>metadata 檔案狀態</small><strong data-ul-meta>尚未建立</strong></div>
+        <div class="sim-ul-card"><small>已確實寫入雲端儲存</small><strong data-ul-durable>0</strong></div>
+        <div class="sim-ul-card"><small>本次實際送出</small><strong data-ul-sent>0</strong></div>
+        <div class="sim-ul-card"><small>另一台裝置（客戶端 #2）看到</small><strong data-ul-peer>看不到這個檔案</strong></div>
+      </div>
+
+      <ul class="sim-ul-legend">
+        <li><i class="s-waiting"></i>尚未處理</li>
+        <li><i class="s-split"></i>已切分</li>
+        <li><i class="s-compressed"></i>已壓縮</li>
+        <li><i class="s-encrypted"></i>已加密</li>
+        <li><i class="s-inflight"></i>傳輸中</li>
+        <li><i class="s-stored"></i>已確實寫入（安全）</li>
+        <li><i class="s-lost"></i>傳輸中丟失</li>
+        <li><i class="s-skipped"></i>沒變動，不必傳</li>
+        <li><i class="s-deduped"></i>雜湊重複，直接引用</li>
+      </ul>
+    </section>`;
+  }
+
+  function wireUploadLab(root, sim, state) {
+    const ul = sim.uploadLab;
+    if (!ul) return;
+    if (state.uploadTimer) { clearTimeout(state.uploadTimer); state.uploadTimer = null; }
+    const panel = root.querySelector('[data-upload-lab]');
+    if (!panel) return;
+
+    const q = s => panel.querySelector(s);
+    const grid = q('[data-ul-grid]');
+    const gridNote = q('[data-ul-gridnote]');
+    const fileSel = q('.sim-ul-file');
+    const startBtn = q('.sim-ul-start');
+    const editBtn = q('.sim-ul-edit');
+    const resetBtn = q('.sim-ul-reset');
+    const blockBytes = ul.blockBytes || 4 * 1024 * 1024;
+    const maxCells = ul.maxCells || 96;
+    const svgEl = root.querySelector('svg.sim-topo');
+
+    const fileOf = id => (ul.files || []).find(f => f.id === id) || (ul.files || [])[0];
+
+    function build(fileId) {
+      const f = fileOf(fileId);
+      const totalBlocks = Math.max(1, Math.ceil(f.bytes / blockBytes));
+      // Derive the cell COUNT from the group size, not the other way round. Picking
+      // cells = min(total, maxCells) first and then rounding groupSize up overshoots
+      // (512 blocks over 96 cells → groupSize 6 → 576 slots), and the surplus cells end up
+      // holding a negative number of blocks, which then corrupts every byte total.
+      const groupSize = Math.ceil(totalBlocks / Math.min(totalBlocks, maxCells));
+      const cellCount = Math.ceil(totalBlocks / groupSize);
+      // Two cells share a hash with an earlier cell, so dedupe has something real to show.
+      const dupOf = {};
+      if (cellCount >= 8) { dupOf[Math.floor(cellCount * 0.55)] = 2; dupOf[Math.floor(cellCount * 0.8)] = 5; }
+      return {
+        fileId: f.id, fileName: f.name, fileBytes: f.bytes, totalBlocks, groupSize,
+        cells: Array.from({ length: cellCount }, (_, i) => ({
+          st: 'waiting',
+          blocks: Math.min(groupSize, totalBlocks - i * groupSize),
+          dup: dupOf[i]
+        })),
+        active: [], cursor: 0, running: false, pass: 1,
+        meta: 'none', sentBytes: 0, wastedBytes: 0,
+        down: { blockServer: false, storage: false, api: false },
+        callbackPending: false, changed: null
+      };
+    }
+
+    const u = () => state.upload;
+    const cellBlocks = c => c.blocks;
+    const durableCells = () => u().cells.filter(c => c.st === 'stored' || c.st === 'skipped' || c.st === 'deduped');
+    const durableBlocks = () => durableCells().reduce((s, c) => s + cellBlocks(c), 0);
+    const allSettled = () => u().cells.every(c => ['stored', 'skipped', 'deduped'].includes(c.st));
+
+    function paint() {
+      const st = u();
+      if (!st) return;
+      grid.innerHTML = st.cells.map((c, i) =>
+        `<i class="sim-ul-cell s-${c.st}" title="區塊 #${i * st.groupSize + 1}–#${i * st.groupSize + c.blocks}"></i>`).join('');
+      gridNote.textContent = st.cells.length < st.totalBlocks
+        ? `檔案 ${st.fileName} 共 ${st.totalBlocks.toLocaleString()} 個 ${ulBytes(blockBytes)} 區塊；每一格代表 ${st.groupSize} 個區塊。`
+        : `檔案 ${st.fileName} 共 ${st.totalBlocks} 個 ${ulBytes(blockBytes)} 區塊，一格一個。`;
+
+      const metaText = { none: '尚未建立', pending: '⏳ pending（已建立，位元組還沒到齊）', uploaded: '✅ uploaded（可以下載了）' }[st.meta];
+      q('[data-ul-meta]').textContent = metaText;
+      q('[data-ul-meta]').className = st.meta === 'uploaded' ? 'ok' : st.meta === 'pending' ? 'warn' : '';
+      q('[data-ul-durable]').textContent = `${durableBlocks().toLocaleString()} / ${st.totalBlocks.toLocaleString()} 個區塊`;
+      q('[data-ul-sent]').textContent = `${ulBytes(st.sentBytes)}${st.wastedBytes ? `（其中 ${ulBytes(st.wastedBytes)} 是重傳浪費掉的）` : ''}`;
+      q('[data-ul-peer]').textContent = st.meta === 'uploaded'
+        ? '✅ 檔案已完整上傳，可以下載'
+        : st.meta === 'pending' ? '👀 看得到檔案，狀態「上傳中」——不會下載到半個檔案' : '看不到這個檔案';
+
+      ['blockServer', 'storage', 'api'].forEach(k => {
+        const el = panel.querySelector(`[data-ul-state="${k}"]`);
+        const lane = panel.querySelector(`[data-ul-lane="${k}"]`);
+        const dead = st.down[k];
+        lane.classList.toggle('dead', dead);
+        el.textContent = dead ? '💥 已當機' : st.running ? '運作中' : '待命';
+        panel.querySelector(`[data-ul-kill="${k}"]`).textContent = dead ? '🔌 復原' : '💥 打掛';
+      });
+      panel.querySelector('[data-ul-state="client"]').textContent =
+        st.running ? '上傳中' : allSettled() && st.meta === 'uploaded' ? '完成' : '待命';
+
+      startBtn.disabled = st.running || (allSettled() && st.meta === 'uploaded');
+      editBtn.disabled = !(allSettled() && st.meta === 'uploaded');
+    }
+
+    function stop() {
+      if (state.uploadTimer) { clearTimeout(state.uploadTimer); state.uploadTimer = null; }
+      if (u()) u().running = false;
+    }
+
+    function schedule() {
+      if (state.uploadTimer) clearTimeout(state.uploadTimer);
+      state.uploadTimer = setTimeout(tick, Math.max(40, (ul.stageMs || 150) / (state.speed || 1)));
+    }
+
+    // One pipeline step: advance every in-flight cell one stage, then admit new ones.
+    function tick() {
+      const st = u();
+      if (!st || !st.running) return;
+      const parallel = ul.parallel || 4;
+
+      // advance
+      st.active = st.active.filter(i => {
+        const c = st.cells[i];
+        if (!c) return false;
+        if (st.down.blockServer && UL_STAGES.includes(c.st)) return false; // handled by the kill
+        const idx = UL_STAGES.indexOf(c.st);
+        if (idx < 0) return false;
+        if (c.st === 'inflight') {
+          if (st.down.storage) return true;               // stuck in flight until storage returns
+          c.st = 'stored';
+          st.sentBytes += cellBlocks(c) * blockBytes;
+          return false;
+        }
+        c.st = UL_STAGES[idx + 1];
+        return true;
+      });
+
+      // admit
+      while (st.active.length < parallel && st.cursor < st.cells.length) {
+        // Check the failure state BEFORE consuming the cursor: bailing out after `cursor++`
+        // would step over a still-waiting cell and strand it, so the upload could never finish.
+        if (st.down.blockServer || st.down.storage) break;
+        const i = st.cursor++;
+        const c = st.cells[i];
+        if (['stored', 'skipped', 'deduped'].includes(c.st)) continue;
+        if (c.dup != null) {
+          c.st = 'deduped';
+          traceLine(root, `區塊 #${i * st.groupSize + 1} 的雜湊與先前的區塊相同，直接引用，不必再存一份。`, 'ok');
+          continue;
+        }
+        c.st = 'split';
+        st.active.push(i);
+      }
+
+      paint();
+
+      if (allSettled()) {
+        stop();
+        if (st.down.api) {
+          st.callbackPending = true;
+          traceLine(root, '⚠️ 所有區塊都已確實寫入雲端儲存，但 API 伺服器當機，收不到「上傳完成」的回調——檔案狀態卡在 pending，其他裝置看得到它卻不能下載。位元組是安全的，檔案還不能用。', 'bad');
+          paint();
+          return;
+        }
+        finishCallback();
+        return;
+      }
+      if (!st.active.length && st.cursor >= st.cells.length) { stop(); paint(); return; }
+      schedule();
+    }
+
+    function finishCallback() {
+      const st = u();
+      st.callbackPending = false;
+      st.meta = 'uploaded';
+      traceLine(root, '雲端儲存系統觸發上傳完成的回調 → API 伺服器把 metadata 狀態改成 uploaded。', 'ok');
+      traceLine(root, '通知服務通報客戶端 #2：檔案已完整上傳，可以下載了。', 'ok');
+      traceLine(root, `— 上傳結束：實際送出 ${ulBytes(st.sentBytes)}${st.wastedBytes ? `，其中 ${ulBytes(st.wastedBytes)} 是當機後重傳浪費的` : ''} —`, 'done');
+      paint();
+    }
+
+    function start(pass2) {
+      const st = u();
+      st.running = true;
+      st.active = [];
+      st.cursor = 0;
+      if (!pass2) {
+        st.meta = 'pending';
+        traceLine(root, `— 開始上傳「${st.fileName}」（${ulBytes(st.fileBytes)}，共 ${st.totalBlocks.toLocaleString()} 個 ${ulBytes(blockBytes)} 區塊）—`, 'head');
+        traceLine(root, '兩個請求同時出發：① 寫入 metadata 並把狀態設為 pending ② 把檔案內容送進區塊伺服器。', '');
+        traceLine(root, '通知服務通報客戶端 #2：有個新檔案正在上傳中。', '');
+      }
+      paint();
+      schedule();
+    }
+
+    startBtn.onclick = () => {
+      state.upload = build(fileSel.value);
+      start(false);
+    };
+
+    resetBtn.onclick = () => { stop(); state.upload = build(fileSel.value); paint(); };
+    fileSel.onchange = () => { stop(); state.upload = build(fileSel.value); paint(); };
+
+    // Second pass: the delta-sync demonstration.
+    editBtn.onclick = () => {
+      const st = u();
+      const canDelta = ul.deltaComponentId ? currentOptionId(sim, ul.deltaComponentId, state) !== 'off' : true;
+      const n = Math.max(1, Math.round(st.cells.length * 0.08));
+      const changed = new Set();
+      while (changed.size < n) changed.add(Math.floor(Math.random() * st.cells.length));
+      st.pass += 1;
+      st.sentBytes = 0;
+      st.wastedBytes = 0;
+      st.meta = 'pending';
+      st.changed = [...changed];
+      st.cells.forEach((c, i) => {
+        if (canDelta && !changed.has(i)) { c.st = c.dup != null ? 'deduped' : 'skipped'; return; }
+        c.st = 'waiting';
+        if (canDelta) c.dup = null;   // a genuinely changed block no longer matches an old hash
+      });
+      const changedBytes = st.cells.filter((c, i) => changed.has(i)).reduce((s, c) => s + cellBlocks(c) * blockBytes, 0);
+      traceLine(root, canDelta
+        ? `✏️ 改了 ${changed.size} 格（約 ${ulBytes(changedBytes)}）後再上傳一次。有差異同步：只有變動過的區塊會重新送出，其餘全部跳過。`
+        : `✏️ 改了 ${changed.size} 格後再上傳一次。沒有差異同步：整份 ${ulBytes(st.fileBytes)} 都要重新送出。`,
+        canDelta ? 'ok' : 'bad');
+      start(true);
+    };
+
+    panel.querySelectorAll('[data-ul-kill]').forEach(btn => {
+      btn.onclick = () => {
+        const st = u();
+        if (!st) return;
+        const k = btn.dataset.ulKill;
+        const nodeId = ul.nodes?.[k];
+        if (!st.down[k]) {
+          st.down[k] = true;
+          svgEl?.querySelector(`[data-node="${nodeId}"]`)?.classList.add('failing');
+          if (k === 'blockServer') {
+            const lost = st.active.length;
+            const lostBytes = st.active.reduce((s, i) => s + cellBlocks(st.cells[i]) * blockBytes, 0);
+            st.active.forEach(i => { st.cells[i].st = 'lost'; });
+            st.active = [];
+            stop();
+            traceLine(root, `💥 區塊伺服器當機！正在處理中的 ${lost} 格（約 ${ulBytes(lostBytes)}）當場中斷；已經確實寫入雲端儲存的 ${durableBlocks().toLocaleString()} 個區塊不受影響。`, 'bad');
+          } else if (k === 'storage') {
+            const lost = st.active.filter(i => st.cells[i].st === 'inflight');
+            lost.forEach(i => { st.cells[i].st = 'lost'; });
+            st.active = st.active.filter(i => st.cells[i].st !== 'lost');
+            stop();
+            traceLine(root, `💥 雲端儲存系統當機！正在寫入的 ${lost.length} 格中斷，新的區塊也無法再落地。已寫入的區塊在其他區域仍有複本。`, 'bad');
+          } else {
+            traceLine(root, '💥 API 伺服器當機！位元組照常送進雲端儲存——但「上傳完成」的回調沒有人收，檔案狀態會卡在 pending。', 'bad');
+          }
+        } else {
+          st.down[k] = false;
+          svgEl?.querySelector(`[data-node="${nodeId}"]`)?.classList.remove('failing');
+          if (k === 'api') {
+            traceLine(root, '🔌 API 伺服器恢復。', 'ok');
+            if (st.callbackPending && allSettled()) { finishCallback(); return; }
+          } else {
+            const canResume = ul.resumeComponentId ? currentOptionId(sim, ul.resumeComponentId, state) !== 'off' : true;
+            if (canResume) {
+              const kept = durableBlocks();
+              st.cells.forEach(c => { if (c.st === 'lost') c.st = 'waiting'; });
+              traceLine(root, `🔌 恢復，而且有斷點續傳：已經確實寫入的 ${kept.toLocaleString()} 個區塊不必重傳，從中斷的地方接著傳。`, 'ok');
+            } else {
+              const waste = durableBlocks() * blockBytes;
+              st.wastedBytes += waste;
+              st.cells.forEach(c => { c.st = 'waiting'; });
+              traceLine(root, `🔌 恢復，但沒有斷點續傳：整份檔案必須從頭重傳，剛才已經寫進去的 ${ulBytes(waste)} 全部白費。`, 'bad');
+            }
+            if (!st.down.blockServer && !st.down.storage && !allSettled()) { start(true); return; }
+          }
+        }
+        paint();
+      };
+    });
+
+    if (!state.upload || !fileOf(state.upload.fileId)) state.upload = build(fileSel.value);
+    else fileSel.value = state.upload.fileId;
+    paint();
+    if (state.upload.running) schedule();
+  }
+
   // ---------- Adaptive bitrate playback sandbox ----------
   // A free-play "watch this play out" experiment, separate from the scripted monthly events:
   // playback is cut into fixed-length segments, and each segment's quality is decided by the
@@ -2054,6 +2387,7 @@
         ${meterRow(lab.cost, state.costEff, state.costEff >= 80 ? 'good' : state.costEff >= 50 ? 'warn' : 'bad')}
       </div>
       ${svgTopology(sim, state, { interactive: true, showControls: true })}
+      ${renderUploadLab(sim)}
       ${renderChunkLab(sim)}
       ${renderAbrLab(sim)}
       ${nextEvent ? `<div class="sim-hint">下個月可能會發生足以考驗架構的事件——先決定好要不要調整能力配置。</div>` : ''}
@@ -2123,6 +2457,7 @@
       if (body && log) { body.innerHTML = log; body.scrollTop = body.scrollHeight; }
     }, () => refreshLoadSummary(root, sim, state));
     wireTraceClear(root);
+    wireUploadLab(root, sim, state);
     wireChunkLab(root, sim, state);
     wireAbrLab(root, sim, state);
     wireDragViewer(root, sim, state);
