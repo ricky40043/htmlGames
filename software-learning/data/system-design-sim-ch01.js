@@ -71,15 +71,15 @@
     topology: {
       viewBox: '0 0 900 460',
       nodes: [
-        { id: 'users', kind: 'user', label: '顧客', x: 80, y: 250 },
-        { id: 'cdn', kind: 'component', componentId: 'cdn', label: 'CDN', x: 280, y: 110 },
-        { id: 'loadBalancer', kind: 'component', componentId: 'loadBalancer', label: 'Load Balancer', x: 280, y: 250 },
-        { id: 'multiRegion', kind: 'component', componentId: 'multiRegion', label: '備援機房', x: 280, y: 400, region: '備援區域' },
-        { id: 'appServer', kind: 'fixed', label: 'App Server 群', x: 500, y: 250 },
-        { id: 'appCache', kind: 'component', componentId: 'appCache', label: '應用快取', x: 500, y: 110 },
-        { id: 'statelessSession', kind: 'component', componentId: 'statelessSession', label: '共用 Session Store', x: 500, y: 400 },
-        { id: 'dbPrimary', kind: 'fixed', label: '主資料庫', x: 720, y: 250 },
-        { id: 'dbReplica', kind: 'component', componentId: 'dbReplica', label: 'DB 讀取複本', x: 720, y: 110 }
+        { id: 'users', kind: 'user', label: '顧客', x: 80, y: 250, arriveLabel: '顧客瀏覽器收到回應' },
+        { id: 'cdn', kind: 'component', componentId: 'cdn', label: 'CDN', x: 280, y: 110, arriveLabel: '檢查靜態內容是否命中 Edge 快取' },
+        { id: 'loadBalancer', kind: 'component', componentId: 'loadBalancer', label: 'Load Balancer', x: 280, y: 250, arriveLabel: '健康檢查後分配到可用的 App Server' },
+        { id: 'multiRegion', kind: 'component', componentId: 'multiRegion', label: '備援機房', x: 280, y: 400, region: '備援區域', arriveLabel: '流量切換到備援機房接手' },
+        { id: 'appServer', kind: 'fixed', label: 'App Server 群', x: 500, y: 250, arriveLabel: '執行商業邏輯與驗證' },
+        { id: 'appCache', kind: 'component', componentId: 'appCache', label: '應用快取', x: 500, y: 110, arriveLabel: '檢查快取是否命中，命中就不必查資料庫' },
+        { id: 'statelessSession', kind: 'component', componentId: 'statelessSession', label: '共用 Session Store', x: 500, y: 400, arriveLabel: '從共用 Session Store 讀取登入狀態' },
+        { id: 'dbPrimary', kind: 'fixed', label: '主資料庫', x: 720, y: 250, arriveLabel: '讀取或寫入主資料庫' },
+        { id: 'dbReplica', kind: 'component', componentId: 'dbReplica', label: 'DB 讀取複本', x: 720, y: 110, arriveLabel: '把讀取查詢導到複本，分攤主庫壓力' }
       ],
       edges: [
         { from: 'users', to: 'cdn' },

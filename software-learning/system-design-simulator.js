@@ -46,7 +46,8 @@
   function newState(sim) {
     const active = new Set();
     return {
-      month: 0, uptime: 100, qoe: 100, costEff: 100, active, usersServed: 0,
+      month: 0, uptime: 100, qoe: 100, costEff: 100, active, usersServed: 0, speed: 1,
+      chunk: null, chunkTimer: null,
       log: [], history: [{ month: 0, uptime: 100, qoe: 100 }], phase: 'briefing'
     };
   }
@@ -155,11 +156,17 @@
     }).join('');
   }
 
+  const SPEED_OPTIONS = [0.1, 0.5, 1, 2];
+
   function svgTopology(sim, state, { interactive = false, showControls = false } = {}) {
     const topo = sim.topology;
     if (!topo) return '<p class="sim-topo-missing">這個場景還沒有拓樸圖資料。</p>';
     state.componentLookup = new Map(sim.components.map(c => [c.id, c]));
     const legend = sim.components.map(c => `<a class="sim-topo-legend-item" href="${reviewHref(sim.chapterId, c.sectionId, c.pageId)}" target="_blank" rel="noreferrer">${state.active.has(c.id) ? '✅' : '⬜️'} ${esc(c.shortName)} <small>教材對照 →</small></a>`).join('');
+    const speedControls = showControls ? `<div class="sim-speed-controls">
+        <span class="sim-speed-label">播放速度</span>
+        ${SPEED_OPTIONS.map(s => `<button class="button secondary sim-speed-btn ${state.speed === s ? 'active' : ''}" type="button" data-speed="${s}">${s}x</button>`).join('')}
+      </div>` : '';
     return `<div class="sim-topo-wrap ${interactive ? '' : 'locked'}">
       <svg class="sim-topo" viewBox="${esc(topo.viewBox)}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="架構拓樸圖">
         ${regionBoxesSvg(topo)}
@@ -172,8 +179,39 @@
         <button class="button secondary sim-demo" type="button" data-kind="watch">${esc(sim.demoLabels?.watch || '▶ 模擬一次讀取請求')}</button>
         <button class="button secondary sim-demo" type="button" data-kind="upload">${esc(sim.demoLabels?.upload || '⬆ 模擬一次寫入請求')}</button>
       </div>` : ''}
+      ${speedControls}
+      <div class="sim-trace">
+        <div class="sim-trace-head"><span>即時處理紀錄</span><button class="sim-trace-clear" type="button">清空</button></div>
+        <div class="sim-trace-body"></div>
+      </div>
       <div class="sim-topo-legend">${legend}</div>
     </div>`;
+  }
+
+  // Appends one timestamped line to the trace-log panel — this is the "what actually happened
+  // when I did X" detail view, one step per node the request/token visits.
+  function traceLine(root, text, tone = '') {
+    const body = root.querySelector('.sim-trace-body');
+    if (!body) return;
+    const now = new Date();
+    const stamp = `${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${Math.floor(now.getMilliseconds() / 100)}`;
+    const line = document.createElement('div');
+    line.className = `sim-trace-line ${tone}`.trim();
+    const tsSpan = document.createElement('span');
+    tsSpan.className = 'sim-trace-ts';
+    tsSpan.textContent = stamp;
+    line.appendChild(tsSpan);
+    line.appendChild(document.createTextNode(text));
+    body.appendChild(line);
+    while (body.children.length > 50) body.removeChild(body.firstChild);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function wireTraceClear(root) {
+    root.querySelector('.sim-trace-clear')?.addEventListener('click', () => {
+      const body = root.querySelector('.sim-trace-body');
+      if (body) body.innerHTML = '';
+    });
   }
 
   // Pure interpolation so this is unit-testable without touching timers/DOM.
@@ -187,7 +225,7 @@
     return { x: a.x + (b.x - a.x) * localT, y: a.y + (b.y - a.y) * localT };
   }
 
-  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, onDone } = {}) {
+  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, onDone, onHop } = {}) {
     if (!svgEl || waypoints.length < 2) { onDone?.(null); return null; }
     const circle = document.createElementNS(SVG_NS, 'circle');
     circle.setAttribute('r', '7');
@@ -196,16 +234,26 @@
     circle.setAttribute('cy', waypoints[0].y);
     svgEl.appendChild(circle);
     const start = Date.now();
+    const segCount = waypoints.length - 1;
+    let nextHop = 1;
+    const fireHopsUpTo = t => {
+      while (nextHop < waypoints.length && t >= nextHop / segCount) {
+        onHop?.(nextHop);
+        nextHop++;
+      }
+    };
     const timer = setInterval(() => {
       const t = (Date.now() - start) / durationMs;
       if (t >= 1) {
         clearInterval(timer);
+        fireHopsUpTo(1);
         const end = waypoints[waypoints.length - 1];
         circle.setAttribute('cx', end.x);
         circle.setAttribute('cy', end.y);
         onDone?.(circle);
         return;
       }
+      fireHopsUpTo(t);
       const p = pointAlongPath(waypoints, t);
       circle.setAttribute('cx', p.x);
       circle.setAttribute('cy', p.y);
@@ -249,6 +297,7 @@
         const badge = svgEl.querySelector('.sim-topo-badge');
         if (badge) badge.textContent = `已服務 ${numFmt(state.usersServed)} 人`;
         burstUsers(sim.topology, svgEl);
+        traceLine(root, `湧入 ${numFmt(Number(btn.dataset.add || 100))} 位新使用者`, 'head');
       };
     });
     root.querySelectorAll('.sim-demo').forEach(btn => {
@@ -257,7 +306,22 @@
         const flowIds = sim.topology.computeFlow(kind, state.active);
         const waypoints = waypointsFor(sim.topology, flowIds);
         svgEl.querySelector('.sim-token-demo')?.remove();
-        spawnToken(svgEl, waypoints, { className: kind, tokenClass: 'sim-token-demo', durationMs: 1600 });
+        traceLine(root, `— 開始模擬：${btn.textContent.trim()} —`, 'head');
+        spawnToken(svgEl, waypoints, {
+          className: kind, tokenClass: 'sim-token-demo',
+          durationMs: 1600 / (state.speed || 1),
+          onHop: idx => {
+            const n = findNode(sim.topology, flowIds[idx]);
+            traceLine(root, `抵達「${n?.label || flowIds[idx]}」${n?.arriveLabel ? '：' + n.arriveLabel : ''}`);
+          },
+          onDone: () => traceLine(root, '— 完成 —', 'done')
+        });
+      };
+    });
+    root.querySelectorAll('[data-speed]').forEach(btn => {
+      btn.onclick = () => {
+        state.speed = Number(btn.dataset.speed);
+        root.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('active', b === btn));
       };
     });
   }
@@ -265,16 +329,18 @@
   // Animates the "does this month's request survive" moment on the event screen: a token
   // travels the current watch-path and either completes (ok) or stops at the first missing
   // capability (fail) — this is the causal "what happened because of what I did" visual.
-  function animateEventOutcome(sim, state, svgEl, event, outcome, done) {
+  function animateEventOutcome(root, sim, state, svgEl, event, outcome, done) {
     const topo = sim.topology;
     if (!topo || !svgEl) { setTimeout(done, 200); return; }
     if (event.severity === 'cost') {
+      traceLine(root, `— 帳務／成本事件：${event.title} —`, 'head');
       (event.relevantComponents || []).forEach(id => {
         const n = topo.nodes.find(x => x.componentId === id);
         const g = n && svgEl.querySelector(`[data-node="${n.id}"]`);
         g?.classList.add('stressed');
+        if (n) traceLine(root, `「${n.label}」承受成本壓力`);
       });
-      setTimeout(done, 900);
+      setTimeout(done, 900 / (state.speed || 1));
       return;
     }
     // Events can override which nodes the token visits (`demoFlow`) — the default watch/browse
@@ -293,16 +359,143 @@
       if (idx >= 0) travelIds = flowIds.slice(0, idx + 1);
     }
     const waypoints = waypointsFor(topo, travelIds);
+    traceLine(root, `— 事件發生：${event.title} —`, 'head');
     spawnToken(svgEl, waypoints, {
       className: outcome.ok ? 'ok' : 'bad',
       tokenClass: 'sim-token-event',
-      durationMs: 1500,
+      durationMs: 1500 / (state.speed || 1),
+      onHop: idx => {
+        const n = findNode(topo, travelIds[idx]);
+        traceLine(root, `抵達「${n?.label || travelIds[idx]}」${n?.arriveLabel ? '：' + n.arriveLabel : ''}`);
+      },
       onDone: () => {
-        if (missingNode) svgEl.querySelector(`[data-node="${missingNode.id}"]`)?.classList.add('failing');
-        else if (outcome.ok) waypoints.length && svgEl.querySelectorAll('.sim-topo-node.on').forEach(g => g.classList.add('success'));
-        setTimeout(done, 600);
+        if (missingNode) {
+          svgEl.querySelector(`[data-node="${missingNode.id}"]`)?.classList.add('failing');
+          traceLine(root, `⚠️ 在「${missingNode.label}」中斷——這個能力沒有裝。`, 'bad');
+        } else if (outcome.ok) {
+          waypoints.length && svgEl.querySelectorAll('.sim-topo-node.on').forEach(g => g.classList.add('success'));
+          traceLine(root, '✅ 請求順利完成。', 'ok');
+        }
+        setTimeout(done, 600 / (state.speed || 1));
       }
     });
+  }
+
+  // ---------- Chunk-upload sandbox ----------
+  // A free-play "kill the server mid-upload" experiment, separate from the scripted monthly
+  // events: start a chunked upload, crash it whenever you want, then see whether recovery
+  // resumes from where it broke or has to retransmit the whole thing.
+
+  function renderChunkLab(sim) {
+    const cs = sim.chunkSim;
+    if (!cs) return '';
+    const resumeComp = sim.components.find(c => c.id === cs.resumeComponentId);
+    return `<section class="sim-chunklab">
+      <h2>🧪 ${esc(cs.label || '上傳穩定性實驗室')}</h2>
+      <p class="sim-chunklab-desc">${esc(cs.desc || `模擬上傳一個大檔案，過程中你可以隨時讓伺服器當機，看復原時是從中斷點繼續，還是整個重傳——結果取決於你現在有沒有裝「${resumeComp?.name || ''}」。`)}</p>
+      <div class="sim-chunk-track"><div class="sim-chunk-fill" style="width:0%"></div></div>
+      <p class="sim-chunk-label">尚未開始</p>
+      <div class="sim-chunklab-actions">
+        <button class="button secondary sim-chunk-start" type="button">${esc(cs.startLabel || '開始上傳')}</button>
+        <button class="button secondary sim-chunk-crash" type="button" disabled>💥 現在讓伺服器壞掉</button>
+        <button class="button secondary sim-chunk-recover" type="button" disabled>🔌 觸發重新連線</button>
+      </div>
+    </section>`;
+  }
+
+  function wireChunkLab(root, sim, state) {
+    const cs = sim.chunkSim;
+    if (!cs) return;
+    // A previous mount may have left a ticking interval pointed at now-detached DOM nodes
+    // (e.g. the player toggled a topology node mid-upload, which re-renders this whole
+    // screen) — always clear it before wiring the fresh one.
+    if (state.chunkTimer) { clearInterval(state.chunkTimer); state.chunkTimer = null; }
+
+    const track = root.querySelector('.sim-chunk-fill');
+    const label = root.querySelector('.sim-chunk-label');
+    const startBtn = root.querySelector('.sim-chunk-start');
+    const crashBtn = root.querySelector('.sim-chunk-crash');
+    const recoverBtn = root.querySelector('.sim-chunk-recover');
+    const svgEl = root.querySelector('svg.sim-topo');
+    if (!track) return;
+
+    const setProgress = () => {
+      const pct = Math.round((state.chunk.done / state.chunk.total) * 100);
+      track.style.width = `${pct}%`;
+      label.textContent = state.chunk.crashed
+        ? `⚠️ 伺服器已當機 · 已完成 ${state.chunk.done}/${state.chunk.total} 個區塊`
+        : state.chunk.done >= state.chunk.total
+          ? `✅ 上傳完成 · 實際傳送 ${state.chunk.sent} 個區塊（重傳 ${state.chunk.resent} 個）`
+          : `上傳中 · ${state.chunk.done}/${state.chunk.total} 個區塊`;
+    };
+
+    const tickChunk = () => {
+      state.chunk.done += 1;
+      state.chunk.sent += 1;
+      traceLine(root, `區塊 ${state.chunk.done}/${state.chunk.total} 上傳完成 ✓`);
+      setProgress();
+      if (state.chunk.done >= state.chunk.total) {
+        clearInterval(state.chunkTimer);
+        state.chunkTimer = null;
+        startBtn.disabled = false;
+        crashBtn.disabled = true;
+        recoverBtn.disabled = true;
+        traceLine(root, `— 上傳全部完成，共實際傳送 ${state.chunk.sent} 個區塊，其中重傳 ${state.chunk.resent} 個 —`, 'done');
+      }
+    };
+
+    const startUpload = () => {
+      state.chunk = { done: 0, total: cs.total, crashed: false, sent: 0, resent: 0 };
+      startBtn.disabled = true;
+      crashBtn.disabled = false;
+      recoverBtn.disabled = true;
+      traceLine(root, `— 開始上傳：${cs.label || '大型檔案'}（共 ${cs.total} 個區塊）—`, 'head');
+      setProgress();
+      state.chunkTimer = setInterval(tickChunk, 700 / (state.speed || 1));
+    };
+
+    startBtn.onclick = startUpload;
+
+    crashBtn.onclick = () => {
+      clearInterval(state.chunkTimer);
+      state.chunkTimer = null;
+      state.chunk.crashed = true;
+      crashBtn.disabled = true;
+      recoverBtn.disabled = false;
+      traceLine(root, `⚠️ 伺服器在區塊 ${state.chunk.done}/${state.chunk.total} 時當機！`, 'bad');
+      svgEl?.querySelector(`[data-node="${cs.crashNodeId}"]`)?.classList.add('failing');
+      setProgress();
+    };
+
+    recoverBtn.onclick = () => {
+      recoverBtn.disabled = true;
+      svgEl?.querySelector(`[data-node="${cs.crashNodeId}"]`)?.classList.remove('failing');
+      const canResume = state.active.has(cs.resumeComponentId);
+      state.chunk.crashed = false;
+      if (canResume) {
+        traceLine(root, `✅ 偵測到「${sim.components.find(c => c.id === cs.resumeComponentId)?.name || '斷點續傳'}」：從區塊 ${state.chunk.done + 1}/${state.chunk.total} 繼續，不重傳已完成的部分。`, 'ok');
+      } else {
+        traceLine(root, `🔁 沒有斷點續傳機制：必須整份重傳，從區塊 1/${state.chunk.total} 重新開始。`, 'bad');
+        state.chunk.resent += state.chunk.done;
+        state.chunk.done = 0;
+      }
+      crashBtn.disabled = false;
+      setProgress();
+      state.chunkTimer = setInterval(tickChunk, 700 / (state.speed || 1));
+    };
+
+    // Restore the panel if an upload was already in progress before this re-render (e.g. the
+    // player toggled a capability mid-upload).
+    if (state.chunk) {
+      const finished = state.chunk.done >= state.chunk.total && !state.chunk.crashed;
+      startBtn.disabled = !finished;
+      crashBtn.disabled = state.chunk.crashed || finished;
+      recoverBtn.disabled = !state.chunk.crashed;
+      setProgress();
+      if (!state.chunk.crashed && !finished) {
+        state.chunkTimer = setInterval(tickChunk, 700 / (state.speed || 1));
+      }
+    }
   }
 
   // ---------- Screens ----------
@@ -345,6 +538,7 @@
         ${meterRow(lab.cost, state.costEff, state.costEff >= 80 ? 'good' : state.costEff >= 50 ? 'warn' : 'bad')}
       </div>
       ${svgTopology(sim, state, { interactive: true, showControls: true })}
+      ${renderChunkLab(sim)}
       ${nextEvent ? `<div class="sim-hint">下個月可能會發生足以考驗架構的事件——先決定好要不要調整能力配置。</div>` : ''}
       <button class="button sim-advance" type="button">${state.month >= sim.months ? '查看今年總結' : `推進到第 ${state.month + 1} 個月`}</button>
       ${historyChart(state.history, sim.months, lab)}
@@ -355,6 +549,8 @@
       if (state.active.has(componentId)) state.active.delete(componentId); else state.active.add(componentId);
       render(root, sim, state);
     });
+    wireTraceClear(root);
+    wireChunkLab(root, sim, state);
 
     root.querySelector('.sim-advance').onclick = () => {
       if (state.month >= sim.months) {
@@ -389,13 +585,14 @@
       <button class="button sim-resolve" type="button">查看結果</button>
       <div id="simEventResult"></div>
     </section>`;
+    wireTraceClear(root);
 
     root.querySelector('.sim-resolve').onclick = () => {
       const resolveBtn = root.querySelector('.sim-resolve');
       resolveBtn.disabled = true;
       const outcome = event.resolve(state.active);
       const svgEl = root.querySelector('svg.sim-topo');
-      animateEventOutcome(sim, state, svgEl, event, outcome, () => {
+      animateEventOutcome(root, sim, state, svgEl, event, outcome, () => {
         state.uptime = clamp(state.uptime + (outcome.uptime || 0));
         state.qoe = clamp(state.qoe + (outcome.qoe || 0));
         state.log.push({
@@ -450,7 +647,9 @@
         <a class="button secondary" href="system-design.html">回到章節目錄</a>
       </div>
     </section>`;
+    wireTraceClear(root);
     root.querySelector('.sim-restart').onclick = () => {
+      if (state.chunkTimer) clearInterval(state.chunkTimer);
       Object.assign(state, newState(sim));
       render(root, sim, state);
     };

@@ -70,15 +70,15 @@
     topology: {
       viewBox: '0 0 900 500',
       nodes: [
-        { id: 'users', kind: 'user', label: '裝置', x: 80, y: 270 },
-        { id: 'uploadGateway', kind: 'component', componentId: 'resumableUpload', label: '上傳閘道', x: 280, y: 150 },
-        { id: 'blockSyncBadge', kind: 'component', componentId: 'blockSync', label: '區塊同步', x: 280, y: 400, size: 'small' },
-        { id: 'syncEngine', kind: 'fixed', label: '同步服務', x: 500, y: 270 },
-        { id: 'changeCursorBadge', kind: 'component', componentId: 'changeCursor', label: '變更游標', x: 500, y: 120, size: 'small' },
-        { id: 'aclBadge', kind: 'component', componentId: 'aclEnforcement', label: '權限強制檢查', x: 500, y: 420, size: 'small' },
-        { id: 'metadataStore', kind: 'fixed', label: 'Metadata Store', x: 720, y: 270 },
-        { id: 'conflictBadge', kind: 'component', componentId: 'conflictResolution', label: '衝突偵測', x: 720, y: 120, size: 'small' },
-        { id: 'regionB', kind: 'component', componentId: 'multiRegionDurable', label: '備援機房', x: 720, y: 420, region: '備援區域' }
+        { id: 'users', kind: 'user', label: '裝置', x: 80, y: 270, arriveLabel: '裝置收到同步結果' },
+        { id: 'uploadGateway', kind: 'component', componentId: 'resumableUpload', label: '上傳閘道', x: 280, y: 150, arriveLabel: '建立或恢復 upload session' },
+        { id: 'blockSyncBadge', kind: 'component', componentId: 'blockSync', label: '區塊同步', x: 280, y: 400, size: 'small', arriveLabel: '比對區塊雜湊，只傳真正變動的部分' },
+        { id: 'syncEngine', kind: 'fixed', label: '同步服務', x: 500, y: 270, arriveLabel: '協調 metadata 與變更事件' },
+        { id: 'changeCursorBadge', kind: 'component', componentId: 'changeCursor', label: '變更游標', x: 500, y: 120, size: 'small', arriveLabel: '用已保存的游標定位上次同步到哪' },
+        { id: 'aclBadge', kind: 'component', componentId: 'aclEnforcement', label: '權限強制檢查', x: 500, y: 420, size: 'small', arriveLabel: '重新檢查目前授權，不信任快取' },
+        { id: 'metadataStore', kind: 'fixed', label: 'Metadata Store', x: 720, y: 270, arriveLabel: '讀取或提交 metadata' },
+        { id: 'conflictBadge', kind: 'component', componentId: 'conflictResolution', label: '衝突偵測', x: 720, y: 120, size: 'small', arriveLabel: '比對 base revision，偵測是否有並行修改' },
+        { id: 'regionB', kind: 'component', componentId: 'multiRegionDurable', label: '備援機房', x: 720, y: 420, region: '備援區域', arriveLabel: '切換到備援區域的複本' }
       ],
       edges: [
         { from: 'users', to: 'uploadGateway' },
@@ -95,6 +95,13 @@
         if (active.has('changeCursor')) return ['users', 'syncEngine', 'users'];
         return ['users', 'syncEngine', 'metadataStore', 'syncEngine', 'users'];
       }
+    },
+    chunkSim: {
+      total: 6,
+      resumeComponentId: 'resumableUpload',
+      crashNodeId: 'uploadGateway',
+      label: '一個 4GB 的影片專案檔',
+      startLabel: '開始上傳這個檔案'
     },
     events: [
       {

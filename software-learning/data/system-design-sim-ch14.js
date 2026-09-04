@@ -64,20 +64,29 @@
         cost: 1,
         desc: '轉檔完成事件被佇列重送時，不會重複發布或重複觸發計費。',
         ...ref('sd14-s04-p03')
+      },
+      {
+        id: 'resumableUpload',
+        name: '斷點續傳 Upload Session',
+        shortName: '斷點續傳',
+        cost: 1,
+        desc: '上傳中斷後能從已成功的位元組繼續，不必整份重傳一次 GB 等級的原始檔。',
+        ...ref('sd14-s03-p01')
       }
     ],
     topology: {
       viewBox: '0 0 900 460',
       nodes: [
-        { id: 'users', kind: 'user', label: '觀眾', x: 80, y: 250 },
-        { id: 'cdn', kind: 'component', componentId: 'cdnShield', label: 'CDN Edge', x: 300, y: 120 },
-        { id: 'origin', kind: 'fixed', label: 'Origin / API', x: 300, y: 250 },
-        { id: 'transcode', kind: 'component', componentId: 'elasticTranscode', label: '轉檔 Worker Pool', x: 520, y: 250 },
-        { id: 'storage', kind: 'fixed', label: 'Storage', x: 740, y: 250 },
-        { id: 'regionB', kind: 'component', componentId: 'multiRegion', label: '備援機房', x: 740, y: 120, region: '備援區域' },
-        { id: 'retryBadge', kind: 'component', componentId: 'retryBudget', label: '重試／DLQ', x: 420, y: 400, size: 'small' },
-        { id: 'publishBadge', kind: 'component', componentId: 'idempotentPublish', label: '冪等發布', x: 620, y: 400, size: 'small' },
-        { id: 'hotColdBadge', kind: 'component', componentId: 'hotColdTier', label: '冷熱分層', x: 800, y: 340, size: 'small' }
+        { id: 'users', kind: 'user', label: '觀眾', x: 80, y: 250, arriveLabel: '使用者裝置收到回應' },
+        { id: 'cdn', kind: 'component', componentId: 'cdnShield', label: 'CDN Edge', x: 300, y: 120, arriveLabel: '檢查熱門內容是否命中 Edge 快取' },
+        { id: 'origin', kind: 'fixed', label: 'Origin / API', x: 300, y: 250, arriveLabel: '驗證請求並決定下一步路由' },
+        { id: 'transcode', kind: 'component', componentId: 'elasticTranscode', label: '轉檔 Worker Pool', x: 520, y: 250, arriveLabel: 'Worker 依佇列深度處理轉檔工作' },
+        { id: 'storage', kind: 'fixed', label: 'Storage', x: 740, y: 250, arriveLabel: '寫入或讀取物件儲存' },
+        { id: 'regionB', kind: 'component', componentId: 'multiRegion', label: '備援機房', x: 740, y: 120, region: '備援區域', arriveLabel: '流量切換到備援區域接手' },
+        { id: 'retryBadge', kind: 'component', componentId: 'retryBudget', label: '重試／DLQ', x: 260, y: 400, size: 'small', arriveLabel: '套用 retry 上限與死信佇列規則' },
+        { id: 'publishBadge', kind: 'component', componentId: 'idempotentPublish', label: '冪等發布', x: 620, y: 400, size: 'small', arriveLabel: '以 video_id 去重，避免重複發布' },
+        { id: 'hotColdBadge', kind: 'component', componentId: 'hotColdTier', label: '冷熱分層', x: 800, y: 340, size: 'small', arriveLabel: '依冷熱程度搬移儲存層級' },
+        { id: 'uploadBadge', kind: 'component', componentId: 'resumableUpload', label: '斷點續傳', x: 440, y: 400, size: 'small', arriveLabel: '檢查已成功的位元組位置' }
       ],
       edges: [
         { from: 'users', to: 'cdn' },
@@ -88,13 +97,21 @@
         { from: 'origin', to: 'regionB', requiresComponent: 'multiRegion' },
         { from: 'origin', to: 'retryBadge', kind: 'stub', requiresComponent: 'retryBudget' },
         { from: 'transcode', to: 'publishBadge', kind: 'stub', requiresComponent: 'idempotentPublish' },
-        { from: 'storage', to: 'hotColdBadge', kind: 'stub', requiresComponent: 'hotColdTier' }
+        { from: 'storage', to: 'hotColdBadge', kind: 'stub', requiresComponent: 'hotColdTier' },
+        { from: 'origin', to: 'uploadBadge', kind: 'stub', requiresComponent: 'resumableUpload' }
       ],
       computeFlow: (kind, active) => {
         if (kind === 'upload') return ['users', 'origin', 'transcode', 'storage'];
         if (active.has('cdnShield')) return ['users', 'cdn', 'users'];
         return ['users', 'cdn', 'origin', 'storage', 'cdn', 'users'];
       }
+    },
+    chunkSim: {
+      total: 6,
+      resumeComponentId: 'resumableUpload',
+      crashNodeId: 'origin',
+      label: '一部 2GB 的影片原始檔',
+      startLabel: '開始上傳這部影片'
     },
     events: [
       {

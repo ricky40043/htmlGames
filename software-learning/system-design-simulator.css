@@ -104,10 +104,32 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px 
 .sim-event-outcome.bad{border-color:rgba(251,113,133,.4)}
 .sim-event-outcome .sim-continue{margin-top:10px}
 .sim-chart-wrap summary{cursor:pointer;color:var(--muted);font-size:.85rem;padding:4px 0}
+.sim-speed-controls{display:flex;align-items:center;gap:8px;margin:0 0 16px;flex-wrap:wrap}
+.sim-speed-label{color:var(--muted);font-size:.78rem}
+.sim-speed-btn{padding:5px 12px!important;font-size:.78rem!important}
+.sim-speed-btn.active{background:var(--accent);border-color:var(--accent);color:#0a0a10;font-weight:800}
+.sim-trace{margin:0 0 22px;border:1px solid var(--border);border-radius:12px;background:#08080d;overflow:hidden}
+.sim-trace-head{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:#111119;border-bottom:1px solid var(--border);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.72rem;letter-spacing:.05em;color:var(--muted);text-transform:uppercase}
+.sim-trace-clear{background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:2px 9px;font-size:.68rem;cursor:pointer}
+.sim-trace-clear:hover{color:#fff;border-color:var(--muted)}
+.sim-trace-body{max-height:190px;overflow-y:auto;padding:8px 14px;display:flex;flex-direction:column;gap:3px}
+.sim-trace-line{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.78rem;color:#c7c7d4;line-height:1.5}
+.sim-trace-line.head{color:var(--accent);font-weight:700;margin-top:4px}
+.sim-trace-line.ok{color:var(--sim-good)}
+.sim-trace-line.bad{color:var(--sim-bad)}
+.sim-trace-line.done{color:var(--accent-2);font-weight:700;margin-bottom:4px}
+.sim-trace-ts{color:var(--muted);margin-right:8px}
+.sim-chunklab{margin:0 0 22px;padding:18px 20px;border:1px solid var(--border);border-radius:14px;background:rgba(139,92,246,.05)}
+.sim-chunklab h2{margin:0 0 8px;font-size:1.02rem}
+.sim-chunklab-desc{margin:0 0 14px;color:var(--muted);font-size:.85rem;line-height:1.6}
+.sim-chunk-track{height:14px;border-radius:999px;background:#0c0c13;border:1px solid var(--border);overflow:hidden}
+.sim-chunk-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .3s ease}
+.sim-chunk-label{margin:8px 0 14px;font-size:.82rem;color:#d7d7e2;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.sim-chunklab-actions{display:flex;gap:10px;flex-wrap:wrap}
 @keyframes simBurst{to{transform:translate(var(--dx),var(--dy));opacity:0}}
 @keyframes simTopoFail{0%,100%{transform:scale(1)}40%{transform:scale(1.3)}}
 @keyframes simTopoPulse{0%,100%{opacity:1}50%{opacity:.5}}
 @media(prefers-reduced-motion:reduce){.sim-burst-dot,.sim-topo-node.failing circle,.sim-topo-node.stressed circle{animation:none}}
 
 @keyframes simIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
-@media(max-width:620px){.sim-comp-grid{grid-template-columns:1fr}.sim-topo-controls{flex-direction:column}.sim-topo-controls .button{width:100%}}
+@media(max-width:620px){.sim-comp-grid{grid-template-columns:1fr}.sim-topo-controls,.sim-chunklab-actions{flex-direction:column}.sim-topo-controls .button,.sim-chunklab-actions .button{width:100%}}
