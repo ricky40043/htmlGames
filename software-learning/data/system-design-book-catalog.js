@@ -19,6 +19,6 @@ window.SYSTEM_DESIGN_BOOK = {
     { id: 'sd-book-14', order: 14, title: '設計 YouTube', status: 'ready', dataFiles: ['system-design-book-ch14-part1.js','system-design-book-ch14-part2.js','system-design-book-ch14-final.js'], simulator: 'system-design-simulator.html?chapter=sd-book-14' },
     { id: 'sd-book-15', order: 15, title: '設計 Google Drive', status: 'ready', dataFiles: ['system-design-book-ch15-part1.js','system-design-book-ch15-part2.js','system-design-book-ch15-final.js'], simulator: 'system-design-simulator.html?chapter=sd-book-15' },
     { id: 'sd-book-16', order: 16, title: '持續學習：System Design Interview Playbook', status: 'ready', dataFiles: ['system-design-book-ch16-part1.js','system-design-book-ch16-part2.js','system-design-book-ch16-final.js'] },
-    { id: 'sd-book-17', order: 17, title: '設計 Google 地圖', status: 'ready', dataFiles: ['system-design-book-ch17-part1.js','system-design-book-ch17-part2.js','system-design-book-ch17-final.js'] }
+    { id: 'sd-book-17', order: 17, title: '設計 Google 地圖', status: 'ready', dataFiles: ['system-design-book-ch17-part1.js','system-design-book-ch17-part2.js','system-design-book-ch17-final.js'], simulator: 'system-design-simulator.html?chapter=sd-book-17' }
   ]
 };

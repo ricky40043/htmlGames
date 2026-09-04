@@ -43,6 +43,36 @@
     };
   }
 
+  // ---------- Scenario vocabulary ----------
+  // This engine now drives more than one product. Everything below used to say「觀眾」「影片」
+  // 「畫質」「串流伺服器」inline, which reads as nonsense the moment the scenario is a map app
+  // instead of a video platform. A scenario can override any of these words via `sim.lexicon`;
+  // the defaults are exactly the strings the video chapter shipped with, so that chapter's
+  // output is unchanged.
+  const LEXICON_DEFAULTS = {
+    viewer: '觀眾',            // the population being served
+    testViewer: '測試觀眾',     // the draggable avatar
+    item: '影片',              // the thing being requested
+    segment: '影片',           // the unit that arrives one at a time
+    quality: '畫質',           // what degrades when bandwidth drops
+    edgeNode: 'CDN 邊緣節點',   // where a cache hit is answered
+    originNode: '串流伺服器',   // where a miss has to go
+    regionParts: 'CDN、Load Balancer、串流伺服器與 API 伺服器',
+    watchVerb: '觀看',
+    concurrentNoun: '同一部影片',
+    wanderIdle: '🚶 讓觀眾隨機走動',
+    wanderActive: '🚶 隨機走動中（點一下停止）',
+    zoneName: '訊號不良區',
+    edgeShort: 'CDN',        // short name for the edge tier in running prose
+    client: '播放器',         // what the user-facing client is called
+    itemMeasure: '部',       // measure word that goes with `item`
+    overloadSymptom: '緩衝變久',
+    qoeMetric: '播放品質'    // the name of the second score meter in running prose
+  };
+  function lex(sim, key) {
+    return sim?.lexicon?.[key] ?? LEXICON_DEFAULTS[key];
+  }
+
   // ---------- Component options (每個能力可以選不同做法/策略，不只是開關) ----------
   // Every component declares `options`, an ordered list starting with an 'off' entry. Clicking
   // a node cycles forward through this list. `state.choice[componentId]` holds the selected
@@ -224,8 +254,19 @@
     demand += (topoOf(sim, state)?.nodes || [])
       .filter(n => n.kind === 'user' && n.headcount && n.regionKey === node.regionKey)
       .reduce((s, n) => s + n.headcount, 0);
-    if (node.loadKind === 'stream') demand *= (1 - offloadRatio(sim, state));
-    else if (node.loadKind === 'api') demand *= (sim.capacity.apiRatio ?? 0.2);
+    // Which slice of the modelled population this tier actually carries. `offloadKind` names the
+    // one tier an edge cache absorbs traffic from, so its demand shrinks as the hit rate rises;
+    // every other tier takes a ratio from `loadRatio`, which may be a plain number or a function
+    // of the player's current choices (a scenario where batching divides the write rate needs
+    // that). The video chapter's original 'stream'/'api' pair stays the default, so its numbers
+    // are unchanged.
+    const offloadKind = sim.capacity.offloadKind || 'stream';
+    const ratios = sim.capacity.loadRatio || { api: sim.capacity.apiRatio ?? 0.2 };
+    if (node.loadKind === offloadKind) demand *= (1 - offloadRatio(sim, state));
+    else if (node.loadKind in ratios) {
+      const r = ratios[node.loadKind];
+      demand *= (typeof r === 'function' ? r(makeChoiceCtx(sim, state)) : r);
+    }
     // Capacity comes only from machines that are actually up: pulling one out really does
     // shrink what this tier can carry, which is what makes killing a machine mean something.
     const capacity = aliveInstanceIndexes(sim, state, node).length * node.capacityPerInstance;
@@ -647,12 +688,12 @@
     const total = Object.values(w).reduce((s, v) => s + v, 0) || 1;
     const rows = topo.regionIds.map(r => `<li>
         <b>${esc(topo.regionLabel[r] || r)}</b>
-        <span>觀眾占比 ${Math.round((w[r] / total) * 100)}%</span>
+        <span>${esc(lex(sim, 'viewer'))}占比 ${Math.round((w[r] / total) * 100)}%</span>
         <button class="sim-mini-btn" type="button" data-region-remove="${esc(r)}">移除</button>
       </li>`).join('');
     return `<details class="sim-arch-editor" open>
       <summary>🏗️ 架構編輯：自己新增地區與使用者群組</summary>
-      <p class="sim-arch-note">地區不是寫死的。新增一個地區會照同一份藍圖生出它自己的 CDN、Load Balancer、串流伺服器與 API 伺服器，並把總觀眾人數重新分配到所有地區——這也是真實世界加一個 edge region 的效果。</p>
+      <p class="sim-arch-note">地區不是寫死的。新增一個地區會照同一份藍圖生出它自己的${esc(lex(sim, 'regionParts'))}，並把總${esc(lex(sim, 'viewer'))}人數重新分配到所有地區——這也是真實世界加一個 edge region 的效果。</p>
       <div class="sim-arch-row">
         <input type="text" class="sim-arch-input" data-region-name placeholder="新地區名稱，例如「新加坡」" aria-label="新地區名稱" />
         <button class="button secondary" type="button" data-region-add>＋ 新增地區</button>
@@ -694,7 +735,7 @@
       </div>
       <p class="sim-topo-scroll-hint">← 左右滑動可以看完整張架構圖 →</p>
       ${interactive
-        ? '<p class="sim-topo-hint"><b>點單獨一台機器</b>（#1／#2…）＝把那一台拔掉或插回去，正在傳給它的請求會當場中斷；<b>點節點上方有底線的策略文字</b>＝切換備援做法；<b>＋／−</b>＝加開或收掉機器。符號：<b>✓</b> 有保護 · <b>⚠</b> 機器照跑但沒備援 · <b>✕</b> 還沒建，流量不會經過它。負載超過 100% 變紅色，代表這一區的機器已經吃不下這些觀眾。</p>'
+        ? '<p class="sim-topo-hint"><b>點單獨一台機器</b>（#1／#2…）＝把那一台拔掉或插回去，正在傳給它的請求會當場中斷；<b>點節點上方有底線的策略文字</b>＝切換備援做法；<b>＋／−</b>＝加開或收掉機器。符號：<b>✓</b> 有保護 · <b>⚠</b> 機器照跑但沒備援 · <b>✕</b> 還沒建，流量不會經過它。負載超過 100% 變紅色，代表這一區的機器已經吃不下這些' + esc(lex(sim, 'viewer')) + '。</p>'
         : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法與當時開的機器數量決定。</p>'}
       ${showControls ? `<div class="sim-topo-controls">
         <button class="button secondary sim-add-users" type="button" data-add="100">${esc(sim.addUsersLabel || '＋100 使用者')}</button>
@@ -702,7 +743,7 @@
         <button class="button secondary sim-demo" type="button" data-kind="upload">${esc(sim.demoLabels?.upload || '⬆ 模擬一次寫入請求')}</button>
         ${sim.demoLabels?.search ? `<button class="button secondary sim-demo" type="button" data-kind="search">${esc(sim.demoLabels.search)}</button>` : ''}
         ${sim.concurrentViewersLabel ? `<button class="button secondary sim-demo-concurrent" type="button" data-count="10">${esc(sim.concurrentViewersLabel)}</button>` : ''}
-        ${sim.dragViewerSim ? '<button class="button secondary sim-wander-btn" type="button" data-viewer-wander aria-pressed="false">🚶 讓觀眾隨機走動</button>' : ''}
+        ${sim.dragViewerSim ? `<button class="button secondary sim-wander-btn" type="button" data-viewer-wander aria-pressed="false">${esc(lex(sim, 'wanderIdle'))}</button>` : ''}
       </div>
       ${sim.mutableTopology ? architectureEditorHtml(sim, state) : ''}` : ''}
       ${speedControls}
@@ -1125,14 +1166,14 @@
         const res = addRegion(sim, state, input?.value);
         if (!res) return;
         if (res.error) { traceLine(root, `⚠️ ${res.error}`, 'bad'); return; }
-        traceLine(root, `🏗️ 新增地區「${esc(res.name)}」：已照藍圖生出它自己的 CDN、Load Balancer、串流伺服器與 API 伺服器，總觀眾人數重新分配到所有地區。`, 'ok');
+        traceLine(root, `🏗️ 新增地區「${esc(res.name)}」：已照藍圖生出它自己的${esc(lex(sim, 'regionParts'))}，總${esc(lex(sim, 'viewer'))}人數重新分配到所有地區。`, 'ok');
         onStructureChange();
       });
       root.querySelectorAll('[data-region-remove]').forEach(b => {
         b.addEventListener('click', () => {
           const res = removeRegion(sim, state, b.dataset.regionRemove);
           if (res.error) { traceLine(root, `⚠️ ${res.error}`, 'bad'); return; }
-          traceLine(root, `🏗️ 移除地區「${esc(res.name)}」，它的觀眾被重新分配到其他地區。`, '');
+          traceLine(root, `🏗️ 移除地區「${esc(res.name)}」，它的${esc(lex(sim, 'viewer'))}被重新分配到其他地區。`, '');
           onStructureChange();
         });
       });
@@ -1233,7 +1274,7 @@
           return;
         }
         const machineNote = route.chosen.map(c => `${findNode(topo, c.nodeId)?.label} #${c.idx + 1}`).join('、');
-        traceLine(root, `— 模擬 ${count} 人同時觀看同一部影片${regionLabel ? `（${regionLabel}地區）` : ''}${machineNote ? `，全部被導到同一組機器：${machineNote}` : ''} —`, 'head');
+        traceLine(root, `— 模擬 ${count} 人同時${esc(lex(sim, 'watchVerb'))}${esc(lex(sim, 'concurrentNoun'))}${regionLabel ? `（${regionLabel}地區）` : ''}${machineNote ? `，全部被導到同一組機器：${machineNote}` : ''} —`, 'head');
         const weights = distanceWeights(topo, route.visited, route.points);
         for (let i = 0; i < count; i++) {
           setTimeout(() => {
@@ -1669,8 +1710,8 @@
         // happens: the segment already in flight was fetched under the old conditions and still
         // plays at its original quality. Real players behave the same way.
         traceLine(root, state.dragViewer.inZone
-          ? '🙋 測試觀眾走進訊號不良區——目前正在傳的那一段還是照舊畫質播完，要等下一段收到之後畫質才會降下來。'
-          : '🙋 測試觀眾離開訊號不良區——同樣要等下一段收到之後，畫質才會開始往回爬。', state.dragViewer.inZone ? 'bad' : 'ok');
+          ? `🙋 ${lex(sim, 'testViewer')}走進${lex(sim, 'zoneName')}——目前正在傳的那一段還是照舊${lex(sim, 'quality')}播完，要等下一段收到之後${lex(sim, 'quality')}才會降下來。`
+          : `🙋 ${lex(sim, 'testViewer')}離開${lex(sim, 'zoneName')}——同樣要等下一段收到之後，${lex(sim, 'quality')}才會開始往回爬。`, state.dragViewer.inZone ? 'bad' : 'ok');
       }
     };
 
@@ -1693,7 +1734,7 @@
         state.dragViewer.regionId = hit;
         if (regionText) regionText.textContent = `由${topo.regionLabel?.[hit] || hit}服務`;
         state.dragViewer.lastPathKind = null;
-        traceLine(root, `🙋 測試觀眾移動到「${esc(topo.regionLabel?.[hit] || hit)}」，改由這一區的節點服務。`, 'head');
+        traceLine(root, `🙋 ${esc(lex(sim, 'testViewer'))}移動到「${esc(topo.regionLabel?.[hit] || hit)}」，改由這一區的節點服務。`, 'head');
       }
       refreshZoneFlag();
     };
@@ -1789,15 +1830,15 @@
     const syncWanderBtn = () => {
       if (!wanderBtn) return;
       wanderBtn.classList.toggle('active', !!state.dragViewer.wander);
-      wanderBtn.textContent = state.dragViewer.wander ? '🚶 隨機走動中（點一下停止）' : '🚶 讓觀眾隨機走動';
+      wanderBtn.textContent = state.dragViewer.wander ? lex(sim, 'wanderActive') : lex(sim, 'wanderIdle');
       wanderBtn.setAttribute('aria-pressed', String(!!state.dragViewer.wander));
     };
     wanderBtn?.addEventListener('click', () => {
       state.dragViewer.wander = !state.dragViewer.wander;
       syncWanderBtn();
       traceLine(root, state.dragViewer.wander
-        ? '🚶 測試觀眾開始隨機走動，會自己走進走出訊號不良區。'
-        : '🚶 測試觀眾停下來了。', '');
+        ? `🚶 ${lex(sim, 'testViewer')}開始隨機走動，會自己走進走出${lex(sim, 'zoneName')}。`
+        : `🚶 ${lex(sim, 'testViewer')}停下來了。`, '');
     });
     syncWanderBtn();
 
@@ -1882,8 +1923,8 @@
       const pathKind = servedFromOrigin ? (hasEdgeCache ? 'miss' : 'noCdn') : 'edge';
       if (pathKind !== dv.lastPathKind) {
         dv.lastPathKind = pathKind;
-        if (pathKind === 'edge') traceLine(root, `🙋 這段影片在「${esc(regionName)}」的 CDN 邊緣節點命中，直接從 CDN 送出，完全沒有碰到後面的串流伺服器。`, 'ok');
-        else if (pathKind === 'miss') traceLine(root, `🙋 CDN 沒有這部影片，這段回源到「${esc(regionName)}」的串流伺服器，再經 CDN 送出。`, '');
+        if (pathKind === 'edge') traceLine(root, `🙋 這段${esc(lex(sim, 'segment'))}在「${esc(regionName)}」的${esc(lex(sim, 'edgeNode'))}命中，直接從${esc(lex(sim, 'edgeShort'))}送出，完全沒有碰到後面的${esc(lex(sim, 'originNode'))}。`, 'ok');
+        else if (pathKind === 'miss') traceLine(root, `🙋 ${esc(lex(sim, 'edgeShort'))}沒有這${esc(lex(sim, 'itemMeasure'))}${esc(lex(sim, 'item'))}，這段回源到「${esc(regionName)}」的${esc(lex(sim, 'originNode'))}，再經${esc(lex(sim, 'edgeShort'))}送出。`, '');
         else traceLine(root, `🙋 目前沒有建 CDN，每一段都直接從「${esc(regionName)}」的串流伺服器送出。`, '');
       }
 
@@ -1924,7 +1965,7 @@
         }
         if (overloadFactor < 1 && !dv.warnedOverload) {
           dv.warnedOverload = true;
-          traceLine(root, `⚠️「${esc(originNode?.label || regionName)}」已超載（負載 ${Math.round(load.ratio * 100)}%），分給每位觀眾的頻寬被壓縮，畫質會被迫下降——加開機器或用 CDN 分流才救得回來。`, 'bad');
+          traceLine(root, `⚠️「${esc(originNode?.label || regionName)}」已超載（負載 ${Math.round(load.ratio * 100)}%），分給每位${esc(lex(sim, 'viewer'))}的頻寬被壓縮，${esc(lex(sim, 'quality'))}會被迫下降——加開機器或用${esc(lex(sim, 'edgeShort'))}分流才救得回來。`, 'bad');
         }
         if (overloadFactor >= 1) dv.warnedOverload = false;
       };
@@ -1941,8 +1982,8 @@
         },
         // A segment lost because its machine was pulled is a stall, not an arrival: nothing is
         // measured, so the quality for the next segment is left exactly where it was.
-        onLost: () => { if (!isCurrent()) return; traceLine(root, '🙋 這一段影片沒有送達（負責的機器中途被拔掉），播放器會卡住重新請求。', 'bad'); settle(); },
-        onBlocked: () => { if (!isCurrent()) return; traceLine(root, '🙋 測試觀眾完全收不到影片：這一區沒有任何一台機器可以服務他。', 'bad'); settle(); }
+        onLost: () => { if (!isCurrent()) return; traceLine(root, `🙋 這一段${lex(sim, 'segment')}沒有送達（負責的機器中途被拔掉），${lex(sim, 'client')}會卡住重新請求。`, 'bad'); settle(); },
+        onBlocked: () => { if (!isCurrent()) return; traceLine(root, `🙋 ${lex(sim, 'testViewer')}完全收不到${lex(sim, 'item')}：這一區沒有任何一台機器可以服務他。`, 'bad'); settle(); }
       });
       if (!handle) settle();
     };
@@ -1986,7 +2027,7 @@
     const over = overloadedNodes(sim, state);
     if (!over.length) return '';
     const list = over.slice(0, 3).map(x => `${esc(x.node.label)}（${Math.round(x.load.ratio * 100)}%）`).join('、');
-    return `<div class="sim-hint bad">⚠️ 目前有 ${over.length} 個節點超載：${list}${over.length > 3 ? ' 等' : ''}。再推進一個月會扣播放品質分數——用節點旁的 ＋ 加開機器，或改用 CDN 把觀看流量分流到邊緣節點。</div>`;
+    return `<div class="sim-hint bad">⚠️ 目前有 ${over.length} 個節點超載：${list}${over.length > 3 ? ' 等' : ''}。再推進一個月會扣${esc(lex(sim, 'qoeMetric'))}分數——用節點旁的 ＋ 加開機器，或改用${esc(lex(sim, 'edgeShort'))}把流量分流到邊緣節點。</div>`;
   }
 
   function refreshLoadSummary(root, sim, state) {
@@ -2101,7 +2142,7 @@
           month: state.month - 1,
           title: '容量不足：節點超載',
           narrative: `這個月有 ${overload.count} 個節點的負載超過容量，最嚴重的是「${overload.worst.node.label}」（${Math.round(overload.worst.load.ratio * 100)}%）。`,
-          result: '超過容量的機器沒辦法給每位觀眾足夠的頻寬，觀眾端表現為緩衝變久、畫質被迫下降。加開機器或把觀看流量分流到 CDN 邊緣節點都能解決。',
+          result: `超過容量的機器沒辦法給每位${lex(sim, 'viewer')}足夠的頻寬，${lex(sim, 'viewer')}端表現為${lex(sim, 'overloadSymptom')}、${lex(sim, 'quality')}被迫下降。加開機器或把流量分流到${lex(sim, 'edgeShort')}都能解決。`,
           ok: false, uptime: 0, qoe: -overload.penalty,
           relevantComponents: [], choiceSnapshot: snapshotChoices(sim, state),
           capacityIssue: true
