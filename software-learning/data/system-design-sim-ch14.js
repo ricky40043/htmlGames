@@ -3,12 +3,19 @@
 
   const ref = pageId => ({ pageId, sectionId: pageId.replace(/-p\d+$/, '') });
 
+  // Component list, topology and events below are grounded directly in the book's own
+  // "設計 YouTube" chapter — specifically its 高階設計 component diagrams (圖 14-3~14-6) and its
+  // 錯誤處理 section, which lists exactly these failure/recovery pairs: Metadata DB Master/Slave
+  // failover, stateless API server redirection, task-worker reassignment, replicated metadata
+  // cache, and (from 節省成本的最佳化做法) CDN-for-popular-content-only cost tiering, plus
+  // (from 安全性最佳化) pre-signed upload URLs. This replaces an earlier version that invented
+  // its own capability names instead of using the book's.
   window.SYSTEM_DESIGN_SIM['sd-book-14'] = {
     chapterId: 'sd-book-14',
     title: 'YouTube 生存戰：撐過爆紅的第一年',
-    subtitle: '你接手一個剛起步的影片平台。12 個月內，使用者會從 5,000 成長到數百萬，中間會發生上傳尖峰、影片爆紅、機房斷線與帳務事故。你在每個月初決定要不要投資哪些架構能力——事件發生時不能再改變主意，只能承擔當下架構的後果。',
+    subtitle: '你接手一個剛起步的影片平台。12 個月內，使用者會從 5,000 成長到數百萬，中間會發生書裡「錯誤處理」一節列出的那些真實故障：資料庫 Master 當機、API 伺服器掛掉、轉檔工作程序卡死、快取節點失效。你在每個月初決定要不要投資哪些備援能力——事件發生時不能再改變主意，只能承擔當下架構的後果。',
     briefing: [
-      '這不是要你寫出轉檔演算法或一致性雜湊的程式碼，而是練習「先投資哪個架構能力」的判斷——跟第 14 章教材裡討論的取捨完全對應。',
+      '這裡的每個能力都對應書裡「錯誤處理」一節實際列出的情境，不是憑空發明的——例如 Metadata 資料庫要有 Master/Slave 複寫，Master 當機才頂替得上來。',
       '每個月你可以開關任何架構能力；開著會持續消耗「營運效率」分數，但能在對應事件發生時保護「可用率」與「播放品質」。',
       '12 個月後會依可用率、播放品質、營運效率算出總評，並逐一列出每個事件「你當時有沒有準備」。'
     ],
@@ -18,52 +25,52 @@
     viewersAtMonth: m => Math.round(5000 * Math.pow(1.62, m)),
     components: [
       {
-        id: 'cdnShield',
-        name: 'CDN ＋ Origin Shield',
-        shortName: 'CDN／源站防護',
-        cost: 3,
-        desc: '熱門影片從 Edge 直接回應，Origin 不會被瞬間流量打爆。',
-        ...ref('sd14-s07-p03')
-      },
-      {
-        id: 'elasticTranscode',
-        name: '彈性轉檔 Worker Pool',
-        shortName: '彈性轉檔',
+        id: 'apiRedundancy',
+        name: 'API 伺服器備援容量',
+        shortName: 'API 備援',
         cost: 2,
-        desc: '上傳尖峰時 Queue 可以吸收，Worker 依佇列深度自動擴縮。',
-        ...ref('sd14-s05-p02')
+        desc: 'API 伺服器是無狀態的，維持足夠的備援台數，單台當機時負載平衡器能立刻把流量導到其他健康的伺服器。',
+        ...ref('sd14-s02-p01')
       },
       {
-        id: 'retryBudget',
-        name: '重試預算 ＋ DLQ',
-        shortName: '重試紀律',
-        cost: 1,
-        desc: '失敗有 retry 上限，超過就進死信佇列，不會無限重試放大故障。',
-        ...ref('sd14-s09-p03')
+        id: 'dbMasterSlave',
+        name: 'Metadata 資料庫 Master／Slave 複寫',
+        shortName: 'DB 主從複寫',
+        cost: 3,
+        desc: 'Master 當機時，可以把其中一個 Slave 提升為新 Master；Slave 當機則啟動新 Slave 再從 Master 讀取資料補上。',
+        ...ref('sd14-s04-p01')
       },
       {
-        id: 'hotColdTier',
-        name: 'Hot／Cold 儲存分層',
-        shortName: '冷熱分層',
-        cost: -2,
-        desc: '冷門影片自動降到便宜儲存層，長期儲存成本不會隨影片庫線性暴增。',
+        id: 'cacheReplica',
+        name: 'Metadata 快取多節點複寫',
+        shortName: '快取複寫',
+        cost: 2,
+        desc: '快取資料複寫到多個節點；其中一個節點壞了，還是可以從其他節點取得資料，並替換掉有問題的節點。',
+        ...ref('sd14-s02-p02')
+      },
+      {
+        id: 'transcodeResilience',
+        name: '轉碼管線容錯',
+        shortName: '轉碼容錯',
+        cost: 3,
+        desc: '任務工作程序當機時，任務排程器把未完成的工作重新指派給其他工作程序；資源管理工具的佇列與 DAG 排程器也都有副本或能重新生成。',
+        ...ref('sd14-s09-p01')
+      },
+      {
+        id: 'cdnPopularOnly',
+        name: 'CDN 只服務熱門內容',
+        shortName: 'CDN 分層',
+        cost: -3,
+        desc: '長尾、冷門的影片留在自己的伺服器提供服務，只有真正受歡迎的內容才進 CDN，避免幫幾乎沒人看的舊影片付高額 CDN 費用。',
         ...ref('sd14-s10-p03')
       },
       {
-        id: 'multiRegion',
-        name: '跨區域備援',
-        shortName: '跨區備援',
-        cost: 4,
-        desc: 'Metadata 與 CDN 節點分散在多個區域，單一機房斷線不會讓那個地區完全看不到影片。',
-        ...ref('sd14-s12-p01')
-      },
-      {
-        id: 'idempotentPublish',
-        name: '冪等發布處理',
-        shortName: '冪等發布',
-        cost: 1,
-        desc: '轉檔完成事件被佇列重送時，不會重複發布或重複觸發計費。',
-        ...ref('sd14-s04-p03')
+        id: 'preSignedUpload',
+        name: '預簽名網址直傳',
+        shortName: '預簽名直傳',
+        cost: -1,
+        desc: '客戶端拿到預簽名網址後直接上傳到原始儲存系統，不必經過 API 伺服器中轉大檔案位元組，同時也更安全——只有授權使用者可以上傳。',
+        ...ref('sd14-s11-p02')
       },
       {
         id: 'resumableUpload',
@@ -78,141 +85,134 @@
       viewBox: '0 0 900 460',
       nodes: [
         { id: 'users', kind: 'user', label: '觀眾', x: 80, y: 250, arriveLabel: '使用者裝置收到回應' },
-        { id: 'cdn', kind: 'component', componentId: 'cdnShield', label: 'CDN Edge', x: 300, y: 120, arriveLabel: '檢查熱門內容是否命中 Edge 快取' },
-        { id: 'origin', kind: 'fixed', label: 'Origin / API', x: 300, y: 250, arriveLabel: '驗證請求並決定下一步路由' },
-        { id: 'transcode', kind: 'component', componentId: 'elasticTranscode', label: '轉檔 Worker Pool', x: 520, y: 250, arriveLabel: 'Worker 依佇列深度處理轉檔工作' },
-        { id: 'storage', kind: 'fixed', label: 'Storage', x: 740, y: 250, arriveLabel: '寫入或讀取物件儲存' },
-        { id: 'regionB', kind: 'component', componentId: 'multiRegion', label: '備援機房', x: 740, y: 120, region: '備援區域', arriveLabel: '流量切換到備援區域接手' },
-        { id: 'retryBadge', kind: 'component', componentId: 'retryBudget', label: '重試／DLQ', x: 260, y: 400, size: 'small', arriveLabel: '套用 retry 上限與死信佇列規則' },
-        { id: 'publishBadge', kind: 'component', componentId: 'idempotentPublish', label: '冪等發布', x: 620, y: 400, size: 'small', arriveLabel: '以 video_id 去重，避免重複發布' },
-        { id: 'hotColdBadge', kind: 'component', componentId: 'hotColdTier', label: '冷熱分層', x: 800, y: 340, size: 'small', arriveLabel: '依冷熱程度搬移儲存層級' },
-        { id: 'uploadBadge', kind: 'component', componentId: 'resumableUpload', label: '斷點續傳', x: 440, y: 400, size: 'small', arriveLabel: '檢查已成功的位元組位置' }
+        { id: 'cdn', kind: 'component', componentId: 'cdnPopularOnly', label: 'CDN', x: 300, y: 120, arriveLabel: '檢查熱門內容是否命中 Edge 快取' },
+        { id: 'apiServer', kind: 'component', componentId: 'apiRedundancy', label: 'API 伺服器', x: 300, y: 250, arriveLabel: '驗證請求並決定下一步路由' },
+        { id: 'transcodeArch', kind: 'component', componentId: 'transcodeResilience', label: '轉碼架構', x: 520, y: 250, arriveLabel: 'DAG 排程器指派任務給工作程序' },
+        { id: 'storage', kind: 'fixed', label: '儲存系統', x: 740, y: 250, arriveLabel: '寫入或讀取原始／已轉碼影片' },
+        { id: 'metadataCache', kind: 'component', componentId: 'cacheReplica', label: 'Metadata 快取', x: 740, y: 120, arriveLabel: '從 Metadata 快取節點取得資料' },
+        { id: 'preSignedBadge', kind: 'component', componentId: 'preSignedUpload', label: '預簽名直傳', x: 420, y: 400, size: 'small', arriveLabel: '直接對原始儲存系統上傳，略過 API 伺服器' },
+        { id: 'metadataDB', kind: 'component', componentId: 'dbMasterSlave', label: 'Metadata 資料庫', x: 620, y: 400, size: 'small', arriveLabel: '讀取或寫入 Metadata 資料庫' },
+        { id: 'uploadBadge', kind: 'component', componentId: 'resumableUpload', label: '斷點續傳', x: 800, y: 340, size: 'small', arriveLabel: '檢查已成功的位元組位置' }
       ],
       edges: [
         { from: 'users', to: 'cdn' },
-        { from: 'cdn', to: 'origin' },
-        { from: 'origin', to: 'transcode' },
-        { from: 'transcode', to: 'storage' },
+        { from: 'cdn', to: 'apiServer' },
+        { from: 'apiServer', to: 'transcodeArch' },
+        { from: 'transcodeArch', to: 'storage' },
         { from: 'storage', to: 'cdn' },
-        { from: 'origin', to: 'regionB', requiresComponent: 'multiRegion' },
-        { from: 'origin', to: 'retryBadge', kind: 'stub', requiresComponent: 'retryBudget' },
-        { from: 'transcode', to: 'publishBadge', kind: 'stub', requiresComponent: 'idempotentPublish' },
-        { from: 'storage', to: 'hotColdBadge', kind: 'stub', requiresComponent: 'hotColdTier' },
-        { from: 'origin', to: 'uploadBadge', kind: 'stub', requiresComponent: 'resumableUpload' }
+        { from: 'apiServer', to: 'metadataCache' },
+        { from: 'users', to: 'preSignedBadge', kind: 'stub', requiresComponent: 'preSignedUpload' },
+        { from: 'apiServer', to: 'metadataDB', kind: 'stub' },
+        { from: 'storage', to: 'uploadBadge', kind: 'stub' }
       ],
       computeFlow: (kind, active) => {
-        if (kind === 'upload') return ['users', 'origin', 'transcode', 'storage'];
-        if (active.has('cdnShield')) return ['users', 'cdn', 'users'];
-        return ['users', 'cdn', 'origin', 'storage', 'cdn', 'users'];
+        if (kind === 'upload') {
+          return active.has('preSignedUpload')
+            ? ['users', 'storage', 'transcodeArch', 'storage']
+            : ['users', 'apiServer', 'storage', 'transcodeArch', 'storage'];
+        }
+        return ['users', 'cdn', 'storage', 'cdn', 'users'];
       }
     },
     chunkSim: {
       total: 6,
       resumeComponentId: 'resumableUpload',
-      crashNodeId: 'origin',
+      crashNodeId: 'storage',
       label: '一部 2GB 的影片原始檔',
       startLabel: '開始上傳這部影片'
     },
     events: [
       {
         month: 2,
-        id: 'uploadSpike',
-        title: '開學／連假上傳潮',
-        relevantComponents: ['elasticTranscode'],
-        demoFlow: ['users', 'origin', 'transcode'],
-        narrative: '大量使用者同時上傳影片，轉檔佇列瞬間堆了平常 8 倍的工作。',
+        id: 'dbMasterDown',
+        title: 'Metadata 主資料庫（Master）當機',
+        relevantComponents: ['dbMasterSlave'],
+        demoFlow: ['users', 'apiServer', 'metadataDB'],
+        narrative: '負責寫入的 Metadata 資料庫 Master 節點突然離線，所有需要更新資料的操作都指向它。',
         resolve: active => {
-          if (active.has('elasticTranscode')) {
-            return { uptime: 0, qoe: -2, log: '彈性 Worker Pool 依佇列深度自動加開，積壓在 6 小時內清完，只有少數使用者感覺轉檔變慢。', ok: true };
+          if (active.has('dbMasterSlave')) {
+            return { uptime: -1, qoe: 0, log: '其中一個 Slave 立刻被提升為新 Master，寫入服務在短暫中斷後恢復，觀眾幾乎沒有察覺。', ok: true };
           }
-          return { uptime: -3, qoe: -14, log: '固定數量的轉檔 Worker 完全吃不消，積壓超過 2 天，大量影片「上傳成功」卻遲遲無法播放，客訴大量湧入。', ok: false };
+          return { uptime: -22, qoe: -4, log: '沒有可頂替的複本，所有需要寫入 Metadata 的操作全部卡住——新影片發布不了、觀看數也不會更新，直到有人手動處理。', ok: false };
         }
       },
       {
         month: 4,
-        id: 'viralHit',
-        title: '一支影片被大帳號轉發',
-        relevantComponents: ['cdnShield', 'retryBudget'],
-        demoFlow: ['users', 'cdn', 'origin', 'retryBadge'],
-        narrative: '一支平常一天幾百次觀看的影片，一小時內被轉發到瞬間 60 倍流量。',
+        id: 'apiServerDown',
+        title: '一台 API 伺服器當機',
+        relevantComponents: ['apiRedundancy'],
+        demoFlow: ['users', 'apiServer'],
+        narrative: '其中一台 API 伺服器硬體故障離線，這台伺服器原本承擔的請求全部需要別人接手。',
         resolve: active => {
-          if (active.has('cdnShield')) {
-            return { uptime: 0, qoe: -1, log: '熱門影片幾乎全部從 Edge Cache 命中，Origin 只承受一次性回源，平台完全沒感覺到這次爆紅。', ok: true };
+          if (active.has('apiRedundancy')) {
+            return { uptime: 0, qoe: 0, log: 'API 伺服器本來就是無狀態的，負載平衡器很快把請求導到其他備援伺服器，容量足夠吸收這些流量。', ok: true };
           }
-          const amplified = !active.has('retryBudget');
-          return {
-            uptime: amplified ? -18 : -9,
-            qoe: -16,
-            log: amplified
-              ? 'Origin 被直接打爆，逾時的 Client 瘋狂自動重試，形成 retry storm，故障範圍從這支影片擴大到整個播放服務。'
-              : 'Origin 被打爆造成明顯降級，但重試預算擋住了 retry storm，沒有擴大成全站故障。',
-            ok: false
-          };
+          return { uptime: -9, qoe: -8, log: '沒有足夠的備援容量，剩餘伺服器瞬間過載，回應時間飆高，不少請求逾時失敗。', ok: false };
         }
       },
       {
         month: 6,
-        id: 'regionOutage',
-        title: '機房停電 30 分鐘',
-        relevantComponents: ['multiRegion'],
-        demoFlow: ['users', 'origin', 'regionB'],
-        narrative: '其中一個資料中心因電力設施故障離線，所有服務瞬間中斷。',
+        id: 'workerStuck',
+        title: '轉碼工作程序當機，任務卡死',
+        relevantComponents: ['transcodeResilience'],
+        demoFlow: ['users', 'apiServer', 'storage', 'transcodeArch'],
+        narrative: '一批影片正在轉碼時，負責處理的任務工作程序當機，任務原本應該要有人接手。',
         resolve: active => {
-          if (active.has('multiRegion')) {
-            return { uptime: -1, qoe: 0, log: '流量與 metadata 讀取切換到其他區域，只有極少數寫入請求短暫失敗，多數使用者沒有察覺。', ok: true };
+          if (active.has('transcodeResilience')) {
+            return { uptime: 0, qoe: -1, log: '任務排程器偵測到工作程序沒有回應，把未完成的任務重新指派給其他健康的工作程序，這批影片仍準時轉出。', ok: true };
           }
-          return { uptime: -20, qoe: -6, log: '這個區域的所有使用者完全無法上傳或觀看，直到電力復原才恢復，形成一次明顯的區域性大當機。', ok: false };
+          return { uptime: -3, qoe: -18, log: '沒有偵測與重派機制，卡在當機工作程序上的轉碼工作永遠不會完成，這些影片的所有畫質版本都上不了架。', ok: false };
         }
       },
       {
         month: 8,
-        id: 'costAudit',
-        title: '投資人要求砍 20% 儲存成本',
-        relevantComponents: ['hotColdTier'],
+        id: 'cdnCostReview',
+        title: '內容團隊要求檢視 CDN 費用',
+        relevantComponents: ['cdnPopularOnly'],
         severity: 'cost',
-        narrative: '影片庫已經累積大量早期熱門、現在幾乎沒人看的舊影片，儲存帳單越來越高。',
+        narrative: '影片庫累積了大量早期熱門、現在幾乎沒人看的舊影片，CDN 帳單卻沒有跟著降下來。',
         resolve: active => {
-          if (active.has('hotColdTier')) {
-            return { qoe: 0, uptime: 0, log: '冷門 rendition 早已降到便宜儲存層，這次稽核只是照既有機制回報數字，不必臨時砍任何東西。', ok: true };
+          if (active.has('cdnPopularOnly')) {
+            return { qoe: 0, uptime: 0, log: '長尾內容早就只留在自己的伺服器提供服務，CDN 費用一直符合預期，這次檢視很快就結束了。', ok: true };
           }
-          return { qoe: -5, uptime: 0, log: '沒有分層機制，只能臨時手動刪除部分冷門 rendition 應急，砍掉了一些使用者仍會用到的畫質選項。', ok: false };
+          return { qoe: -3, uptime: 0, log: '不管冷門熱門全部都進 CDN，其中一大部分流量其實在服務幾乎沒人看的舊影片，帳單明顯偏高，團隊被要求緊急檢討。', ok: false };
         }
       },
       {
         month: 10,
-        id: 'duplicateEvent',
-        title: '佇列重送轉檔完成事件',
-        relevantComponents: ['idempotentPublish'],
-        demoFlow: ['users', 'origin', 'transcode', 'publishBadge'],
-        narrative: '訊息佇列在網路抖動後重送了一批「轉檔完成」事件。',
+        id: 'cacheNodeDown',
+        title: 'Metadata 快取節點當機',
+        relevantComponents: ['cacheReplica'],
+        demoFlow: ['users', 'apiServer', 'metadataCache'],
+        narrative: '其中一個 Metadata 快取節點硬體故障，這個節點原本保存的熱門資料瞬間消失。',
         resolve: active => {
-          if (active.has('idempotentPublish')) {
-            return { uptime: 0, qoe: 0, log: 'Completion handler 以 video_id + pipeline_version 去重，重送的事件被安全忽略。', ok: true };
+          if (active.has('cacheReplica')) {
+            return { uptime: 0, qoe: 0, log: '快取資料本來就複寫到多個節點，這個節點掛掉不影響服務，系統很快把有問題的節點換掉。', ok: true };
           }
-          return { uptime: -2, qoe: -3, log: '同一支影片被重複發布，部分使用者看到通知被重複推播，也有影片被誤判成重新上傳而暫時下架。', ok: false };
+          return { uptime: -5, qoe: -6, log: '只有單一快取節點，掛掉之後所有 Metadata 查詢直接打到資料庫，資料庫負擔瞬間暴增，連帶拖慢其他請求。', ok: false };
         }
       },
       {
         month: 11,
         id: 'finale',
-        title: '跨年直播倒數＋上傳尖峰同時發生',
-        relevantComponents: ['cdnShield', 'elasticTranscode', 'multiRegion'],
-        demoFlow: ['users', 'cdn', 'origin', 'transcode', 'regionB'],
-        narrative: '跨年夜：全站最大流量的直播式觀看，加上大量使用者同時上傳跨年影片，任何一個環節撐不住都會被放大。',
+        title: '跨年夜：流量暴增＋快取不穩＋轉碼工作程序同時出狀況',
+        relevantComponents: ['apiRedundancy', 'cacheReplica', 'transcodeResilience'],
+        demoFlow: ['users', 'apiServer', 'metadataCache', 'storage', 'transcodeArch'],
+        narrative: '跨年夜：全站最大流量同時考驗 API 容量、Metadata 快取穩定性與轉碼管線，任何一環撐不住都會被放大。',
         resolve: active => {
-          const shields = ['cdnShield', 'elasticTranscode', 'multiRegion'].filter(id => active.has(id)).length;
+          const shields = ['apiRedundancy', 'cacheReplica', 'transcodeResilience'].filter(id => active.has(id)).length;
           const table = {
-            3: { uptime: 1, qoe: 1, log: '三道防線都到位：CDN 吸收觀看尖峰、彈性 Worker 吸收上傳尖峰、跨區備援分攤壓力。全站平穩撐過今年流量最高的一夜。', ok: true },
-            2: { uptime: -6, qoe: -6, log: '大部分流量被擋住，但缺的那一環仍造成明顯降級，多數使用者感覺得到卡頓或上傳變慢。', ok: false },
-            1: { uptime: -16, qoe: -14, log: '只有一道防線，撐不住三個尖峰疊加，多個地區同時出現明顯降級與間歇性中斷。', ok: false },
-            0: { uptime: -30, qoe: -25, log: '完全沒有防線，平台在今年流量最高的一晚整個被打垮。', ok: false }
+            3: { uptime: 1, qoe: 1, log: '三道防線都到位：API 備援吸收流量尖峰、快取複寫扛住熱門查詢、轉碼管線容錯撐住跨年影片處理。全站平穩撐過今年流量最高的一夜。', ok: true },
+            2: { uptime: -7, qoe: -7, log: '大部分流量被擋住，但缺的那一環仍造成明顯降級，多數使用者感覺得到卡頓或功能異常。', ok: false },
+            1: { uptime: -17, qoe: -15, log: '只有一道防線，撐不住三個壓力疊加，多個環節同時出現明顯降級與間歇性中斷。', ok: false },
+            0: { uptime: -32, qoe: -26, log: '完全沒有防線，平台在今年流量最高的一晚整個被打垮。', ok: false }
           };
           return table[shields];
         }
       }
     ],
     grade: score => {
-      if (score >= 90) return { letter: 'S', text: '你在成本、可用率與播放品質之間做出了非常成熟的取捨，這年撐過了每一次尖峰與故障。' };
+      if (score >= 90) return { letter: 'S', text: '你在成本、可用率與播放品質之間做出了非常成熟的取捨，這年撐過了書裡列出的每一種真實故障。' };
       if (score >= 78) return { letter: 'A', text: '大部分關鍵時刻都準備到位，只有少數事件讓使用者感覺到明顯的影響。' };
       if (score >= 62) return { letter: 'B', text: '架構撐過了這一年，但至少有一次事件造成了不小的傷害，值得回頭檢討當時的判斷。' };
       if (score >= 45) return { letter: 'C', text: '多次事件都造成明顯損害，這套架構撐過了一年，但過程相當狼狽。' };

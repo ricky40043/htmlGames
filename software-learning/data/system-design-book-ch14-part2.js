@@ -57,12 +57,25 @@ chapter.sections.push(
   ]},
   {id:'sd14-s09-p03',title:'Retry 要避免 Failure Amplification',blocks:[
    {type:'bullets',items:['exponential backoff + jitter','retry budget','per-stage circuit breaker','DLQ/manual inspection','poison file detection','worker lease/visibility timeout']}
+  ]},
+  {id:'sd14-s09-p04',title:'API 伺服器與 Metadata 資料庫：無狀態的可以直接換，有狀態的要看角色',blocks:[
+   {type:'p',text:'API 伺服器本身不保存任何跟特定使用者綁定的 state，一台當機，Load Balancer 健康檢查失敗後直接把流量導到其他伺服器，不需要任何資料搬遷。Metadata 資料庫就不一樣：它保存的是系統的 source of truth，故障處理要看掛掉的是哪個角色。'},
+   {type:'compare',items:[['API 伺服器（stateless）','當機＝少一台可用容量；只要備援容量足夠，切換幾乎無感。'],['Metadata 資料庫 Master','當機＝寫入路徑斷了，必須有 Slave 可以被提升為新 Master。'],['Metadata 資料庫 Slave','當機＝讀取容量下降；啟動新 Slave 並從 Master 同步資料補上。']]},
+   {type:'callout',title:'面試判斷',text:'看到「某個角色的節點掛了」，先問這個角色是不是 stateless、是不是唯一寫入點；這決定了復原是「換一台就好」還是需要 promotion／resync 流程。'}
+  ]},
+  {id:'sd14-s09-p05',title:'複寫的快取與有副本的佇列：不要只設計一個「唯一」節點',blocks:[
+   {type:'p',text:'Metadata 快取如果只有單一節點，一旦當機，所有查詢會直接打到資料庫，資料庫負擔瞬間暴增，形成第二次故障。因此快取資料通常會複寫到多個節點：任一節點掛掉，其他節點還能繼續服務，再把有問題的節點替換掉。'},
+   {type:'stepper',steps:[['偵測','監控發現某個快取或佇列節點沒有回應。'],['旁路','讀取／寫入改走其他還健康的節點或副本。'],['替換','啟動新節點加入叢集，恢復原本的容量與備援程度。'],['驗證','確認新節點資料已同步，才視為完全恢復。']]},
+   {type:'bullets',items:['資源管理工具的任務佇列、工作程序佇列、執行佇列，也適用同樣的道理：佇列節點壞了，切到副本佇列，不讓整個轉碼管線因為單一節點而全部停擺。','任務工作程序（worker）當機時，任務排程器會偵測到沒有回應，把它手上未完成的任務重新指派給其他工作程序執行。']},
+   {type:'callout',title:'共同模式',text:'API 伺服器、Metadata 快取、資源管理工具的佇列、任務工作程序——這些角色的共同設計原則都是「不能只有一個必要節點」，故障時才有東西可以頂替。'}
   ]}],
  quiz:[
   MC('sd14-s09-q1','為何每 stage 要有 durable boundary？','sd14-s09-p01','Crash 後能知道從哪裡安全重做。','支援 recovery 與 exactly-once-like side effects。',[["讓所有 worker 無 state","不是。"],["取消 retry","相反。"],["只為 logging","不只。"]]),
   MC('sd14-s09-q2','1080p 失敗是否一定阻擋 READY？','sd14-s09-p02','取決於 minimum playable set / product requirement。','可以定義 degraded publish。',[["一定阻擋","不一定。"],["一定忽略","也不一定。"],["只看 thumbnail","不足。"]]),
   MC('sd14-s09-q3','Worker 失敗後所有 job 立即無限重試，風險？','sd14-s09-p03','Retry storm 放大依賴故障與成本。','Backoff/jitter/budget。',[["會自動修復 root cause","不會。"],["一定降低 backlog","不一定。"],["不影響下游","錯。"]]),
-  MC('sd14-s09-q4','Poison video 指什麼？','sd14-s09-p03','某輸入每次都 deterministic 觸發 transcoder crash/failure。','需要隔離/DLQ，不應無限重試。',[["熱門影片","不是。"],["被 cache 的影片","不是。"],["只有 metadata 缺 title","不一定。"]])
+  MC('sd14-s09-q4','Poison video 指什麼？','sd14-s09-p03','某輸入每次都 deterministic 觸發 transcoder crash/failure。','需要隔離/DLQ，不應無限重試。',[["熱門影片","不是。"],["被 cache 的影片","不是。"],["只有 metadata 缺 title","不一定。"]]),
+  MC('sd14-s09-q5','API 伺服器當機時，為什麼可以直接換一台而不用搬遷任何資料？','sd14-s09-p04','API 伺服器是 stateless 的，沒有跟特定使用者綁定的狀態需要搬遷。','負載平衡器把流量導到其他健康伺服器即可。',[["因為它會自動備份使用者密碼","與此無關。"],["因為 DNS TTL 很短","不是主因。"],["因為它跟 CDN 是同一台機器","架構上不是同一層。"]]),
+  MC('sd14-s09-q6','Metadata 資料庫的 Master 節點當機，最直接的復原方式是？','sd14-s09-p04','需要有 Slave 可以被提升為新的 Master，才能恢復寫入能力。','把一個 Slave 提升為新 Master。',[["直接把所有請求導到 CDN","CDN 不處理資料庫寫入。"],["重開 API 伺服器就好","API 伺服器本身沒有寫入能力問題。"],["等待使用者重新整理頁面","無法解決寫入路徑斷裂。"]])
  ]
 },
 {
