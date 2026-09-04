@@ -65,7 +65,10 @@ body[data-book-page="simulator"]{background:radial-gradient(circle at top,#17182
 
 /* ---- Topology diagram ---- */
 .sim-topo-wrap{margin:0 0 22px}
-svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10;border:1px solid var(--border);border-radius:14px}
+.sim-topo-scroll{border:1px solid var(--border);border-radius:14px;background:#0a0a10;overflow:hidden}
+svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10}
+/* Only shown once the diagram is actually pannable (see the mobile block at the bottom). */
+.sim-topo-scroll-hint{display:none;margin:6px 0 0;text-align:center;font-size:.72rem;color:var(--muted)}
 .sim-topo-region{fill:rgba(139,92,246,.06);stroke:rgba(139,92,246,.4);stroke-dasharray:6 5;stroke-width:1.5}
 .sim-topo-region-label{fill:#c4b5fd;font-size:12px;font-weight:700}
 .sim-topo-edge{stroke-width:2.5;transition:stroke .2s ease,opacity .2s ease}
@@ -250,4 +253,38 @@ svg.sim-sandbox-svg{width:100%;height:auto;display:block;background:#0a0a10;bord
 @media(prefers-reduced-motion:reduce){.sim-burst-dot,.sim-topo-node.failing circle,.sim-topo-node.stressed circle{animation:none}}
 
 @keyframes simIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+/* ---- Phones ----
+   The topology is the hard case: it cannot usefully shrink, so below this width it keeps a
+   real minimum size and pans horizontally inside its own scroller. Everything else collapses
+   to a single column and loses the desktop paddings that eat a narrow screen alive. */
+@media(max-width:760px){
+  .sim-shell{width:calc(100% - 16px);padding:22px 0 64px}
+  .sim-screen{padding:16px 14px;border-radius:14px}
+  .sim-screen h1{font-size:1.35rem}
+  .sim-lede{font-size:.92rem;line-height:1.7}
+  .sim-briefing-list{padding-left:18px;font-size:.88rem}
+  .sim-topo-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  .sim-topo-scroll svg.sim-topo{min-width:1080px}
+  .sim-topo-scroll svg.sim-sandbox-svg{min-width:820px}
+  .sim-topo-scroll-hint{display:block}
+  .sim-topo-hint{font-size:.74rem;line-height:1.65}
+  .sim-topo-legend{flex-direction:column;gap:10px}
+  .sim-topo-legend-item{max-width:none}
+  .sim-trace-body{max-height:150px;padding:8px 10px}
+  .sim-trace-line{font-size:.72rem}
+  .sim-viewers{font-size:.85rem;line-height:1.7}
+  .sim-meters{gap:9px;margin:14px 0 18px}
+  .sim-arch-editor{padding:10px 12px}
+  .sim-arch-regions li{flex-wrap:wrap;gap:6px}
+  .sim-arch-regions li span{margin-left:0;width:100%}
+  .sim-chunklab,.sim-abrlab{padding:14px 12px}
+  .sim-log-item{padding:11px 12px}
+  .sim-log-narrative,.sim-log-result{font-size:.78rem}
+  .sim-hint{font-size:.8rem;padding:10px 12px}
+  .sim-speed-controls{gap:6px}
+  .sim-speed-btn{flex:1}
+  .sim-event-outcome{padding:13px 14px}
+  .result-actions{flex-direction:column}
+  .result-actions .button{width:100%}
+}
 @media(max-width:620px){.sim-comp-grid{grid-template-columns:1fr}.sim-topo-controls,.sim-chunklab-actions,.sim-abrlab-actions,.sim-sandbox-toolbar{flex-direction:column}.sim-topo-controls .button,.sim-chunklab-actions .button,.sim-abrlab-actions .button,.sim-sandbox-toolbar .button,.sim-sandbox-toolbar select{width:100%}.sim-sandbox-layout{grid-template-columns:1fr}.sim-sandbox-palette{flex-direction:row;flex-wrap:wrap}.sim-palette-item{flex:1 1 72px}}

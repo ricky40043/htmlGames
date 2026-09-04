@@ -174,7 +174,9 @@
       dragViewer: cs ? {
         x: cs.start.x, y: cs.start.y, inZone: false, wander: false,
         regionId: cs.homeRegionId || sim.topology?.regionIds?.[0] || null,
-        qualityId: (cs.ladder || sim.abrSim?.ladder || []).slice(-1)[0]?.id
+        // What is on screen right now, and what the next request will ask for. See wireDragViewer.
+        qualityId: (cs.ladder || sim.abrSim?.ladder || []).slice(-1)[0]?.id,
+        fetchQualityId: (cs.ladder || sim.abrSim?.ladder || []).slice(-1)[0]?.id
       } : null,
       // The bad-signal zone is a movable AND resizable object, not scenery painted at a fixed
       // spot — its live geometry lives here so it survives a full renderPlay remount, exactly
@@ -677,13 +679,20 @@
         <span class="sim-speed-label">播放速度</span>
         ${SPEED_OPTIONS.map(s => `<button class="button secondary sim-speed-btn ${state.speed === s ? 'active' : ''}" type="button" data-speed="${s}">${s}x</button>`).join('')}
       </div>` : '';
+    // On a phone this diagram is ~1300 units wide inside a ~360px viewport: scaled to fit, every
+    // label renders at about 3px and the whole thing is unreadable. The scroll wrapper lets the
+    // stylesheet give the SVG a real minimum width on small screens and pan it sideways instead,
+    // which is the only way a diagram this dense stays legible on a phone.
     return `<div class="sim-topo-wrap ${interactive ? '' : 'locked'}">
-      <svg class="sim-topo" viewBox="${esc(topo.viewBox)}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="架構拓樸圖">
-        ${regionBoxesSvg(topo)}
-        ${edgesSvg(sim, state)}
-        ${nodesSvg(sim, state, interactive)}
-        ${interactive && showControls ? dragViewerSvg(sim, state) : ''}
-      </svg>
+      <div class="sim-topo-scroll">
+        <svg class="sim-topo" viewBox="${esc(topo.viewBox)}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="架構拓樸圖">
+          ${regionBoxesSvg(topo)}
+          ${edgesSvg(sim, state)}
+          ${nodesSvg(sim, state, interactive)}
+          ${interactive && showControls ? dragViewerSvg(sim, state) : ''}
+        </svg>
+      </div>
+      <p class="sim-topo-scroll-hint">← 左右滑動可以看完整張架構圖 →</p>
       ${interactive
         ? '<p class="sim-topo-hint"><b>點單獨一台機器</b>（#1／#2…）＝把那一台拔掉或插回去，正在傳給它的請求會當場中斷；<b>點節點上方有底線的策略文字</b>＝切換備援做法；<b>＋／−</b>＝加開或收掉機器。符號：<b>✓</b> 有保護 · <b>⚠</b> 機器照跑但沒備援 · <b>✕</b> 還沒建，流量不會經過它。負載超過 100% 變紅色，代表這一區的機器已經吃不下這些觀眾。</p>'
         : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法與當時開的機器數量決定。</p>'}
@@ -869,6 +878,35 @@
     });
   }
 
+  // ---------- Packet travel time ----------
+  // Packets move at a CONSTANT speed, and a path's duration falls out of how long that path
+  // physically is. Splitting a fixed total duration evenly across hops (the earlier behaviour)
+  // produced exactly the wrong intuition: the short hop to a nearby CDN edge crawled while the
+  // long haul across an ocean raced, because both got the same slice of time. Being close is
+  // supposed to be *why* the CDN answers quickly, so distance has to drive duration, not the
+  // other way round.
+  const TOKEN_UNITS_PER_MS = 2.6;   // viewBox units travelled per millisecond at 1x
+  const TOKEN_MIN_MS = 180;         // floor so a very short hop is still perceptible
+  const TOKEN_MAX_MS = 6000;
+
+  // Weight per segment = its actual drawn length, multiplied for a hop that crosses regions:
+  // an ocean is not just far, it is also slower per unit of distance (propagation + peering).
+  function distanceWeights(topo, nodeIds, points) {
+    return points.slice(1).map((p, i) => {
+      const a = points[i];
+      const dist = Math.hypot(p.x - a.x, p.y - a.y) || 1;
+      const na = findNode(topo, nodeIds[i]), nb = findNode(topo, nodeIds[i + 1]);
+      const cross = na?.region && nb?.region && na.region !== nb.region;
+      return dist * (cross ? (topo.crossRegionWeight || 3) : 1);
+    });
+  }
+
+  function pathDurationMs(weights, speed, scale = 1) {
+    const total = weights.reduce((sum, wgt) => sum + wgt, 0);
+    const ms = clamp(total / TOKEN_UNITS_PER_MS, TOKEN_MIN_MS, TOKEN_MAX_MS) * scale;
+    return ms / (speed || 1);
+  }
+
   // Cycling a capability's option used to trigger a full render() — that wiped the trace log,
   // killed any in-flight token animation, and flashed the whole screen on every click. This
   // updates only the node, its edges, and its legend row in place. For pool nodes the instance
@@ -943,8 +981,13 @@
     // Position-only remap hook: the test viewer replaces its own `users_*` waypoints with
     // wherever the avatar is standing right now.
     const finalPoints = opts.mapPoint ? points.map((p, i) => opts.mapPoint(visited[i], p) || p) : points;
+    // Weights come from where the packet actually travels (after any remapping), so a viewer
+    // standing right next to their CDN edge really does get a shorter, quicker hop than one
+    // standing across the map.
+    const weights = distanceWeights(topo, visited, finalPoints);
     return spawnToken(svgEl, finalPoints, {
-      weights: hopWeights(topo, visited),
+      weights,
+      durationMs: pathDurationMs(weights, state.speed, opts.durationScale ?? 1),
       ...opts.token,
       guard: () => routeStillAlive(state, chosen),
       onLost: () => {
@@ -989,10 +1032,10 @@
           // These viewers are the group standing at `originNode`, so their requests start and
           // end there rather than at the region's generic users icon.
           mapPoint: originNode ? (nodeId, p) => (nodeId === `users_${regionId}` ? { x: originNode.x, y: originNode.y } : p) : undefined,
+          durationScale: 0.9 + Math.random() * 0.35,
           token: {
             className: 'ambient',
             tokenClass: 'sim-token-ambient',
-            durationMs: (1100 + Math.random() * 900) / (state.speed || 1),
             onDone: circle => setTimeout(() => circle?.remove(), 300 / (state.speed || 1))
           }
         });
@@ -1158,7 +1201,6 @@
         spawnRequest(root, sim, state, svgEl, flowIds, {
           token: {
             className: kind, tokenClass: 'sim-token-demo',
-            durationMs: 1600 / (state.speed || 1),
             onHop: (idx, machine, nodeId) => {
               const n = findNode(topoOf(sim, state), nodeId);
               // Naming the exact machine is the whole point of splitting the pool apart: you can
@@ -1192,12 +1234,12 @@
         }
         const machineNote = route.chosen.map(c => `${findNode(topo, c.nodeId)?.label} #${c.idx + 1}`).join('、');
         traceLine(root, `— 模擬 ${count} 人同時觀看同一部影片${regionLabel ? `（${regionLabel}地區）` : ''}${machineNote ? `，全部被導到同一組機器：${machineNote}` : ''} —`, 'head');
-        const weights = hopWeights(topo, route.visited);
+        const weights = distanceWeights(topo, route.visited, route.points);
         for (let i = 0; i < count; i++) {
           setTimeout(() => {
             spawnToken(svgEl, route.points, {
               className: 'concurrent', tokenClass: 'sim-token-ambient',
-              durationMs: (1400 + Math.random() * 400) / (state.speed || 1),
+              durationMs: pathDurationMs(weights, state.speed, 0.95 + Math.random() * 0.2),
               weights,
               guard: () => routeStillAlive(state, route.chosen),
               onDone: circle => setTimeout(() => circle?.remove(), 250 / (state.speed || 1))
@@ -1210,6 +1252,9 @@
       btn.onclick = () => {
         state.speed = Number(btn.dataset.speed);
         root.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('active', b === btn));
+        // The test viewer's segment cadence is derived from the speed, so it has to be re-paced
+        // rather than left running at the rate it was started with.
+        state.repaceDragViewer?.();
       };
     });
   }
@@ -1265,12 +1310,12 @@
       if (idx >= 0) travelIds = flowIds.slice(0, idx + 1);
     }
     const waypoints = waypointsFor(sim, state, travelIds);
-    const weights = hopWeights(topo, travelIds);
+    const weights = distanceWeights(topo, travelIds, waypoints);
     traceLine(root, `— 事件發生：${event.title} —`, 'head');
     spawnToken(svgEl, waypoints, {
       className: outcome.ok ? 'ok' : 'bad',
       tokenClass: 'sim-token-event',
-      durationMs: 1500 / (state.speed || 1),
+      durationMs: pathDurationMs(weights, state.speed),
       weights,
       onHop: idx => {
         const n = findNode(topo, travelIds[idx]);
@@ -1593,7 +1638,7 @@
   function wireDragViewer(root, sim, state) {
     const cs = sim.dragViewerSim;
     if (!cs || !state.dragViewer) return;
-    if (state.dragViewerTimer) { clearInterval(state.dragViewerTimer); state.dragViewerTimer = null; }
+    if (state.dragViewerTimer) { clearTimeout(state.dragViewerTimer); state.dragViewerTimer = null; }
 
     const svgEl = root.querySelector('svg.sim-topo');
     const g = root.querySelector('[data-drag-viewer]');
@@ -1773,13 +1818,34 @@
     const poorRange = cs.poorMbpsRange || sim.abrSim?.poorMbpsRange || [0.4, 1.6];
     const goodRange = cs.goodMbpsRange || sim.abrSim?.goodMbpsRange || [4.0, 7.5];
     const tickMs = cs.tickMs || sim.abrSim?.tickMs || 900;
+    let segmentInFlight = false;
+    // Every remount (advancing a month re-renders the whole play screen) creates a fresh closure
+    // over fresh DOM. With a self-scheduling chain that is dangerous in a way a plain interval
+    // never was: a token spawned by the PREVIOUS generation is still animating, and when it
+    // lands its callbacks would schedule the next segment using the old, now-detached elements —
+    // stealing the timer from the live generation and writing playback state through dead nodes.
+    // A generation stamp makes every stale callback a no-op.
+    const gen = (state.dragViewerGen = (state.dragViewerGen || 0) + 1);
+    const isCurrent = () => state.dragViewerGen === gen;
+    const scheduleNext = () => {
+      if (!isCurrent()) return;
+      if (state.dragViewerTimer) clearTimeout(state.dragViewerTimer);
+      state.dragViewerTimer = setTimeout(() => { if (isCurrent()) tick(); }, Math.max(90, tickMs * 0.25) / (state.speed || 1));
+    };
 
-    // ONE segment per tick, and the quality decision belongs to the segment's ARRIVAL, not its
-    // departure. That ordering is the whole point: walking into the bad-signal area cannot
-    // retroactively change the segment already in flight — it plays out at the quality it was
-    // requested at, and only the segment that arrives AFTER that measures the worse bandwidth
-    // and drops to 360p. Walking back out behaves the same way in reverse, so quality climbs
-    // back one arrival at a time instead of snapping. Real ABR players work exactly like this.
+    // ONE segment per tick, and TWO separate quality values — which is the whole subtlety here:
+    //
+    //   dv.qualityId      what the viewer is WATCHING right now = the quality of the segment
+    //                     that most recently arrived. This is what the label shows.
+    //   dv.fetchQualityId what the player will ASK FOR next, decided by the bandwidth measured
+    //                     when the last segment landed.
+    //
+    // Collapsing these two into one variable (the earlier bug) made the label jump the instant
+    // the decision was made — i.e. just as the next packet departed — even though what was on
+    // screen at that moment was still the previous segment. Keeping them apart means the
+    // displayed quality changes exactly when the lower-quality segment ARRIVES, one full
+    // segment after the decision, and you can watch the small red packet travel across the
+    // diagram before the label follows it down. Real players behave this way.
     const tick = () => {
       stepWander();
       const dv = state.dragViewer;
@@ -1791,13 +1857,23 @@
       // genuinely comes from the streaming servers; and when there is no CDN at all, the CDN
       // node is not on the path and nothing comes out of it.
       const flowIds = (topo?.computeFlow ? topo.computeFlow('watch', ctx, r) : []) || [];
-      if (flowIds.length < 2) return;
+      // Exactly one segment is ever in flight, and the next is requested only once this one has
+      // settled (arrived, was lost, or could not be sent). Segment flight time now depends on
+      // how far the bytes actually travel, so a fixed interval would either overlap segments
+      // (short interval, long path) or leave dead air — and the cadence itself is informative:
+      // with a nearby CDN answering, segments tick along quickly; from a distant origin they
+      // visibly crawl.
+      let settled = false;
+      const settle = () => { if (settled) return; settled = true; segmentInFlight = false; scheduleNext(); };
+      if (flowIds.length < 2) { settle(); return; }
+      segmentInFlight = true;
       const servedFromOrigin = flowIds.includes(`streamServer_${r}`);
       const originNode = findNode(topo, `streamServer_${r}`);
       const regionName = topo?.regionLabel?.[r] || r;
 
       // The quality this segment is being FETCHED at was decided when the previous one arrived.
-      const sendIdx = Math.max(0, ladder.findIndex(q => q.id === dv.qualityId));
+      // Note this is deliberately NOT dv.qualityId (what is currently playing).
+      const sendIdx = Math.max(0, ladder.findIndex(q => q.id === (dv.fetchQualityId || dv.qualityId)));
 
       // Announce where the bytes are coming from only when that actually changes, otherwise
       // every single tick would spam the log with the same line.
@@ -1811,8 +1887,20 @@
         else traceLine(root, `🙋 目前沒有建 CDN，每一段都直接從「${esc(regionName)}」的串流伺服器送出。`, '');
       }
 
-      // Decided at ARRIVAL, from the conditions that hold at that moment.
-      const onSegmentArrived = () => {
+    // Runs when the segment we just sent has completed its round trip back to the viewer.
+      // `sentIdx` is the quality THIS segment was encoded at — it becomes what is on screen.
+      const onSegmentArrived = sentIdx => {
+        // 1. What is playing is now this segment. The label follows the picture, not the plan.
+        if (dv.qualityId !== ladder[sentIdx].id) {
+          const wentDown = ladder.findIndex(q => q.id === dv.qualityId) > sentIdx;
+          dv.qualityId = ladder[sentIdx].id;
+          qualityText.textContent = ladder[sentIdx].label;
+          qualityText.setAttribute('class', `sim-drag-viewer-quality q-${ladder[sentIdx].id}`);
+          traceLine(root, `🙋 這一段（${ladder[sentIdx].label}）送達了，畫面現在才${wentDown ? '降成' : '變成'}「${ladder[sentIdx].label}」。`, wentDown ? 'bad' : 'ok');
+        }
+        // 2. Only now, having measured how this segment actually travelled, decide what to ask
+        //    for NEXT. That request goes out on the next tick and will not be visible on screen
+        //    until it in turn arrives.
         // Being served from an overloaded origin is not free: a streaming tier carrying more
         // viewers than it has capacity for delivers each of them less bandwidth, which the ABR
         // logic then reacts to — the same causal chain as the bad-signal zone, but caused by an
@@ -1821,7 +1909,7 @@
         const overloadFactor = load && load.ratio > 1 ? Math.max(0.15, 1 - (load.ratio - 1) * 0.5) : 1;
         const [lo, hi] = dv.inZone ? poorRange : goodRange;
         const measured = (lo + Math.random() * (hi - lo)) * overloadFactor;
-        const curIdx = Math.max(0, ladder.findIndex(q => q.id === dv.qualityId));
+        const curIdx = sentIdx;
         let sustainableIdx = 0;
         for (let i = ladder.length - 1; i >= 0; i--) {
           if (measured >= ladder[i].mbps * 0.9) { sustainableIdx = i; break; }
@@ -1831,10 +1919,8 @@
         else if (curIdx < ladder.length - 1 && measured > ladder[curIdx + 1].mbps * 1.3) nextIdx = curIdx + 1;
         else nextIdx = curIdx;
         if (nextIdx !== curIdx) {
-          dv.qualityId = ladder[nextIdx].id;
-          qualityText.textContent = ladder[nextIdx].label;
-          qualityText.setAttribute('class', `sim-drag-viewer-quality q-${ladder[nextIdx].id}`);
-          traceLine(root, `🙋 這一段收到了：量測頻寬 ${measured.toFixed(1)} Mbps，所以「下一段」畫質${nextIdx < curIdx ? '降為' : '回升為'}「${ladder[nextIdx].label}」。`, nextIdx < curIdx ? 'bad' : 'ok');
+          dv.fetchQualityId = ladder[nextIdx].id;
+          traceLine(root, `🙋 量測到的頻寬是 ${measured.toFixed(1)} Mbps，所以「下一段」改抓「${ladder[nextIdx].label}」——畫面要等那一段真的收到才會變。`, nextIdx < curIdx ? 'bad' : '');
         }
         if (overloadFactor < 1 && !dv.warnedOverload) {
           dv.warnedOverload = true;
@@ -1843,7 +1929,7 @@
         if (overloadFactor >= 1) dv.warnedOverload = false;
       };
 
-      spawnRequest(root, sim, state, svgEl, flowIds, {
+      const handle = spawnRequest(root, sim, state, svgEl, flowIds, {
         trace: true,
         // Both ends of this round trip are the viewer themself, wherever they are standing now.
         mapPoint: (nodeId, p) => (nodeId === `users_${r}` ? { x: dv.x, y: dv.y } : p),
@@ -1851,19 +1937,23 @@
           tokenClass: 'sim-token-segment',
           className: `q-${ladder[sendIdx].id}`,
           radius: 5 + sendIdx * 4,
-          durationMs: (tickMs * 0.9) / (state.speed || 1),
-          onDone: c => { c?.remove(); onSegmentArrived(); }
+          onDone: c => { c?.remove(); if (!isCurrent()) return; onSegmentArrived(sendIdx); settle(); }
         },
         // A segment lost because its machine was pulled is a stall, not an arrival: nothing is
         // measured, so the quality for the next segment is left exactly where it was.
-        onLost: () => traceLine(root, '🙋 這一段影片沒有送達（負責的機器中途被拔掉），播放器會卡住重新請求。', 'bad'),
-        onBlocked: () => traceLine(root, '🙋 測試觀眾完全收不到影片：這一區沒有任何一台機器可以服務他。', 'bad')
+        onLost: () => { if (!isCurrent()) return; traceLine(root, '🙋 這一段影片沒有送達（負責的機器中途被拔掉），播放器會卡住重新請求。', 'bad'); settle(); },
+        onBlocked: () => { if (!isCurrent()) return; traceLine(root, '🙋 測試觀眾完全收不到影片：這一區沒有任何一台機器可以服務他。', 'bad'); settle(); }
       });
+      if (!handle) settle();
     };
 
     qualityText.textContent = ladder.find(q => q.id === state.dragViewer.qualityId)?.label || state.dragViewer.qualityId || '--';
     refreshZoneFlag();
-    state.dragViewerTimer = setInterval(tick, tickMs / (state.speed || 1));
+    // Re-pacing on a speed change is only safe while nothing is in the air — otherwise it would
+    // launch a second segment alongside the one still travelling and break the one-in-flight
+    // invariant the whole quality model rests on.
+    state.repaceDragViewer = () => { if (!segmentInFlight) scheduleNext(); };
+    scheduleNext();
   }
 
   // ---------- Screens ----------
@@ -2111,7 +2201,7 @@
     root.querySelector('.sim-restart').onclick = () => {
       if (state.chunkTimer) clearInterval(state.chunkTimer);
       if (state.abrTimer) clearInterval(state.abrTimer);
-      if (state.dragViewerTimer) clearInterval(state.dragViewerTimer);
+      if (state.dragViewerTimer) clearTimeout(state.dragViewerTimer);
       Object.assign(state, newState(sim));
       render(root, sim, state);
     };
@@ -2233,11 +2323,13 @@
           <button class="button secondary sim-sandbox-clear" type="button">清空畫布</button>
         </div>
         <div class="sim-sandbox-canvas-wrap">
-          <svg class="sim-topo sim-sandbox-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="img" aria-label="自訂拓樸圖畫布">
-            ${regionBoxesSvg({ nodes: state.nodes })}
-            <g class="sandbox-edges-group">${sandboxEdgesSvg(state)}</g>
-            ${sandboxNodesSvg(state, state.selectedNodeId)}
-          </svg>
+          <div class="sim-topo-scroll">
+            <svg class="sim-topo sim-sandbox-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="img" aria-label="自訂拓樸圖畫布">
+              ${regionBoxesSvg({ nodes: state.nodes })}
+              <g class="sandbox-edges-group">${sandboxEdgesSvg(state)}</g>
+              ${sandboxNodesSvg(state, state.selectedNodeId)}
+            </svg>
+          </div>
           <div class="sim-sandbox-toolbar">
             <select class="sim-sandbox-sim-from"><option value="">起點…</option>${state.nodes.map(n => `<option value="${esc(n.id)}" ${state.simFrom === n.id ? 'selected' : ''}>${sandboxTypeMeta(n.type).icon} ${esc(n.label)}</option>`).join('')}</select>
             <select class="sim-sandbox-sim-to"><option value="">終點…</option>${state.nodes.map(n => `<option value="${esc(n.id)}" ${state.simTo === n.id ? 'selected' : ''}>${sandboxTypeMeta(n.type).icon} ${esc(n.label)}</option>`).join('')}</select>
@@ -2516,7 +2608,7 @@
   window.__simTestHooks = {
     pointAlongPath, waypointsFor, clusterPositions, hopWeights,
     instanceCount, nodeLoad, overloadedNodes, weeklyCostPenalty, regionIdAtPoint, nodeIsPresent,
-    routeFor, regionShare, instanceIsDown, aliveInstanceIndexes, nodeCanServe, topoOf
+    routeFor, distanceWeights, pathDurationMs, regionShare, instanceIsDown, aliveInstanceIndexes, nodeCanServe, topoOf
   };
 
   boot();
