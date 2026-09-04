@@ -61,44 +61,49 @@ chapter.sections.push(
  ]
 },
 {
- id:'sd14-s03',order:3,title:'Resumable Upload：大檔與不穩網路的必要設計',duration:'38–55 分鐘',summary:'使用 upload session、byte range/chunk、checksum、retry 與 direct-to-storage，避免 1GB 影片因最後 1% 斷線全部重傳。',
- research:[{label:'YouTube Data API — Resumable Uploads',url:'https://developers.google.com/youtube/v3/guides/using_resumable_upload_protocol'}],
+ id:'sd14-s03',order:3,title:'第三步驟：深入設計——加快上傳速度的最佳化做法',duration:'38–55 分鐘',summary:'書裡對「上傳大檔案」給的解法不是一份神秘協定，而是三個具體做法：切成 GOP 平行上傳、上傳中心設在使用者附近、模組之間用佇列鬆散耦合。',
+ research:[{label:'YouTube Data API — Resumable Uploads（官方斷點續傳協定文件，可對照參考）',url:'https://developers.google.com/youtube/v3/guides/using_resumable_upload_protocol'}],
  pages:[
-  {id:'sd14-s03-p01',title:'Upload Session',blocks:[
-   {type:'stepper',steps:[['Create session','API 驗權限/metadata，回 upload URL。'],['Upload bytes','Client 對 session URL 傳 binary。'],['Checkpoint','Server 記錄已成功 range。'],['Resume','斷線後查 offset，從下一 byte 繼續。'],['Finalize','checksum/size 完整後標記 UPLOADED。']]}
+  {id:'sd14-s03-p01',title:'速度最佳化：以平行方式上傳影片',blocks:[
+   {type:'p',text:'把整支影片當做一整個單位來進行上傳，是一種很沒效率的做法。我們可以透過 GOP（Group of Pictures）對齊的方式，把影片切分成比較小的叢集，來提高上傳影片的速度。'},
+   {type:'diagram',nodes:[['原始影片','根據 GOP 對齊方式進行切分'],['GOP 1','平行上傳'],['GOP 2','平行上傳'],['GOP N','平行上傳'],['原始儲存系統','接收各個 GOP']],caption:'圖 14-22／14-23：客戶端把影片依 GOP 對齊方式切分成一群較小的區塊，平行上傳到原始儲存系統。'},
+   {type:'p',text:'在這樣的做法下，即使先前的上傳工作失敗，也可以快速進行重新上傳：根據 GOP 來切分影片檔案的工作，可以由客戶端來實現，藉此提高上傳影片的速度。'}
   ]},
-  {id:'sd14-s03-p02',title:'不要假設最後一個 Request 全收或全沒收',blocks:[
-   {type:'p',text:'網路斷線時 client 可能不知道 server 已寫到哪。YouTube 官方 resumable protocol 可查 upload status，308 response Range 告訴已成功 byte offset，再續傳剩餘部分。'},
-   {type:'callout',title:'Ambiguous Outcome',text:'Distributed upload 最危險的是 client timeout 後盲目重傳造成重複/覆寫；session + range state 解這個問題。'}
+  {id:'sd14-s03-p02',title:'只重傳失敗的那個 GOP，不必整支重來',blocks:[
+   {type:'p',text:'因為影片已經先被切成一個個獨立的 GOP 區塊，如果其中一個 GOP 上傳失敗（例如網路斷線），只需要重新上傳失敗的那一個 GOP，不必把已經成功上傳的其他 GOP 全部重傳一次——這正是本章模擬關卡「斷點續傳」能力想呈現的核心概念：故障後從中斷點繼續，而不是整份重來。'},
+   {type:'callout',title:'跟模擬關卡的對應',text:'模擬器裡上傳中把伺服器弄壞、看復原時是「續傳」還是「整個重來」，模擬的正是這裡的機制：有沒有保留每個 GOP／區塊的上傳進度紀錄。'}
   ]},
-  {id:'sd14-s03-p03',title:'Chunk Size Trade-off',blocks:[
-   {type:'compare',items:[['大 Chunk','request overhead 少，但失敗重傳單位大。'],['小 Chunk','恢復細、progress 好，但 request/metadata overhead 高。'],['Parallel Chunks','更快但需排序/commit/checksum 與上限控制。']]}
+  {id:'sd14-s03-p03',title:'速度最佳化：把上傳中心放在靠近使用者的位置',blocks:[
+   {type:'p',text:'提高上傳速度的另一種做法，就是在全球範圍內設立多個上傳中心，讓使用者可以就近將影片上傳到該區域的上傳中心。為了達到這樣的效果，我們採用 CDN 做為上傳中心。'},
+   {type:'p',text:'速度最佳化：無處不在的平行處理——原本的設計中，影片從原始儲存系統一路走到已編碼儲存系統，每個步驟都要等前一個步驟的輸出完成才能開始，這種緊密依賴的關係讓整個流程很難平行運作。另一種最佳化做法，就是在步驟之間建立一個鬆散耦合的系統，以實現更高的平行性。'},
+   {type:'diagram',nodes:[['原始儲存系統','上傳模組'],['下載模組','取得原始分段影片'],['編碼模組','轉碼'],['已編碼儲存系統','上傳已編碼影片'],['CDN','提供申流']],caption:'圖 14-25：在引入訊息佇列之前，系統的耦合性比較緊密；引入佇列之後，各模組就不需要再等待下一個模組的輸出。'}
   ]}],
  quiz:[
-  MC('sd14-s03-q1','Resumable upload 最大價值？','sd14-s03-p01','斷線不必從 0 重傳大檔。','從已成功 offset 恢復。',[["讓 transcoding 不需要","無關。"],["讓影片永遠變小","不是。"],["讓 CDN 自動 encode","不是。"]]),
-  MC('sd14-s03-q2','Client timeout 後為何先查 upload offset？','sd14-s03-p02','Server 可能已收到部分 bytes，結果具有 ambiguity。','避免盲目重傳或漏傳。',[["因為 HTTP 不支援 retry","支援。"],["因為 DB 一定掉線","不一定。"],["只為顯示進度條","不只。"]]),
-  MC('sd14-s03-q3','Chunk 越小的代價？','sd14-s03-p03','更多 requests、headers、metadata/coordination。','Recovery granularity 換 request overhead。',[["一定更慢且不可用","不是絕對。"],["會讓 checksum 失效","不會。"],["會取消 resume","相反。"]]),
-  MC('sd14-s03-q4','Upload finalize 前最應驗證？','sd14-s03-p01','預期 size/checksum/ranges 完整性。','確認 bytes 完整且未重疊/缺段。',[["只看 filename","不足。"],["只看 user agent","無關。"],["只看 thumbnail","太晚/無關。"]])
+  MC('sd14-s03-q1','書中提高上傳速度的第一個做法是什麼？','sd14-s03-p01','把影片依 GOP 對齊方式切分成較小區塊，由客戶端平行上傳。','依 GOP 切分影片後平行上傳。',[["把整支影片壓縮成更小的檔案","書中談的是切分並平行上傳，不是壓縮檔案本身。"],["先在本地端轉碼再上傳","轉碼是上傳完成後由轉碼伺服器負責的工作，不是客戶端上傳前的步驟。"],["要求使用者降低影片畫質","書中沒有這個做法，畫質是轉碼階段才處理的事。"]]),
+  MC('sd14-s03-q2','GOP 切分之後，如果其中一個 GOP 上傳失敗，會發生什麼事？','sd14-s03-p02','只需要重新上傳失敗的那個 GOP，其他已成功的部分不必重傳。','只重傳失敗的那個 GOP。',[["整支影片都要重新上傳","這正是 GOP 切分要避免的沒有效率做法。"],["直接放棄這次上傳","書中的做法是重試失敗的部分，不是放棄。"],["自動降低影片畫質重傳","跟畫質切換無關，是重傳範圍的問題。"]]),
+  MC('sd14-s03-q3','書中提到的第二個上傳速度最佳化做法是什麼？','sd14-s03-p03','在全球設立多個上傳中心（採用 CDN），讓使用者能就近上傳。','把上傳中心設在靠近使用者的位置。',[["把所有上傳集中到單一資料中心","恰好相反，集中反而會拉長距離、變慢。"],["限制使用者只能在特定時段上傳","書中沒有這樣的限制。"],["要求所有使用者都用有線網路上傳","書中的做法是縮短地理距離，不是限制網路類型。"]]),
+  MC('sd14-s03-q4','為什麼在模組之間引入訊息佇列，可以提高平行性？','sd14-s03-p03','原本緊密耦合的流程中每一步都要等前一步完成；引入佇列後模組不必再互相等待。','讓模組之間鬆散耦合，不必等待彼此的輸出。',[["因為佇列會自動加快轉碼速度","佇列本身不會加速轉碼，是讓模組解耦、能各自平行運作。"],["因為佇列取代了 CDN","佇列與 CDN 是不同角色，佇列不會取代 CDN 的功能。"],["因為佇列可以無限儲存影片","佇列的重點是解耦合，不是拿來當作影片的儲存系統。"]])
  ]
 },
 {
- id:'sd14-s04',order:4,title:'Metadata Flow 與 Publish Boundary',duration:'32–45 分鐘',summary:'Video bytes 與 metadata 可平行上傳，但只有 processing 完成且 policy 通過後才對觀看者 publish。',
- research:[{label:'YouTube Data API — Videos resource',url:'https://developers.google.com/youtube/v3/docs/videos'}],
+ id:'sd14-s04',order:4,title:'流程 B 再深入：為什麼上傳影片跟更新 metadata 是兩條平行的路',duration:'32–45 分鐘',summary:'書裡把「上傳影片位元組」跟「更新 metadata 詮釋資料」設計成兩個平行送出的請求，而不是包在同一個請求裡——這個設計選擇本身就值得多想一層。',
+ research:[{label:'YouTube Data API — Videos resource（YouTube 官方影片 metadata 欄位參考）',url:'https://developers.google.com/youtube/v3/docs/videos'}],
  pages:[
-  {id:'sd14-s04-p01',title:'Metadata 可以先寫，但 Public Read 要看 State',blocks:[
-   {type:'p',text:'Title/description/privacy 可以在 upload session 前後更新；但 watch API 應檢查 video state=READY 且 visibility/ACL 通過。'}
+  {id:'sd14-s04-p01',title:'複習：流程 B 做了什麼',blocks:[
+   {type:'p',text:'把檔案上傳到原始儲存系統的同時，客戶端也會以平行的方式發送另一個請求，更新影片的 metadata 詮釋資料，其中包括檔案名稱、大小、格式等等。API 伺服器會用這些資料來更新 metadata 快取與 metadata 資料庫（圖 14-6）。'}
   ]},
-  {id:'sd14-s04-p02',title:'Publish Event 應在 Durable State 後',blocks:[
-   {type:'diagram',nodes:[['Transcode Complete','all required outputs'],['Metadata Tx','READY + manifest version'],['Event','VideoReady'],['Cache/CDN','warm/invalidate'],['Viewer','discover/play']],caption:'不要先發 VideoReady 再發現 metadata transaction 失敗。'}
+  {id:'sd14-s04-p02',title:'為什麼不要把這兩件事包成同一個請求',blocks:[
+   {type:'compare',items:[['影片位元組','檔案大（最大到 1GB），走原始儲存系統，最終要交給轉碼伺服器處理。'],['Metadata 詮釋資料','檔案小、需要立刻可查詢，走 API 伺服器與 metadata 資料庫/快取。']]},
+   {type:'p',text:'這兩種資料的大小、去向、時效性要求完全不同：如果硬要包成同一個請求，metadata 的讀寫就會被卡在一個可能要傳輸幾百 MB 影片位元組的大請求後面。拆成兩條平行路徑，兩邊可以各自用最適合的方式處理，不會互相拖累。'}
   ]},
-  {id:'sd14-s04-p03',title:'Idempotent Completion Handler',blocks:[
-   {type:'p',text:'Queue 可能重送 transcoding-complete event；handler 以 video_id + pipeline_version 去重，重複處理不能重複發布、重複計費或覆蓋新版本。'}
+  {id:'sd14-s04-p03',title:'延伸思考：兩條路徑不同步完成怎麼辦？',blocks:[
+   {type:'p',text:'書中沒有把這個情境展開，但值得自己想一層：如果影片位元組上傳成功、但 metadata 更新請求失敗（或反過來），會發生什麼事？較合理的處理方式是，API 伺服器在確認兩邊都成功之前，不會把這支影片標記成「可供觀看」，並讓客戶端知道哪一邊需要重試。'}
   ]}],
  quiz:[
-  MC('sd14-s04-q1','Upload bytes 完成是否代表 viewer 一定可播放？','sd14-s04-p01','還可能需 transcoding/moderation/publish。','不一定，要等 READY。',[["一定可以","錯。"],["永遠不可以","也錯。"],["只看 title 是否存在","不足。"]]),
-  MC('sd14-s04-q2','VideoReady event 最安全何時發？','sd14-s04-p02','READY/manifest durable commit 之後。','先 commit source of truth，再發事件。',[["Upload 開始就發","太早。"],["Client 打字 title 時","無關。"],["CDN miss 時才發","不是。"]]),
-  MC('sd14-s04-q3','Completion handler 為何要 idempotent？','sd14-s04-p03','Queue/retry 可能重複 event。','避免重複 publish/side effect。',[["因為 event 永遠 exactly once","不能假設。"],["只為省 DB row","不只。"],["因為 CDN 不支援 retry","無關。"]]),
-  MC('sd14-s04-q4','Manifest version 應跟什麼綁定？','sd14-s04-p02','一組可播放 renditions 的一致版本。','Pipeline/output version，避免混用半舊半新 segments。',[["User password version","無關。"],["Browser tab id","無關。"],["DNS TTL only","不是。"]])
+  MC('sd14-s04-q1','流程 B（更新 metadata）跟流程 A（上傳影片位元組）之間的關係是什麼？','sd14-s04-p01','客戶端會以平行方式同時發送這兩個請求，不是先後順序執行。','兩者平行發送，不是依序執行的兩個步驟。',[["流程 B 一定要等流程 A 完成才能開始","書中明確畫成平行的兩條路徑，不是先後順序。"],["流程 B 是流程 A 的一部分","它們是分開發送的兩個請求，不是同一個流程裡的子步驟。"],["流程 B 只在影片下架時才會用到","流程 B 是上傳當下就會用到的一般流程，跟下架無關。"]]),
+  MC('sd14-s04-q2','為什麼影片位元組跟 metadata 詮釋資料要走不同路徑處理？','sd14-s04-p02','兩者的檔案大小、目的地系統、時效性要求完全不同，包在一起會互相拖累。','兩者特性差異很大，分開處理才能各自用最適合的方式進行。',[["因為 metadata 比影片位元組還要大","恰好相反，metadata 通常小很多。"],["因為 API 伺服器不能傳輸檔案","API 伺服器可以處理請求，只是效率考量下不適合把大檔案包進同一個請求。"],["因為這樣比較省成本","書中談的是效率與架構清晰度，不是直接的省錢考量。"]]),
+  MC('sd14-s04-q3','如果流程 A 成功但流程 B 失敗，比較合理的處理方式是？','sd14-s04-p03','在兩邊都確認成功之前，不要把影片標記為可供觀看，並讓客戶端知道要重試。','先不標記為可觀看，通知需要重試的那一邊。',[["直接標記為可以觀看","這樣使用者可能看到缺少正確 metadata 的影片，例如標題是空的。"],["把已上傳的影片位元組刪除","沒有必要刪除已經成功的部分，只需要重試失敗的那一邊。"],["忽略這個問題，讓它自然發生","忽略可能導致不一致的資料長期存在。"]]),
+  MC('sd14-s04-q4','Metadata 詮釋資料最終會更新到哪些地方？','sd14-s04-p01','圖 14-6 顯示 API 伺服器會更新 metadata 資料庫與 metadata 快取。','Metadata 資料庫與 metadata 快取。',[["只更新原始儲存系統","原始儲存系統存放的是影片位元組，不是 metadata。"],["只更新 CDN","CDN 負責影片申流，不是 metadata 的存放位置。"],["只更新轉碼伺服器","轉碼伺服器負責影片轉碼，不處理 metadata 更新。"]])
  ]
 },
 {

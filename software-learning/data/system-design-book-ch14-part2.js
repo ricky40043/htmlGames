@@ -4,59 +4,62 @@ const O=(id,text,correct,misconception='')=>({id,text,correct,misconception});
 const MC=(id,question,page,explanation,correct,wrong)=>({id,question,reviewPageId:page,explanation,options:[O(id+'-c',correct,true),...wrong.map((x,i)=>O(id+'-w'+(i+1),x[0],false,x[1]))]});
 chapter.sections.push(
 {
- id:'sd14-s07',order:7,title:'CDN、Origin 與 Hot Video',duration:'38–55 分鐘',summary:'把 viewer traffic 從 origin 移到 edge；理解 cache hit、origin shield、popular video、cold miss 與 signed delivery。',
+ id:'sd14-s07',order:7,title:'延伸知識：CDN 命中率是怎麼一回事',duration:'38–55 分鐘',summary:'書裡的高階設計把 CDN 定為「觀眾串流影片的唯一路徑」，這裡進一步拆解：為什麼熱門影片特別適合放進 CDN，冷門影片卻不一定划算。',
  research:[{label:'Understanding the characteristics of internet short video sharing（影片受歡迎程度與存取模式的實測研究）',url:'https://arxiv.org/pdf/0707.3670.pdf'}],
  pages:[
-  {id:'sd14-s07-p01',title:'Playback Bytes 主要走 CDN',blocks:[
-   {type:'diagram',nodes:[['Viewer','manifest/segment'],['Edge CDN','hot chunks'],['Origin Shield','optional'],['Object Storage','source of truth']],caption:'API server 不承擔大部分 video egress。'}
+  {id:'sd14-s07-p01',title:'為什麼「熱門」跟 CDN 特別搭',blocks:[
+   {type:'p',text:'CDN 的基本運作方式是快取：某個內容第一次被請求時，CDN 節點會去源頭（origin，也就是我們的儲存系統）取得資料再快取起來，之後同一份內容再被請求，就直接由 CDN 節點回應，不必再麻煩源頭。一部影片被越多不同觀眾重複觀看，快取就被重複命中越多次，CDN 帶來的效益也就越高——這正是本章模擬關卡把「CDN 只服務熱門內容」設計成一個可以開關的獨立能力的原因：開啟後，大部分觀看請求會直接命中 CDN 快取，只有少數長尾內容仍要回頭找源頭。'},
+   {type:'callout',title:'跟模擬關卡的對應',text:'模擬器裡開啟 CDN 分層後，約 85% 的觀看請求會走「短路徑」直接命中快取，其餘仍會走完整路徑到源頭——這個比例就是在具體呈現「熱門內容命中率高、長尾內容仍會 miss」這件事。'}
   ]},
-  {id:'sd14-s07-p02',title:'Hot Video 是 CDN 的甜蜜點',blocks:[
-   {type:'p',text:'同一 segment 被大量 viewers 重複讀，edge hit ratio 高；origin bandwidth 大幅下降。新影片/長尾影片則更可能 cold miss。'},
-   {type:'callout',title:'Cache Key',text:'video_id + rendition + segment/version，不能因 token/query noise 讓同一 segment 形成大量 cache variants。'}
+  {id:'sd14-s07-p02',title:'新影片／冷門影片為什麼幫不上忙',blocks:[
+   {type:'p',text:'一部剛上傳、還沒什麼人看過的影片，CDN 節點還沒有機會快取到它，第一次被請求時一定要繞去源頭拿資料——這就是「快取沒命中」（cache miss）。如果一部影片本來就很少人看，CDN 花費的儲存與同步成本，可能還比不上省下來的頻寬，這也是「節省成本的最佳化做法」小節建議只給熱門內容用 CDN 的根本原因。'}
   ]},
-  {id:'sd14-s07-p03',title:'Origin 失敗要有 Degraded Strategy',blocks:[
-   {type:'bullets',items:['edge stale serve where safe','multi-origin / replicated object storage','short retry budget','manifest fallback to available rendition','prewarm predictable premieres']}
+  {id:'sd14-s07-p03',title:'源頭掛掉時該怎麼辦',blocks:[
+   {type:'p',text:'CDN 雖然能擋掉大部分流量，但源頭（原始儲存系統／已轉碼儲存系統）一旦真的發生問題，還是要有因應之道，常見的做法包括：'},
+   {type:'bullets',items:['讓 CDN 節點在短時間內繼續提供舊版本的快取內容，而不是立刻回傳錯誤。','讓儲存系統本身有複本，不是只有單一份存在單一地點。','重試的次數與頻率要有上限，避免所有觀眾同時湧向源頭，反而讓源頭更難恢復。']}
   ]}],
  quiz:[
-  MC('sd14-s07-q1','CDN 對影片系統最直接的價值？','sd14-s07-p01','把重複 playback bytes 從靠近使用者的 edge 提供。','降低 origin egress 與 latency。',[["取代 metadata DB","不是。"],["負責所有 transcoding","不是。"],["保證影片內容合法","不是。"]]),
-  MC('sd14-s07-q2','Hot video 為何 CDN hit 高？','sd14-s07-p02','大量 viewers 讀相同 segments。','高重用讓 edge cache 有效。',[["因為影片一定更短","無關。"],["因為 hot video 不需 storage","錯。"],["因為每 user 都拿不同 bytes","相反。"]]),
-  MC('sd14-s07-q3','Cache key 帶大量無關 query token 可能？','sd14-s07-p02','造成同一 segment 被分成很多 cache objects，hit ratio 下降。','Cache fragmentation。',[["提高 hit ratio","相反。"],["自動縮影片","不會。"],["解決 auth","不一定。"]]),
-  MC('sd14-s07-q4','Origin 暫時失敗時哪個策略較成熟？','sd14-s07-p03','使用 edge cached/stale content、replicated origin、有限 retry。','Fail-soft，不要讓所有 viewers 同時打爆 origin。',[["所有 client 無限 retry","會放大故障。"],["刪 CDN cache","更糟。"],["重建全部影片","不合理。"]])
+  MC('sd14-s07-q1','為什麼熱門影片特別適合放進 CDN？','sd14-s07-p01','越多觀眾重複觀看同一部影片，CDN 快取被命中的次數就越多，效益也越高。','重複觀看次數越多，快取命中率越高，CDN 效益越好。',[["因為熱門影片檔案比較小","檔案大小跟受歡迎程度無關。"],["因為熱門影片不需要轉碼","任何影片上架前都需要經過轉碼，不因熱門與否而免除。"],["因為 CDN 只能存放熱門內容","CDN 技術上可以存放任何內容，是我們基於成本考量選擇只給熱門內容用。"]]),
+  MC('sd14-s07-q2','一部剛上傳的新影片，第一次被觀看時會發生什麼事？','sd14-s07-p02','CDN 節點還沒有快取過這部影片，第一次請求要繞去源頭拿資料，也就是快取沒命中。','發生快取沒命中，必須向源頭（儲存系統）取得資料。',[["一定會播放失敗","快取沒命中不代表播放失敗，只是這次請求需要多繞一趟到源頭。"],["會自動被標記為熱門","受歡迎程度是根據後續實際觀看次數判斷的，不是上傳當下就決定。"],["會被拒絕上傳","跟上傳流程無關，這裡談的是播放時的快取行為。"]]),
+  MC('sd14-s07-q3','為什麼不是所有影片都值得放進 CDN？','sd14-s07-p03','冷門影片被請求的次數很少，CDN 的儲存與同步成本可能超過省下來的頻寬效益。','冷門內容的 CDN 成本效益可能不划算，這正是成本最佳化小節的重點。',[["因為 CDN 有影片數量上限","書中談的是成本效益考量，不是技術上的數量限制。"],["因為冷門影片版權比較複雜","跟版權無關，是使用量與成本的權衡。"],["因為冷門影片格式不相容","格式相容性是轉碼階段處理的問題，不是 CDN 收錄與否的原因。"]]),
+  MC('sd14-s07-q4','源頭（原始儲存系統）暫時發生問題時，比較成熟的因應做法是？','sd14-s07-p03','讓 CDN 短暫繼續提供舊版本內容、儲存系統本身要有複本、重試次數要有上限。','CDN 提供舊快取、儲存系統複寫、限制重試次數，避免壓垮源頭。',[["讓所有使用者的請求無限重試","無限重試反而會讓已經有問題的源頭雪上加霜。"],["立刻清空所有 CDN 快取","清空快取只會讓更多請求直接打到本來就有問題的源頭。"],["暫停整個平台","過度激烈的做法，書中沒有建議在源頭暫時故障時停掉整個服務。"]])
  ]
 },
 {
- id:'sd14-s08',order:8,title:'Playback Flow：Manifest、Segments、ABR 與 Startup Latency',duration:'38–54 分鐘',summary:'從點擊 Play 到第一個 frame，拆 manifest、auth、edge lookup、segment download、buffer 與 quality switch。',
+ id:'sd14-s08',order:8,title:'延伸知識：播放器怎麼一段一段決定畫質（自適應串流）',duration:'38–54 分鐘',summary:'書中提過影片會被切成多種畫質版本、由播放器自己選——這裡把播放器實際怎麼做這個選擇的邏輯講清楚，也是模擬關卡「自適應畫質播放實驗室」背後的機制。',
  research:[{label:'YouTube scalability talk by early YouTube employee（YouTube 早期員工的擴展性演講）',url:'https://www.youtube.com/watch?v=w5WVu624fY8'}],
  pages:[
-  {id:'sd14-s08-p01',title:'Startup Path 要短',blocks:[
-   {type:'stepper',steps:[['Get metadata','visibility + manifest URL'],['Fetch manifest','renditions'],['Choose initial bitrate','保守起播'],['Fetch first segment','prefer nearby edge'],['Decode','first frame'],['Adapt','subsequent segments']]}
+  {id:'sd14-s08-p01',title:'播放器不是一次要整支影片',blocks:[
+   {type:'p',text:'延續前面「串流協定」小節的概念：影片被切成一段一段的 segment，並用 manifest 描述有哪些畫質版本可以選。播放器實際的起播流程大致是：'},
+   {type:'stepper',steps:[['取得影片資訊','確認影片可以觀看，並拿到 manifest 的位置。'],['讀取 manifest','知道這支影片有哪些畫質／位元速率版本可選。'],['選擇起始畫質','通常保守選擇，先求能快速開始播放。'],['取得第一個 segment','向最近的 CDN 節點請求。'],['開始播放，持續調整','根據後續量測到的網路狀況，決定下一段要不要換畫質。']]}
   ]},
-  {id:'sd14-s08-p02',title:'第一段不一定選最高畫質',blocks:[
-   {type:'p',text:'為縮短 startup time，player 常保守選一個可快速取得的 rendition；累積 throughput/buffer evidence 後再升。'}
+  {id:'sd14-s08-p02',title:'為什麼第一段通常不是選最高畫質',blocks:[
+   {type:'p',text:'播放器還沒真正量測過你的網路狀況之前，貿然選最高畫質風險很高——萬一實際頻寬不夠，才剛開始播放就要停下來緩衝，體驗反而更差。比較穩妥的做法是先選一個容易快速取得的畫質開始播放，等後續幾個 segment 的下載時間證實網路狀況不錯，才逐步調高畫質。'}
   ]},
-  {id:'sd14-s08-p03',title:'Client Buffer 是重要 State',blocks:[
-   {type:'bullets',items:['buffer seconds 過低 → 降 bitrate','buffer 健康 → 可嘗試升 bitrate','seek → 新 range/segments','playback speed 改變 consumption rate']}
+  {id:'sd14-s08-p03',title:'緩衝區（buffer）是播放器判斷的關鍵依據',blocks:[
+   {type:'bullets',items:['緩衝區存量偏低時，播放器會偏向選擇較低畫質的下一段，優先確保不斷播。','緩衝區存量充足、且最近幾段下載都很順利，播放器才會嘗試調高畫質。','使用者拖動進度條（seek）時，播放器只需要請求新位置對應的 segment，不必重新下載前面的內容。']},
+   {type:'callout',title:'跟模擬關卡的對應',text:'模擬器裡的「自適應畫質播放實驗室」跟拖曳觀眾到訊號不良區的做法，就是在具體呈現這裡講的邏輯：量測到的頻寬不夠時，下一段畫質會降，而且是先大幅降低來保護緩衝區；網路恢復後則是一段一段慢慢往上調，不會直接跳回最高畫質。'}
   ]}],
  quiz:[
-  MC('sd14-s08-q1','播放第一步為何不是直接拉 1GB 檔？','sd14-s08-p01','Streaming 以 manifest + segments 支援快速起播與 adaptive quality。','分段下載可快速開始播放。',[["因為 HTTP 不能傳大檔","可以。"],["因為 object storage 不能讀","可以。"],["只為縮短 URL","不是。"]]),
-  MC('sd14-s08-q2','Initial bitrate 為何常保守？','sd14-s08-p02','先減少 startup/rebuffer 風險，再根據實測升畫質。','Startup latency 優先。',[["因為高畫質永久禁止","不是。"],["因為 CDN 沒高畫質","不一定。"],["因為 metadata 只支援 360p","不是。"]]),
-  MC('sd14-s08-q3','ABR 為何看 buffer seconds？','sd14-s08-p03','Buffer 是抵抗網路抖動的安全墊。','決定能否承受更高 bitrate。',[["只為算 storage","不是。"],["因為 buffer 是 DB cache","不是。"],["因為 throughput 不重要","兩者都重要。"]]),
-  MC('sd14-s08-q4','Seek 到影片尾端時典型行為？','sd14-s08-p03','請求新的 segments/range，不需下載前面全部內容。','Random access 到目標 segments。',[["必須從第 0 byte 重播","不必要。"],["重新 transcoding","不需要。"],["重新 upload","無關。"]])
+  MC('sd14-s08-q1','播放器起播的第一步驟做的是什麼？','sd14-s08-p01','先取得影片資訊、確認可以觀看，並拿到 manifest 的位置。','確認影片可觀看，並取得 manifest 位置。',[["直接下載整支影片","串流播放不需要也不應該先下載整支影片。"],["先開始轉碼","轉碼是影片上架前，由轉碼伺服器完成的工作，不是播放當下做的事。"],["先建立上傳工作階段","那是上傳流程，跟觀看/播放無關。"]]),
+  MC('sd14-s08-q2','為什麼播放器第一段通常不選最高畫質？','sd14-s08-p02','還沒真正量測過網路狀況，貿然選最高畫質可能導致播放沒多久就要停下來緩衝。','風險考量：先求穩定開始播放，再逐步調高畫質。',[["因為法律規定不能一開始就用最高畫質","沒有這樣的規定，純粹是播放體驗上的考量。"],["因為最高畫質的版本還沒轉碼完成","轉碼在影片上架前就已完成，不是播放當下才處理。"],["因為使用者裝置一定不支援","裝置支援度是另一回事，這裡談的是網路狀況的不確定性。"]]),
+  MC('sd14-s08-q3','緩衝區（buffer）存量偏低時，播放器通常怎麼反應？','sd14-s08-p03','偏向選擇較低畫質的下一段，優先確保播放不中斷。','降低下一段的畫質，避免播放中斷。',[["立刻調到最高畫質","緩衝區低的時候升畫質風險更高，容易造成播放中斷。"],["停止播放等待使用者操作","播放器會自動調整畫質因應，不需要使用者手動介入。"],["重新整個下載影片","串流播放器不會因為緩衝區低就改成整個重新下載。"]]),
+  MC('sd14-s08-q4','使用者拖動進度條到影片後段時，播放器的典型行為是？','sd14-s08-p03','只請求新位置對應的 segment，不需要下載前面的內容。','請求目標位置的 segment，不必重新下載前面部分。',[["必須從頭開始重新播放","串流的分段設計正是為了支援跳轉，不需要從頭播放。"],["需要重新轉碼","轉碼在影片上架前就已完成，跳轉播放不會觸發重新轉碼。"],["需要重新上傳影片","跟上傳流程完全無關。"]])
  ]
 },
 {
- id:'sd14-s09',order:9,title:'Failure Recovery：Retry、Checkpoint、DLQ 與 Partial Success',duration:'40–56 分鐘',summary:'處理 upload 中斷、worker crash、部分 rendition 失敗、queue redelivery、CDN/origin outage 與 publish race。',
- research:[{label:'YouTube Data API — Resumable upload recovery',url:'https://developers.google.com/youtube/v3/guides/using_resumable_upload_protocol'}],
+ id:'sd14-s09',order:9,title:'錯誤處理',duration:'40–56 分鐘',summary:'先分清楚「可恢復」跟「不可恢復」兩種錯誤，再看系統各個構成元素常遇到的典型錯誤該怎麼處理——這是模擬關卡每個月事件背後對照的原始清單。',
+ research:[{label:'YouTube Data API — Resumable upload recovery（官方斷點續傳復原文件，可對照參考）',url:'https://developers.google.com/youtube/v3/guides/using_resumable_upload_protocol'}],
  pages:[
-  {id:'sd14-s09-p01',title:'每一階段都要定義 Durable Boundary',blocks:[
-   {type:'compare',items:[['Upload','range/checksum state durable。'],['Transcode','job state + deterministic output。'],['Publish','metadata READY transaction durable。'],['Playback','CDN edge 可從 replicated origin 恢復。']]}
+  {id:'sd14-s09-p01',title:'先分兩種錯誤：可恢復與不可恢復',blocks:[
+   {type:'p',text:'對於一個大型系統來說，出現系統錯誤是無可避免的事。如果要打造出一個具有高度容錯能力的系統，就必須妥善處理錯誤，並從錯誤中迅速恢復。書中把錯誤分成兩種類型：'},
+   {type:'compare',items:[['可恢復的錯誤','一般的做法就是再多重試幾次同樣的操作，就能從錯誤中恢復。'],['不可恢復的錯誤','如果系統認為該任務已經不可恢復（例如影片格式本身就有問題），就會把跟這支影片相關聯的所有執行中任務停止下來，並向客戶端送回適當的錯誤碼。']]}
   ]},
-  {id:'sd14-s09-p02',title:'Partial Rendition Failure',blocks:[
-   {type:'p',text:'1080p encode 失敗但 360/720p 成功，產品可以選擇先 READY 低畫質再補高畫質，或要求 minimum rendition set 完整後才 READY。'},
-   {type:'callout',title:'這是產品 Requirement',text:'不要把「所有 rendition 都要成功」當成天然真理。'}
+  {id:'sd14-s09-p02',title:'系統各構成元素的典型錯誤（上）',blocks:[
+   {type:'bullets',items:['上傳錯誤：重試。','影片分割錯誤：有些比較老舊的行動裝置或瀏覽器，可能無法使用 GOP 對齊方式來分割影片，這時就把整部影片傳送到伺服器，由伺服器端完成分割的工作。','轉碼錯誤：重試。','預處理器佇列出問題：重試。','DAG 排程器錯誤：重新生成 DAG 圖。']}
   ]},
-  {id:'sd14-s09-p03',title:'Retry 要避免 Failure Amplification',blocks:[
-   {type:'bullets',items:['exponential backoff + jitter','retry budget','per-stage circuit breaker','DLQ/manual inspection','poison file detection','worker lease/visibility timeout']}
+  {id:'sd14-s09-p03',title:'為什麼「重試」不能無限重試下去',blocks:[
+   {type:'p',text:'書中對大多數階段性錯誤的建議都是「重試」，但這不代表可以無限次、無間隔地重試：如果某個輸入每次都會讓工作程序當掉（例如檔案本身已損毀），無限重試只會不斷燒掉運算資源，卻永遠不會成功。比較成熟的做法是設定重試上限與間隔，超過上限就交給人工檢查，而不是讓系統無止盡空轉。'}
   ]},
   {id:'sd14-s09-p04',title:'API 伺服器與 Metadata 資料庫：無狀態的可以直接換，有狀態的要看角色',blocks:[
    {type:'p',text:'API 伺服器本身不保存任何跟特定使用者綁定的 state，一台當機，Load Balancer 健康檢查失敗後直接把流量導到其他伺服器，不需要任何資料搬遷。Metadata 資料庫就不一樣：它保存的是系統的 source of truth，故障處理要看掛掉的是哪個角色。'},
@@ -70,10 +73,10 @@ chapter.sections.push(
    {type:'callout',title:'共同模式',text:'API 伺服器、Metadata 快取、資源管理工具的佇列、任務工作程序——這些角色的共同設計原則都是「不能只有一個必要節點」，故障時才有東西可以頂替。'}
   ]}],
  quiz:[
-  MC('sd14-s09-q1','為何每 stage 要有 durable boundary？','sd14-s09-p01','Crash 後能知道從哪裡安全重做。','支援 recovery 與 exactly-once-like side effects。',[["讓所有 worker 無 state","不是。"],["取消 retry","相反。"],["只為 logging","不只。"]]),
-  MC('sd14-s09-q2','1080p 失敗是否一定阻擋 READY？','sd14-s09-p02','取決於 minimum playable set / product requirement。','可以定義 degraded publish。',[["一定阻擋","不一定。"],["一定忽略","也不一定。"],["只看 thumbnail","不足。"]]),
-  MC('sd14-s09-q3','Worker 失敗後所有 job 立即無限重試，風險？','sd14-s09-p03','Retry storm 放大依賴故障與成本。','Backoff/jitter/budget。',[["會自動修復 root cause","不會。"],["一定降低 backlog","不一定。"],["不影響下游","錯。"]]),
-  MC('sd14-s09-q4','Poison video 指什麼？','sd14-s09-p03','某輸入每次都 deterministic 觸發 transcoder crash/failure。','需要隔離/DLQ，不應無限重試。',[["熱門影片","不是。"],["被 cache 的影片","不是。"],["只有 metadata 缺 title","不一定。"]]),
+  MC('sd14-s09-q1','書中把系統錯誤分成哪兩種類型？','sd14-s09-p01','可恢復的錯誤與不可恢復的錯誤，處理方式完全不同。','可恢復的錯誤、不可恢復的錯誤。',[["熱門錯誤與冷門錯誤","書中沒有這樣的分類方式。"],["上傳錯誤與下載錯誤","這只是錯誤發生的位置之一，不是書中用來分類錯誤處理方式的兩大類。"],["客戶端錯誤與伺服器端錯誤","書中的分類依據是「能不能恢復」，不是錯誤發生在哪一端。"]]),
+  MC('sd14-s09-q2','舊型行動裝置或瀏覽器無法用 GOP 對齊方式分割影片時，書中的解法是什麼？','sd14-s09-p02','把整部影片傳送到伺服器，由伺服器端完成分割的工作。','改由伺服器端完成影片分割。',[["直接拒絕該裝置上傳","書中提供了相容做法，不是直接拒絕。"],["要求使用者更新裝置","書中的解法是伺服器端接手處理，不是要求使用者換裝置。"],["跳過分割直接轉碼整支影片","書中明確說是由伺服器完成分割，不是跳過分割步驟。"]]),
+  MC('sd14-s09-q3','DAG 排程器發生錯誤時，書中的處理方式是？','sd14-s09-p02','重新生成 DAG 圖。','重新生成 DAG 圖。',[["直接跳過轉碼","書中的做法是重新生成，不是跳過整個轉碼流程。"],["切換到別的影片平台","不合理，也不是書中提到的做法。"],["通知使用者放棄上傳","書中沒有要求放棄，而是系統自行重新生成 DAG。"]]),
+  MC('sd14-s09-q4','為什麼「重試」不能無限次進行下去？','sd14-s09-p03','如果輸入本身有問題（例如檔案損毀），無限重試只會不斷消耗運算資源卻永遠不會成功。','某些錯誤重試也不會成功，無限重試只是浪費資源。',[["因為系統會自動修好 root cause","重試不會修好輸入本身的問題，只是重複同樣的操作。"],["因為重試一定會讓 backlog 變少","如果問題本身無法透過重試解決，backlog 反而可能持續累積。"],["因為重試不會影響其他任務","無限重試會佔用運算資源，可能拖慢其他正常任務的處理。"]]),
   MC('sd14-s09-q5','API 伺服器當機時，為什麼可以直接換一台而不用搬遷任何資料？','sd14-s09-p04','API 伺服器是 stateless 的，沒有跟特定使用者綁定的狀態需要搬遷。','負載平衡器把流量導到其他健康伺服器即可。',[["因為它會自動備份使用者密碼","與此無關。"],["因為 DNS TTL 很短","不是主因。"],["因為它跟 CDN 是同一台機器","架構上不是同一層。"]]),
   MC('sd14-s09-q6','Metadata 資料庫的 Master 節點當機，最直接的復原方式是？','sd14-s09-p04','需要有 Slave 可以被提升為新的 Master，才能恢復寫入能力。','把一個 Slave 提升為新 Master。',[["直接把所有請求導到 CDN","CDN 不處理資料庫寫入。"],["重開 API 伺服器就好","API 伺服器本身沒有寫入能力問題。"],["等待使用者重新整理頁面","無法解決寫入路徑斷裂。"]])
  ]
@@ -124,26 +127,28 @@ chapter.sections.push(
  ]
 },
 {
- id:'sd14-s12',order:12,title:'Multi-Region、Observability 與 Live Streaming 邊界',duration:'42–58 分鐘',summary:'完成全球 upload/playback routing、replicated metadata、CDN、transcode locality、DR 與 QoE telemetry；最後區分 VOD 與 Live。',
- research:[],
+ id:'sd14-s12',order:12,title:'第四步驟：匯整總結——如果面試還有多餘時間',duration:'42–58 分鐘',summary:'書中最後點出三個可以繼續深入的方向：擴展 API 層與資料庫、直播（live streaming）跟隨選影片有什麼本質上的不同、以及影片下架機制。',
+ research:[{label:'YouTube by the numbers（用數字來看 YouTube）',url:'https://www.omnicoreagency.com/youtube-statistics/'}],
  pages:[
-  {id:'sd14-s12-p01',title:'Region 不是每個 Component 都 Active-Active',blocks:[
-   {type:'bullets',items:['Playback CDN 全球 edge。','Upload 可就近 ingress，再跨 region durable replicate。','Metadata 可 home-region + replica 或 globally distributed DB。','Transcode jobs 優先靠近 source/storage/GPU pool。']}
+  {id:'sd14-s12-p01',title:'擴展 API 層與資料庫',blocks:[
+   {type:'p',text:'我們在本章已經介紹了 YouTube 這類影片申流服務主要的架構設計。如果面試還有多餘的時間，也可以聊聊以下幾個主題：'},
+   {type:'compare',items:[['擴展 API 層','由於 API 伺服器是無狀態的（stateless），因此可以談談在 API 層進行水平擴展。'],['擴展資料庫','你可以談談資料庫複寫（database replication）與分片（sharding）。']]}
   ]},
-  {id:'sd14-s12-p02',title:'QoE Metrics 比 CPU 更接近產品',blocks:[
-   {type:'compare',items:[['Upload','success/resume rate、time-to-upload。'],['Processing','queue age、transcode time、failure by codec。'],['Playback','startup、rebuffer、quality switches、CDN hit、video start failure。'],['Cost','egress/video-minute、transcode-minute、storage/video。']]}
+  {id:'sd14-s12-p02',title:'直播（live streaming）跟隨選影片不一樣',blocks:[
+   {type:'p',text:'直播（live streaming）指的是以即時方式拍攝並播放出去的內容，雖然一樣要經過上傳、編碼、串流這幾個步驟，但跟本章談的隨選影片（VOD）有明顯不同：'},
+   {type:'bullets',items:['直播的內容還在持續產生中，沒辦法像隨選影片那樣，先把整部影片轉碼成所有畫質版本後再上架。','直播對延遲的要求比隨選影片高得多，任何需要花費太多時間的錯誤處理做法（例如整份重新處理），在直播情境下都是不可接受的。']}
   ]},
-  {id:'sd14-s12-p03',title:'Live Streaming 為何是另一題',blocks:[
-   {type:'p',text:'Live 也有 ingest/encode/CDN，但不能等待完整檔案、latency 更敏感、segment 很短、producer 還在持續產生內容，故 recovery/ordering 與 delay trade-off 不同。'}
+  {id:'sd14-s12-p03',title:'影片下架',blocks:[
+   {type:'p',text:'影片下架：侵犯版權、色情或其他非法行為的影片，都應該予以下架處理。其中有一些是在上傳過程中就被系統偵測出來，有一些則是靠使用者檢舉才被發現、進而處理。'}
   ]},
-  {id:'sd14-s12-p04',title:'完整 YouTube Interview Checklist',blocks:[
-   {type:'code',text:'□ scope + video bytes estimate\n□ direct/resumable upload\n□ metadata + state machine\n□ transcode DAG + renditions\n□ object storage + CDN\n□ manifest/ABR playback\n□ retry/idempotency/DLQ\n□ cost + security/takedown\n□ multi-region + QoE metrics'}
+  {id:'sd14-s12-p04',title:'恭喜你跟我們走到了這裡',blocks:[
+   {type:'p',text:'恭喜你跟我們走到了這裡！本章介紹了 YouTube 這類影片申流服務主要的架構設計，從需求估算、高階設計、影片轉碼的 DAG 架構，一路談到串流協定、安全性、成本優化與錯誤處理。記住這些構成元素之間的取捨判斷，比死記每個名詞的定義更重要。'}
   ]}],
  quiz:[
-  MC('sd14-s12-q1','為什麼 transcoding worker 不一定全球 active-active 同一 job？','sd14-s12-p01','需要避免重複昂貴工作，通常有 job ownership/lease。','可多 region capacity，但單 job 要有明確 ownership/idempotency。',[["因為 GPU 不能跨 region","不是。"],["因為 queue 不能 replicate","可以。"],["因為影片只能一個 region 看","錯。"]]),
-  MC('sd14-s12-q2','Playback 最重要 observability 之一？','sd14-s12-p02','startup/rebuffer 直接反映 viewer QoE。','Startup latency / rebuffer ratio。',[["只看 API CPU","不足。"],["只看 title update rate","不是。"],["只看 repository commits","無關。"]]),
-  MC('sd14-s12-q3','Live 與 VOD 最大流程差異之一？','sd14-s12-p03','內容仍在生成，無法先完成全檔 transcoding再 publish。','低 latency continuous ingest/encode/delivery。',[["Live 不需要 CDN","仍常需要。"],["Live 不需要 encode","仍需要。"],["VOD 一定比 live 更即時","相反。"]]),
-  MC('sd14-s12-q4','完整 YouTube 題最核心 cost drivers？','sd14-s12-p04','Storage、transcode compute、CDN/egress。','Media bytes 與 processing cost。',[["只有 metadata DB connections","太局部。"],["只有 login QPS","不是。"],["只有 DNS lookup","不是。"]])
+  MC('sd14-s12-q1','書中提到 API 層可以怎麼進行水平擴展？','sd14-s12-p01','因為 API 伺服器是無狀態的（stateless），可以直接水平擴展。','因為 API 伺服器無狀態，水平擴展相對單純。',[["因為 API 伺服器有 GPU","跟 GPU 無關，是無狀態這個特性帶來的擴展優勢。"],["因為 API 伺服器不會被呼叫","水平擴展的前提正是因為會被大量呼叫，才需要擴展。"],["因為 metadata 資料庫不需要擴展","書中把 API 層與資料庫列為兩個分開可以討論的擴展主題。"]]),
+  MC('sd14-s12-q2','書中提到擴展資料庫時，可以討論哪兩個主題？','sd14-s12-p01','資料庫複寫（database replication）與分片（sharding）。','資料庫複寫與分片。',[["快取與 CDN","這兩者是不同小節談的主題，不是資料庫擴展本身的做法。"],["DRM 與浮水印","這些是影片版權保護做法，跟資料庫擴展無關。"],["GOP 與容器格式","這些是影片轉碼相關概念，不是資料庫擴展主題。"]]),
+  MC('sd14-s12-q3','直播（live streaming）跟隨選影片（VOD）最主要的差異是什麼？','sd14-s12-p02','直播對延遲的要求比較高，需要不同的錯誤處理做法。','直播對延遲更敏感，需要不同的錯誤處理策略。',[["直播不需要串流協定","直播仍然需要串流協定來傳輸內容。"],["直播不需要處理錯誤","任何系統都需要處理錯誤，直播只是處理方式跟隨選影片不同。"],["隨選影片比直播更即時","恰好相反，直播才是即時性要求更高的情境。"]]),
+  MC('sd14-s12-q4','書中提到影片下架主要處理哪些內容？','sd14-s12-p03','侵犯版權、色情或其他非法行為的影片。','侵犯版權、色情或其他非法內容。',[["畫質太低的影片","畫質不是下架的理由，是轉碼/串流品質的問題。"],["上傳失敗的影片","上傳失敗是錯誤處理要解決的問題，不是下架機制要處理的內容。"],["檔案格式不支援的影片","格式問題在轉碼階段就會處理，不是下架機制的範疇。"]])
  ]
 }
 );
