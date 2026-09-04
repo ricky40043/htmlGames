@@ -162,7 +162,7 @@
     const topo = sim.topology;
     if (!topo) return '<p class="sim-topo-missing">這個場景還沒有拓樸圖資料。</p>';
     state.componentLookup = new Map(sim.components.map(c => [c.id, c]));
-    const legend = sim.components.map(c => `<a class="sim-topo-legend-item" href="${reviewHref(sim.chapterId, c.sectionId, c.pageId)}" target="_blank" rel="noreferrer">${state.active.has(c.id) ? '✅' : '⬜️'} ${esc(c.shortName)} <small>教材對照 →</small></a>`).join('');
+    const legend = sim.components.map(c => `<a class="sim-topo-legend-item" data-legend="${esc(c.id)}" href="${reviewHref(sim.chapterId, c.sectionId, c.pageId)}" target="_blank" rel="noreferrer"><span class="sim-legend-mark">${state.active.has(c.id) ? '✅' : '⬜️'}</span> ${esc(c.shortName)} <small>教材對照 →</small></a>`).join('');
     const speedControls = showControls ? `<div class="sim-speed-controls">
         <span class="sim-speed-label">播放速度</span>
         ${SPEED_OPTIONS.map(s => `<button class="button secondary sim-speed-btn ${state.speed === s ? 'active' : ''}" type="button" data-speed="${s}">${s}x</button>`).join('')}
@@ -263,6 +263,39 @@
 
   function waypointsFor(topo, nodeIds) {
     return nodeIds.map(id => findNode(topo, id)).filter(Boolean).map(n => ({ x: n.x, y: n.y }));
+  }
+
+  // Toggling a capability used to trigger a full render() — that wiped the trace log, killed
+  // any in-flight token animation, and flashed the whole screen on every click. This updates
+  // only the node, its edges, and its legend row in place, so the rest of the screen (and
+  // anything animating) is left alone.
+  function updateComponentVisual(root, sim, state, componentId) {
+    const topo = sim.topology;
+    const g = topo.nodes.find(n => n.componentId === componentId);
+    if (!g) return;
+    const on = state.active.has(componentId);
+    const nodeEl = root.querySelector(`[data-node="${g.id}"]`);
+    if (nodeEl) {
+      nodeEl.classList.toggle('on', on);
+      nodeEl.classList.toggle('off', !on);
+      const mark = nodeEl.querySelector('.sim-topo-mark');
+      if (mark) mark.textContent = on ? '✓' : '✕';
+    }
+    topo.edges.forEach(e => {
+      if (e.from !== g.id && e.to !== g.id) return;
+      const a = findNode(topo, e.from), b = findNode(topo, e.to);
+      const aOn = a.kind !== 'component' || state.active.has(a.componentId);
+      const bOn = b.kind !== 'component' || state.active.has(b.componentId);
+      const reqOn = !e.requiresComponent || state.active.has(e.requiresComponent);
+      const isActive = aOn && bOn && reqOn;
+      const line = root.querySelector(`[data-edge="${e.from}-${e.to}"]`);
+      if (line) {
+        line.classList.toggle('active', isActive);
+        line.classList.toggle('inactive', !isActive);
+      }
+    });
+    const legendEl = root.querySelector(`[data-legend="${componentId}"] .sim-legend-mark`);
+    if (legendEl) legendEl.textContent = on ? '✅' : '⬜️';
   }
 
   function burstUsers(topo, svgEl) {
@@ -547,7 +580,8 @@
 
     wireTopologyControls(root, sim, state, componentId => {
       if (state.active.has(componentId)) state.active.delete(componentId); else state.active.add(componentId);
-      render(root, sim, state);
+      updateComponentVisual(root, sim, state, componentId);
+      traceLine(root, `${state.active.has(componentId) ? '啟用' : '關閉'}了「${sim.components.find(c => c.id === componentId)?.shortName || componentId}」`, state.active.has(componentId) ? 'ok' : '');
     });
     wireTraceClear(root);
     wireChunkLab(root, sim, state);
