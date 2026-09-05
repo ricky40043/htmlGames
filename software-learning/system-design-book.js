@@ -222,11 +222,57 @@
     return map;
   }
 
+  function diagramNodeHtml(node, index, count) {
+    const title = Array.isArray(node) ? node[0] : node?.label || node?.id || `節點 ${index + 1}`;
+    const detail = Array.isArray(node) ? node[1] : node?.detail || '';
+    return `<div class="book-node" data-flow-step data-flow-node="${esc(node?.id || title)}">
+      <span class="book-node-pulse" aria-hidden="true"></span>
+      <strong>${esc(title)}</strong><small>${esc(detail)}</small>
+    </div>${index < count - 1 ? '<span class="book-arrow" data-flow-arrow aria-hidden="true">→</span>' : ''}`;
+  }
+
+  function diagramFlowHtml(flow, index) {
+    const nodes = flow.nodes || [];
+    const label = flow.label || `資料流 ${index + 1}`;
+    const payload = flow.payload || label;
+    return `<section class="book-flow-lane" data-book-flow data-flow-payload="${esc(payload)}">
+      <div class="book-flow-label"><span>${esc(label)}</span><small data-flow-status aria-live="polite">等待資料</small></div>
+      <div class="diagram-chain">${nodes.map((node, nodeIndex) => diagramNodeHtml(node, nodeIndex, nodes.length)).join('')}</div>
+    </section>`;
+  }
+
+  function diagramHtml(block) {
+    const flows = block.flows?.length
+      ? block.flows
+      : [{ label: block.flowLabel || '資料流', payload: block.payload || 'request payload', nodes: block.nodes || [] }];
+    return `<div class="book-diagram live" data-book-diagram>
+      <div class="book-diagram-toolbar"><div><strong>動態資料流</strong><small>只有資料真正經過時，節點與連線才會亮起</small></div><button class="button secondary book-flow-replay" type="button" data-flow-play>↻ 重播全部</button></div>
+      <div class="book-flow-lanes">${flows.map(diagramFlowHtml).join('')}</div>
+      ${block.caption ? `<p>${esc(block.caption)}</p>` : ''}
+    </div>`;
+  }
+
+  function wireBookFlows(scope) {
+    const runtime = window.SystemDesignRuntime;
+    if (!runtime?.animateSequence) return;
+    scope.querySelectorAll('[data-book-diagram]').forEach((diagram, diagramIndex) => {
+      const replay = () => {
+        const lanes = [...diagram.querySelectorAll('[data-book-flow]')];
+        lanes.forEach((lane, laneIndex) => setTimeout(() => runtime.animateSequence(lane, {
+          interval: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 180 : 520,
+          payload: lane.dataset.flowPayload
+        }), laneIndex * 140));
+      };
+      diagram.querySelector('[data-flow-play]')?.addEventListener('click', replay);
+      setTimeout(replay, 220 + diagramIndex * 120);
+    });
+  }
+
   function blockHtml(block) {
     if (block.type === 'lead') return `<p class="book-lead">${esc(block.text)}</p>`;
     if (block.type === 'p') return `<p>${esc(block.text)}</p>`;
     if (block.type === 'bullets') return `<ul class="book-bullets">${block.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
-    if (block.type === 'diagram') return `<div class="book-diagram"><div class="diagram-chain">${block.nodes.map((n, i) => `<div class="book-node"><strong>${esc(n[0])}</strong><small>${esc(n[1] || '')}</small></div>${i < block.nodes.length - 1 ? '<span class="book-arrow">→</span>' : ''}`).join('')}</div>${block.caption ? `<p>${esc(block.caption)}</p>` : ''}</div>`;
+    if (block.type === 'diagram' || block.type === 'liveDiagram') return diagramHtml(block);
     if (block.type === 'compare') return `<div class="book-compare">${block.items.map(x => `<article><h4>${esc(x[0])}</h4><p>${esc(x[1])}</p></article>`).join('')}</div>`;
     if (block.type === 'stepper') return `<div class="book-stepper">${block.steps.map((x, i) => `<article><span>${i + 1}</span><div><h4>${esc(x[0])}</h4><p>${esc(x[1])}</p></div></article>`).join('')}</div>`;
     if (block.type === 'code') return `<pre class="book-code"><code>${esc(block.text)}</code></pre>`;
@@ -381,6 +427,7 @@
     document.querySelector('#bookPageCounter').textContent = `${chapterTag(chapter)}教材第 ${pInfo.number} 頁 · 本小節 ${pageIdx + 1}/${section.pages.length}`;
     const takeaway = pageTakeaway(page);
     document.querySelector('#bookPageStage').innerHTML = `<article class="book-page ${params.get('review') ? 'review-highlight' : ''}" id="${esc(page.id)}"><h2>${esc(page.title)}</h2><div class="book-page-purpose"><strong>這頁只先回答一件事</strong><p>先找出這個做法要解決的問題，再看它怎麼運作，以及它會帶來什麼代價。</p></div>${page.blocks.map(blockHtml).join('')}${takeaway ? `<aside class="book-page-takeaway"><strong>這頁先記住</strong><p>${esc(takeaway)}</p></aside>` : ''}</article>`;
+    wireBookFlows(document.querySelector('#bookPageStage'));
 
     const sectionIdx = chapter.sections.findIndex(s => s.id === section.id);
     const previousSection = sectionIdx > 0 ? chapter.sections[sectionIdx - 1] : null;

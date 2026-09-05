@@ -140,7 +140,11 @@ chapter.sections.push(
  research:[{label:'How We\'ve Scaled Dropbox',url:'https://www.youtube.com/watch?v=PE4gwstWhmc'}],
  pages:[
   {id:'sd15-s06-p01',title:'整張圖',blocks:[
-   {type:'code',text:'                          使用者（瀏覽器／行動 App）\n                    ┌───────────┼────────────── 長輪詢 ──────┐\n                    ▼           ▼                            ▼\n              區塊伺服器    負載平衡器                     通知服務 ──▶ 離線備份佇列\n                    │           │                            ▲\n                    │           ▼                            │\n                    │      API 伺服器 ───────────────────────┘\n                    │        │      │\n                    ▼        ▼      ▼\n              雲端儲存系統  Metadata  Metadata\n                    │        快取      資料庫\n                    ▼\n              冷儲存系統'},
+   {type:'liveDiagram',flows:[
+    {label:'Metadata 路徑',payload:'file metadata',nodes:[['使用者','瀏覽器／App'],['Load Balancer','分配 API request'],['API 伺服器','身份與 metadata'],['Metadata 快取','先讀快取'],['Metadata 資料庫','一致性主資料']]},
+    {label:'檔案位元組路徑',payload:'encrypted blocks',nodes:[['使用者','原始檔案'],['區塊伺服器','切分／壓縮／加密'],['雲端儲存系統','保存位元組'],['冷儲存系統','封存舊版本']]},
+    {label:'變更通知路徑',payload:'change event',nodes:[['API 伺服器','發布變更'],['通知服務','長輪詢推送'],['離線備份佇列','裝置離線時暫存'],['使用者裝置','上線後補同步']]}
+   ],caption:'三條資料流各自播放：Metadata、檔案位元組與變更通知不是同一條串行管線。'},
    {type:'callout',title:'先看出這一件事',text:'使用者有兩條往下的線：一條進負載平衡器與 API 伺服器，另一條直接進區塊伺服器。API 伺服器負責的是「上傳流程以外幾乎所有的其他工作」——真正的檔案位元組不經過它。'}
   ]},
   {id:'sd15-s06-p02',title:'負責搬位元組的那三個',blocks:[

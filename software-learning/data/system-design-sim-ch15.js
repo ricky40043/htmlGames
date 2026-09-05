@@ -27,6 +27,168 @@
       search: '🔔 模擬一次變更通知'
     },
     viewersAtMonth: m => Math.round(2000 * Math.pow(1.55, m)),
+    draggableTopology: true,
+    // The diagram, inspector and blank simulator all speak this same store/request model. These
+    // are not decorative labels: each demo upload writes real rows that remain visible for the
+    // rest of the run.
+    dataModel: {
+      stores: [
+        {
+          id: 'driveMetadata', nodeId: 'metadataDB', kind: 'relational database',
+          label: 'Google Drive Metadata 資料庫',
+          description: '只保存檔案結構、版本、區塊索引與上傳狀態；真正的檔案位元組在雲端物件儲存。',
+          tables: [
+            { id: 'user', label: 'user', key: 'user_id', schema: [
+              { name: 'user_id', type: 'uuid', note: '使用者唯一 ID' },
+              { name: 'user_name', type: 'varchar', note: '顯示名稱' },
+              { name: 'created_at', type: 'timestamp', note: '建立時間' }
+            ], seed: [{ user_id: 'usr-demo', user_name: '示範使用者', created_at: '2026-09-05' }] },
+            { id: 'device', label: 'device', key: 'device_id', schema: [
+              { name: 'device_id', type: 'uuid', note: '裝置 ID' }, { name: 'user_id', type: 'uuid FK', note: '所屬使用者' },
+              { name: 'last_logged_in_at', type: 'timestamp', note: '最後連線時間' }
+            ], seed: [{ device_id: 'dev-web', user_id: 'usr-demo', last_logged_in_at: '現在' }, { device_id: 'dev-phone', user_id: 'usr-demo', last_logged_in_at: '現在' }] },
+            { id: 'workspace', label: 'workspace', key: 'workspace_id', schema: [
+              { name: 'workspace_id', type: 'uuid', note: '根目錄／共享空間 ID' }, { name: 'owner_id', type: 'uuid FK', note: '擁有者' },
+              { name: 'is_shared', type: 'boolean', note: '是否共享' }, { name: 'created_at', type: 'timestamp', note: '建立時間' }
+            ], seed: [{ workspace_id: 'ws-demo', owner_id: 'usr-demo', is_shared: true, created_at: '2026-09-05' }] },
+            { id: 'file', label: 'file', key: 'file_id', schema: [
+              { name: 'file_id', type: 'uuid', note: '檔案唯一 ID' }, { name: 'file_name', type: 'varchar', note: '檔名' },
+              { name: 'relative_path', type: 'varchar', note: '名稱空間內路徑' }, { name: 'workspace_id', type: 'uuid FK', note: '所屬工作區' },
+              { name: 'latest_version', type: 'int', note: '最新版本號' }, { name: 'upload_status', type: 'enum', note: 'pending / uploaded / interrupted' },
+              { name: 'checksum', type: 'sha256', note: '完整檔案校驗值' }, { name: 'last_modified', type: 'timestamp', note: '最後更新' }
+            ] },
+            { id: 'file_version', label: 'file_version（append-only）', key: 'version_id', schema: [
+              { name: 'version_id', type: 'uuid', note: '不可變版本 ID' }, { name: 'file_id', type: 'uuid FK', note: '所屬檔案' },
+              { name: 'device_id', type: 'uuid FK', note: '來源裝置' }, { name: 'version_number', type: 'int', note: '版本序號' },
+              { name: 'size_bytes', type: 'bigint', note: '邏輯大小' }, { name: 'created_at', type: 'timestamp', note: '建立時間' }
+            ] },
+            { id: 'block', label: 'block index', key: 'block_id', schema: [
+              { name: 'block_id', type: 'uuid / sha256', note: '區塊 ID；啟用去重時可直接採內容雜湊' },
+              { name: 'content_hash', type: 'sha256', note: '用來驗證內容並比對重複區塊' }, { name: 'object_key', type: 'varchar', note: '物件儲存位置' },
+              { name: 'size_bytes', type: 'int', note: '區塊大小' }, { name: 'replicas', type: 'int', note: '耐久性副本數' }
+            ] },
+            { id: 'file_version_block', label: 'file_version_block', schema: [
+              { name: 'version_id', type: 'uuid FK', note: '檔案版本' }, { name: 'block_id', type: 'sha256 FK', note: '實際區塊' },
+              { name: 'block_order', type: 'int', note: '重建檔案時的順序' }
+            ] },
+            { id: 'upload_session', label: 'upload_session', key: 'session_id', schema: [
+              { name: 'session_id', type: 'uuid', note: '斷點續傳工作階段' }, { name: 'file_id', type: 'uuid FK', note: '上傳中的檔案' },
+              { name: 'received_blocks', type: 'int', note: '已確實落地的區塊' }, { name: 'status', type: 'enum', note: 'active / completed / interrupted' }
+            ] }
+          ]
+        },
+        {
+          id: 'driveObjects', nodeId: 'cloudStorage', kind: 'object storage', label: '雲端儲存系統',
+          description: '保存加密後的檔案區塊。Metadata DB 只持有 object_key，不把大型位元組塞進資料列。',
+          tables: [{ id: 'objects', label: 'encrypted block objects', key: 'object_key', schema: [
+            { name: 'object_key', type: 'varchar', note: 'bucket 內的物件鍵' }, { name: 'file_id', type: 'uuid', note: '來源檔案' },
+            { name: 'block_id', type: 'uuid / sha256', note: '對應 metadata block index' },
+            { name: 'content_hash', type: 'sha256', note: '解密後內容的校驗值' }, { name: 'bytes', type: 'int', note: '這個區塊的實際位元組' },
+            { name: 'encrypted', type: 'boolean', note: '寫入前已加密' }, { name: 'replication', type: 'varchar', note: '單區／跨區複製' }
+          ] }]
+        },
+        {
+          id: 'driveCache', nodeId: 'metadataCache', kind: 'cache', label: 'Metadata 快取',
+          description: '快速提供檔案清單；資料庫更新時應立即失效，避免另一台裝置看到舊版本。',
+          tables: [{ id: 'entries', label: 'cache entries', key: 'cache_key', schema: [
+            { name: 'cache_key', type: 'varchar', note: 'workspace/file 查詢鍵' }, { name: 'version', type: 'int', note: '快取版本' },
+            { name: 'state', type: 'enum', note: 'valid / invalidated' }
+          ] }]
+        },
+        {
+          id: 'driveNotifications', nodeId: 'notifyService', kind: 'event stream', label: '通知服務',
+          description: '只傳「哪個檔案變了」的輕量事件，客戶端收到後再去抓 metadata 與區塊。',
+          tables: [{ id: 'messages', label: 'change notifications', key: 'event_id', schema: [
+            { name: 'event_id', type: 'uuid', note: '事件 ID' }, { name: 'file_id', type: 'uuid', note: '變動檔案' },
+            { name: 'event', type: 'enum', note: 'pending / uploaded / changed' }, { name: 'device_id', type: 'uuid', note: '接收裝置' }
+          ] }]
+        },
+        {
+          id: 'driveOfflineQueue', nodeId: 'offlineQueueNode', kind: 'durable queue', label: '離線備份佇列',
+          description: '裝置離線時保存變動事件，重連後依序補送。',
+          tables: [{ id: 'pending_changes', label: 'pending changes', key: 'event_id', schema: [
+            { name: 'event_id', type: 'uuid', note: '待補送事件' }, { name: 'device_id', type: 'uuid', note: '離線裝置' },
+            { name: 'file_id', type: 'uuid', note: '變動檔案' }, { name: 'status', type: 'enum', note: 'queued / delivered' }
+          ] }]
+        }
+      ]
+    },
+    operationFactory: (kind, seq, ctx) => {
+      const pad = String(seq).padStart(3, '0');
+      const fileId = ctx.payload?.file_id || `file-${pad}`;
+      const name = ctx.payload?.file_name || `demo_upload_${pad}.bin`;
+      const bytes = Number(ctx.payload?.size_bytes) || (24 + seq * 4) * MB;
+      const blockCount = Math.ceil(bytes / (4 * MB));
+      const at = `第 ${ctx.month} 月 / #${seq}`;
+      if (kind === 'upload') {
+        const versionNumber = Math.max(1, Number(ctx.payload?.version_number) || 1);
+        const versionId = `${fileId}-v${versionNumber}`;
+        const previousBlocks = Array.isArray(ctx.payload?.previous_blocks) ? ctx.payload.previous_blocks : [];
+        const changedBlocks = new Set(ctx.payload?.changed_blocks || []);
+        const deltaEnabled = Boolean(ctx.payload?.delta_enabled);
+        const resumable = ctx.choices.has('resumableUpload');
+        const dedupe = ctx.choices.has('blockDedupe');
+        const replication = ctx.choices.get('storageReplication');
+        const replicaCount = replication === 'off' ? 1 : 2;
+        const blockRefs = [];
+        const blockWrites = Array.from({ length: blockCount }, (_, index) => {
+          const order = index + 1;
+          const blockPad = String(order).padStart(4, '0');
+          const previous = previousBlocks[index];
+          const unchanged = Boolean(previous) && !changedBlocks.has(order);
+          // Unchanged blocks retain their content hash across versions. Delta sync reuses their
+          // old block reference without uploading; server-side dedupe can do the same even when
+          // the client sent the bytes again. Changed blocks receive a new immutable hash.
+          const hashStem = name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'file';
+          const contentHash = unchanged ? previous.contentHash : `sha256-${hashStem}-v${versionNumber}-${blockPad}`;
+          const reusesExisting = unchanged && (deltaEnabled || dedupe);
+          const blockId = reusesExisting ? previous.blockId : dedupe ? contentHash : `block-${pad}-${blockPad}`;
+          const objectKey = `blocks/${blockId}`;
+          const blockBytes = Math.min(4 * MB, bytes - index * 4 * MB);
+          blockRefs.push({ blockId, contentHash, objectKey, sizeBytes: blockBytes });
+          const writes = [
+            { storeId: 'driveMetadata', tableId: 'block', key: 'block_id', row: { block_id: blockId, content_hash: contentHash, object_key: objectKey, size_bytes: blockBytes, replicas: replicaCount } },
+            { storeId: 'driveMetadata', tableId: 'file_version_block', row: { version_id: versionId, block_id: blockId, block_order: order } }
+          ];
+          if (!reusesExisting) writes.push(
+            { storeId: 'driveObjects', tableId: 'objects', key: 'object_key', row: { object_key: objectKey, file_id: fileId, block_id: blockId, content_hash: contentHash, bytes: blockBytes, encrypted: true, replication } }
+          );
+          return writes;
+        }).flat();
+        const existingVersion = versionNumber > 1;
+        const pendingFile = existingVersion
+          ? { file_id: fileId, upload_status: 'pending', last_modified: at }
+          : { file_id: fileId, file_name: name, relative_path: `/demo/${name}`, workspace_id: 'ws-demo', latest_version: 0, upload_status: 'pending', checksum: `sha256-${pad}`, last_modified: at };
+        return {
+          label: `上傳 ${name}${existingVersion ? ` v${versionNumber}` : ''}`,
+          payload: { file_id: fileId, file_name: name, version_number: versionNumber, size_bytes: bytes, block_count: blockCount, upload_type: resumable ? 'resumable' : 'simple' },
+          blockRefs,
+          writesOnHop: [
+            { nodeId: 'metadataDB', storeId: 'driveMetadata', tableId: 'file', key: 'file_id', row: pendingFile },
+            ...(resumable ? [{ nodeId: 'metadataDB', storeId: 'driveMetadata', tableId: 'upload_session', key: 'session_id', row: { session_id: `upload-${pad}`, file_id: fileId, received_blocks: 0, status: 'active' } }] : []),
+            { nodeId: 'notifyService', storeId: 'driveNotifications', tableId: 'messages', key: 'event_id', row: { event_id: `pending-${pad}`, file_id: fileId, event: 'pending', device_id: 'dev-phone' } }
+          ],
+          writesOnComplete: [
+            { storeId: 'driveMetadata', tableId: 'file', key: 'file_id', row: { file_id: fileId, latest_version: versionNumber, upload_status: 'uploaded', checksum: `sha256-${pad}-v${versionNumber}`, last_modified: at } },
+            { storeId: 'driveMetadata', tableId: 'file_version', key: 'version_id', row: { version_id: versionId, file_id: fileId, device_id: 'dev-web', version_number: versionNumber, size_bytes: bytes, created_at: at } },
+            ...blockWrites,
+            ...(resumable ? [{ storeId: 'driveMetadata', tableId: 'upload_session', key: 'session_id', row: { session_id: `upload-${pad}`, file_id: fileId, received_blocks: blockCount, status: 'completed' } }] : []),
+            { storeId: 'driveCache', tableId: 'entries', key: 'cache_key', row: { cache_key: `file:${fileId}`, version: versionNumber, state: ctx.choices.get('cacheConsistency') === 'invalidate' ? 'invalidated' : 'valid（可能暫時過期）' } },
+            { storeId: 'driveNotifications', tableId: 'messages', key: 'event_id', row: { event_id: `uploaded-${pad}`, file_id: fileId, event: 'uploaded', device_id: 'dev-phone' } }
+          ],
+          writesOnFail: [
+            { storeId: 'driveMetadata', tableId: 'file', key: 'file_id', row: { file_id: fileId, upload_status: 'interrupted', last_modified: at } },
+            ...(resumable ? [{ storeId: 'driveMetadata', tableId: 'upload_session', key: 'session_id', row: { session_id: `upload-${pad}`, file_id: fileId, status: 'interrupted' } }] : [])
+          ]
+        };
+      }
+      if (kind === 'search') return {
+        label: `通知檔案變更 #${pad}`,
+        payload: { event_id: `change-${pad}`, file_id: fileId, target_device: 'dev-phone' },
+        writesOnComplete: [{ storeId: 'driveNotifications', tableId: 'messages', key: 'event_id', row: { event_id: `change-${pad}`, file_id: fileId, event: 'changed', device_id: 'dev-phone' } }]
+      };
+      return { label: `下載變更 #${pad}`, payload: { file_id: `file-${String(Math.max(1, seq)).padStart(3, '0')}`, device_id: 'dev-phone', operation: 'download_changed_blocks' } };
+    },
     lexicon: {
       viewer: '裝置',
       testViewer: '測試裝置',
@@ -57,6 +219,7 @@
       stageMs: 120,
       resumeComponentId: 'resumableUpload',
       deltaComponentId: 'blockSync',
+      dedupeComponentId: 'blockDedupe',
       nodes: { blockServer: 'blockServer', storage: 'cloudStorage', api: 'apiServer' },
       files: [
         { id: 'doc', name: 'proposal.docx', bytes: 40 * MB },
@@ -260,12 +423,28 @@
         { from: 'cloudStorage', to: 'apiServer' },
         { from: 'cloudStorage', to: 'dedupeBadge', kind: 'stub', requiresComponent: 'blockDedupe' },
         { from: 'cloudStorage', to: 'coldStorage' },
-        { from: 'notifyService', to: 'offlineQueueNode', kind: 'stub', requiresComponent: 'offlineQueue' }
+        { from: 'notifyService', to: 'offlineQueueNode', kind: 'stub', requiresComponent: 'offlineQueue' },
+        { from: 'offlineQueueNode', to: 'users', kind: 'stub', requiresComponent: 'offlineQueue' }
       ],
       // Three genuinely different paths, matching 圖 15-14 and 圖 15-15.
       //   upload → 位元組走區塊伺服器，metadata 走 API 伺服器，最後回調把狀態翻成 uploaded
       //   watch  → 另一台裝置收到通知後，先抓 metadata，再抓變動過的區塊
       //   search → 一次純粹的變更通知
+      computeFlows: (kind) => {
+        if (kind !== 'upload') return null;
+        return [
+          {
+            id: 'metadata',
+            label: 'Metadata：先寫入 pending，立刻通知其他裝置',
+            nodes: ['users', 'loadBalancer', 'apiServer', 'metadataDB', 'apiServer', 'notifyService', 'users']
+          },
+          {
+            id: 'bytes',
+            label: '位元組：切分／壓縮／加密／落地，再 callback 改成 uploaded',
+            nodes: ['users', 'blockServer', 'cloudStorage', 'apiServer', 'metadataDB', 'apiServer', 'notifyService', 'users']
+          }
+        ];
+      },
       computeFlow: (kind, ctx) => {
         if (kind === 'upload') {
           return ['users', 'blockServer', 'cloudStorage', 'apiServer', 'metadataDB', 'apiServer', 'notifyService', 'users'];
@@ -275,7 +454,7 @@
             ? ['users', 'loadBalancer', 'apiServer', 'notifyService', 'offlineQueueNode', 'users']
             : ['users', 'loadBalancer', 'apiServer', 'notifyService', 'users'];
         }
-        return ['users', 'loadBalancer', 'apiServer', 'metadataCache', 'apiServer', 'users',
+        return ['notifyService', 'users', 'loadBalancer', 'apiServer', 'metadataDB', 'apiServer', 'loadBalancer', 'users',
                 'blockServer', 'cloudStorage', 'blockServer', 'users'];
       }
     },
@@ -384,7 +563,7 @@
         id: 'notifyOutage',
         title: '通知服務整台當掉，上百萬條長輪詢連線同時斷開',
         relevantComponents: ['notificationMode', 'offlineQueue'],
-        demoFlow: ['users', 'apiServer', 'notifyService', 'offlineQueueNode'],
+        demoFlow: ['users', 'loadBalancer', 'apiServer', 'notifyService', 'offlineQueueNode'],
         narrative: '一台通知伺服器故障。它身上掛著超過一百萬條長輪詢連線，全部在同一秒斷開，然後同時嘗試重連。',
         resolve: ctx => {
           const mode = ctx.get('notificationMode');
@@ -400,7 +579,7 @@
         id: 'finale',
         title: '年度大遷徙：全公司同時把本機檔案搬上雲端',
         relevantComponents: ['resumableUpload', 'blockServerRedundancy', 'storageReplication', 'conflictResolution'],
-        demoFlow: ['users', 'blockServer', 'cloudStorage', 'apiServer', 'metadataDB', 'notifyService'],
+        demoFlow: ['users', 'blockServer', 'cloudStorage', 'apiServer', 'metadataDB', 'apiServer', 'notifyService'],
         narrative: '一個大企業客戶決定在同一週把所有部門的檔案全部搬上來：幾十萬個檔案、大量超過 1 GB 的大檔、還有很多人同時編輯同一批共享資料夾。',
         resolve: ctx => {
           const shields = ['resumableUpload', 'blockServerRedundancy', 'storageReplication', 'conflictResolution'].filter(id => ctx.has(id)).length;

@@ -43,15 +43,16 @@ chapter.sections.push(
    {type:'p',text:'不過在預設情況下，NoSQL 資料庫並不會支援 ACID 這幾個屬性，必須另外透過程式碼的方式才能把 ACID 屬性整合到同步邏輯中。我們的設計選擇採用關聯式資料庫，因為它天生具有 ACID 的原生支援。'},
    {type:'callout',title:'和第 14 章對照著看',text:'影片平台可以接受觀看數晚幾秒更新，所以那裡選了為高寫入優化的儲存；雲端硬碟不能接受兩台裝置看到不同的檔案，所以這裡選了 ACID。同樣的問題，不同的需求，不同的答案。'}
   ]},
-  {id:'sd15-s08-p03',title:'metadata 的六張表',blocks:[
-   {type:'code',text:'user(user_id, user_name, created_at)\ndevice(device_id, user_id, last_logged_in_at)\nworkspace(id, owner_id, is_shared, created_at)\nfile(id, file_name, relative_path, is_directory,\n     lastest_version, checksum, workspace_id,\n     created_at, last_modified)\nfile_version(id, file_id, device_id, version_number, last_modified)\nblock(block_id, file_version_id, block_order)'},
-   {type:'compare',items:[['user','使用者名稱、電子郵件、個人檔案照片等基本資訊。'],['device','同一個使用者可擁有很多個設備。'],['workspace','使用者的根目錄。'],['file','最新檔案相關的所有資訊。'],['file_version','檔案的版本歷史。每一行資料都是唯讀的，讓修訂歷史維持完整性。'],['block','檔案區塊的所有資訊。只要以正確的順序連結所有相應的區塊，就可以重建出任何版本的檔案。']]}
+  {id:'sd15-s08-p03',title:'metadata 的完整核心資料表',blocks:[
+   {type:'code',text:'user(user_id, user_name, created_at)\ndevice(device_id, user_id, last_logged_in_at)\nworkspace(workspace_id, owner_id, is_shared, created_at)\nfile(file_id, file_name, relative_path, is_directory,\n     latest_version, upload_status, checksum, workspace_id,\n     created_at, last_modified)\nfile_version(version_id, file_id, device_id, version_number, size_bytes, created_at)\nblock(block_id, content_hash, object_key, size_bytes, replicas)\nfile_version_block(version_id, block_id, block_order)\nupload_session(session_id, file_id, received_blocks, status)'},
+   {type:'compare',items:[['user／device／workspace','誰的哪一台裝置，正在操作哪一個根目錄或共享空間。'],['file','最新版本、checksum 與 pending／uploaded 狀態；它不保存大型檔案位元組。'],['file_version','唯讀的版本歷史，每個新版本新增一列，舊版本不原地覆寫。'],['block','以內容雜湊作 ID，指向物件儲存位置，才能跨版本安全去重。'],['file_version_block','把一個版本與多個 block 依 block_order 關聯，正確重建內容。'],['upload_session','記錄已落地區塊數與 active／completed／interrupted，支援斷點續傳。']]},
+   {type:'callout',title:'在模擬器裡直接看資料',text:'進入第 15 章模擬，連按幾次「模擬上傳一個檔案」，再點 Metadata 資料庫。你會看到每一次 request 都新增 file、file_version 與逐筆 block 關聯；啟用斷點續傳後還會新增 upload_session，不再只看到一個資料庫圖示。'}
   ]}],
  quiz:[
   MC('sd15-s08-q1','為什麼這一題選了關聯式資料庫？','sd15-s08-p02','高度一致性是硬需求。','它天生具有 ACID 的原生支援。',[["因為它比較快","不是選它的理由。"],["因為它可以存檔案","檔案存在雲端儲存。"],["因為 NoSQL 無法水平擴展","NoSQL 擴展性通常更好，理由是 ACID。"]]),
   MC('sd15-s08-q2','寫入資料庫時對快取要做什麼？','sd15-s08-p01','否則快取會回舊值。','讓快取內容失效。',[["延長快取時間","會讓不一致更久。"],["什麼都不用做","快取會與資料庫不一致。"],["把快取切成唯讀","不解決一致性。"]]),
   MC('sd15-s08-q3','file_version 資料表為什麼每一行都是唯讀的？','sd15-s08-p03','原地修改舊版本會破壞歷史。','讓檔案修訂歷史維持一定的完整性。',[["為了節省空間","唯讀不會省空間。"],["為了加快查詢","不是主要理由。"],["因為資料庫不支援更新","支援，是設計選擇。"]]),
-  MC('sd15-s08-q4','要重建某個版本的檔案，需要什麼？','sd15-s08-p03','block 表存了 block_order。','以正確的順序連結該版本的所有區塊。',[["只要檔案名稱","不足以取得內容。"],["只要最新版本的區塊","舊版本需要它自己的區塊。"],["只要 checksum","校驗值不含內容。"]])
+  MC('sd15-s08-q4','要重建某個版本的檔案，需要什麼？','sd15-s08-p03','file_version_block 關聯表保存每個版本的 block_order。','以正確的順序連結該版本的所有區塊。',[["只要檔案名稱","不足以取得內容。"],["只要最新版本的區塊","舊版本需要它自己的區塊。"],["只要 checksum","校驗值不含內容。"]])
  ]
 },
 
@@ -61,9 +62,17 @@ chapter.sections.push(
  pages:[
   {id:'sd15-s09-p01',title:'兩個請求同時出發',blocks:[
    {type:'lead',text:'有兩個請求以平行的方式發送出來：一個是添加檔案的 metadata 詮釋資料，另一個是把檔案上傳到雲端儲存系統。這兩個請求都是源自於客戶端 #1。'},
+   {type:'liveDiagram',flows:[
+    {label:'分支 A：Metadata',payload:'file status = pending',nodes:[['客戶端 #1','新增檔案'],['Load Balancer','分配 API'],['API 伺服器','驗證與建立 metadata'],['Metadata DB','INSERT file / pending'],['通知服務','告知客戶端 #2']]},
+    {label:'分支 B：檔案位元組',payload:'encrypted blocks',nodes:[['客戶端 #1','檔案內容'],['區塊伺服器','切分／壓縮／加密'],['雲端儲存','耐久寫入區塊']]}
+   ],caption:'兩條路同時出發；這裡刻意分成兩列，而不是錯畫成一條先後順序。'},
    {type:'stepper',steps:[['1. 添加 metadata','客戶端 1 發送出一個請求，要添加新檔案的 metadata。'],['2. 狀態設為 pending','把新檔案的 metadata 保存到 metadata 資料庫，然後把檔案上傳狀態修改為「pending」（待處理）。'],['3. 通報通知服務','向通知服務發出通報，添加了一個新檔案。'],['4. 通知客戶端 2','通知服務會通報相關客戶端，有個新檔案正在上傳中。']]}
   ]},
   {id:'sd15-s09-p02',title:'另一條路：位元組',blocks:[
+   {type:'liveDiagram',flows:[
+    {label:'位元組落地',payload:'block #1…N',nodes:[['客戶端 #1','原始檔案'],['區塊伺服器','切分／壓縮／加密'],['雲端儲存','所有區塊 durable']]},
+    {label:'完成回調',payload:'upload completed',nodes:[['雲端儲存','觸發 callback'],['API 伺服器','接收完成事件'],['Metadata DB','UPDATE uploaded'],['通知服務','推送完成'],['客戶端 #2','可以下載']]}
+   ],caption:'只有第一列全部落地後，第二列 callback 才會把 pending 翻成 uploaded。'},
    {type:'stepper',steps:[['2.1 上傳檔案內容','客戶端 #1 把檔案內容上傳到區塊伺服器。'],['2.2 切分並上傳','區塊伺服器把檔案切分成好幾個區塊，並進行壓縮、加密，然後再上傳到雲端儲存系統。'],['2.3 回調','檔案上傳之後，雲端儲存系統會觸發上傳完成的回調程序（callback），這個請求會被發送到 API 伺服器。'],['2.4 狀態改為 uploaded','metadata 資料庫內的檔案狀態修改為「uploaded」（已上傳）。'],['2.5 通報通知服務','向通知服務發出通報，檔案狀態已被修改為 uploaded。'],['2.6 通知客戶端 2','通知服務會通報相關客戶端，檔案已完整上傳。']]}
   ]},
   {id:'sd15-s09-p03',title:'pending 為什麼一定要存在',blocks:[
@@ -88,6 +97,10 @@ chapter.sections.push(
    {type:'p',text:'客戶端一旦知道檔案有變動，就會先透過 API 伺服器請求 metadata，然後再下載變動過的區塊，以構建出相應的檔案。'}
   ]},
   {id:'sd15-s10-p02',title:'下載流程的九個步驟',blocks:[
+   {type:'liveDiagram',flows:[
+    {label:'先取得 Metadata',payload:'changed file metadata',nodes:[['通知服務','檔案已變動'],['客戶端 #2','請求 metadata'],['Load Balancer','分配 API'],['API 伺服器','查詢變動'],['Metadata DB','回傳版本與 block 清單'],['客戶端 #2','知道要抓哪些 block']]},
+    {label:'再取得變動區塊',payload:'changed blocks',nodes:[['客戶端 #2','請求缺少區塊'],['區塊伺服器','代理下載'],['雲端儲存','讀取加密區塊'],['區塊伺服器','解密／重建'],['客戶端 #2','完成同步']]}
+   ],caption:'下載不是直接抓整份檔案：先用 metadata 找出缺少的 block，再只下載那些內容。'},
    {type:'stepper',steps:[['1','通知服務通報客戶端 #2，檔案在其他位置被改動了。'],['2','客戶端 #2 發送請求以取得 metadata。'],['3','API 伺服器向 metadata 資料庫請求變動相關的 metadata。'],['4','metadata 被送回到 API 伺服器。'],['5','客戶端 #2 取得 metadata。'],['6','客戶端向區塊伺服器發送請求，以下載所需的區塊。'],['7','區塊伺服器從雲端儲存系統下載一些區塊。'],['8','雲端儲存系統把區塊送回區塊伺服器。'],['9','客戶端 #2 下載所有新區塊，再重新構建出整個檔案。']]}
   ]},
   {id:'sd15-s10-p03',title:'長輪詢 vs WebSocket：為什麼選了長輪詢',blocks:[

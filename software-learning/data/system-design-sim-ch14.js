@@ -18,6 +18,7 @@
   // Every "off" label below therefore says what off actually means for that specific component,
   // instead of the single generic「關閉」that made a live-but-unredundant server read as dead.
   const OFF_ALWAYS = label => ({ id: 'off', label, cost: 0 });
+  const MB = 1024 * 1024;
 
   // ---------------------------------------------------------------------------------------
   // ONE recipe for a region's stack. The three starting regions are built from it, and so is
@@ -52,7 +53,7 @@
     { from: `users_${r}`, to: `cdn_${r}`, requiresComponent: 'cdnTier' },
     { from: `cdn_${r}`, to: `loadBalancer_${r}`, requiresComponent: 'cdnTier' },
     { from: `loadBalancer_${r}`, to: `streamServer_${r}` },
-    { from: `streamServer_${r}`, to: 'storage' },
+    { from: `streamServer_${r}`, to: 'transcodedStorage' },
     { from: `apiServer_${r}`, to: 'storage' },
     { from: `apiServer_${r}`, to: 'metadataCache' },
     { from: `apiServer_${r}`, to: 'metadataDB', kind: 'stub' },
@@ -70,7 +71,7 @@
       '**容量是真的在算的**：地區觀眾數 ÷ 那一區的機器容量 = 負載率，超過 100% 變紅色，每推進一個月會扣播放品質分數。總觀眾人數是固定的，多開一個地區就是把同一群人分散開來。',
       '**CDN 決定流量從哪裡出來**：沒建 CDN 時每一次觀看都要回源到你自己的串流伺服器；建了之後大多數觀看在地區 CDN 就直接回覆，根本不碰後面的機器——封包動畫會直接顯示這個差別。',
       '**測試觀眾（🙋）**：他站在哪個地區的框裡就由那一區服務，可以拖到別區，也可以按「讓觀眾隨機走動」讓他自己亂走。訊號不良區可以拖、也可以拉右下角縮放。注意畫質**不會馬上變**——正在傳的那一段會照原畫質播完，要等下一段收到之後才會降或升，跟真實播放器一樣。',
-      '拓樸圖上每個地區各有自己獨立的 CDN、Load Balancer——後面又分成兩條路：搜尋／上架影片打「API 伺服器」，觀看影片走「串流伺服器」，兩者是分開的伺服器群組，不會互相影響。後端的儲存與轉碼系統則集中在美國主機房，跨海過去在動畫上會明顯變慢。'
+      '拓樸圖上每個地區各有自己獨立的 CDN、Load Balancer——後面又分成兩條路：搜尋／上架影片打「API 伺服器」，觀看影片走「串流伺服器」，兩者是分開的伺服器群組，不會互相影響。後端則完整保留教材的原始儲存、轉碼、已轉碼儲存、完成事件佇列／處理器、Metadata DB／快取；跨海過去在動畫上會明顯變慢。'
     ],
     months: 12,
     viewersLabel: '目前尖峰同時觀看人數估計',
@@ -94,6 +95,112 @@
     // regions, machines and user groups are all added and removed during the run. See
     // `regionBlueprint` below for how a region the player invents actually gets built.
     mutableTopology: true,
+    draggableTopology: true,
+    dataModel: {
+      stores: [
+        {
+          id: 'youtubeMetadata', nodeId: 'metadataDB', kind: 'database', label: 'YouTube Metadata 資料庫',
+          description: '保存影片、上傳 session、轉碼任務、rendition 與觀看事件；大型影音位元組另存在 Object Storage。',
+          tables: [
+            { id: 'video', label: 'videos', key: 'video_id', schema: [
+              { name: 'video_id', type: 'uuid', note: '影片 ID' }, { name: 'title', type: 'varchar', note: '影片標題' },
+              { name: 'owner_id', type: 'uuid', note: '上傳者' }, { name: 'status', type: 'enum', note: 'uploading / processing / ready' },
+              { name: 'size_bytes', type: 'bigint', note: '原始檔大小' }, { name: 'created_at', type: 'timestamp', note: '建立時間' }
+            ] },
+            { id: 'upload_session', label: 'upload_sessions', key: 'session_id', schema: [
+              { name: 'session_id', type: 'uuid', note: '可續傳 session' }, { name: 'video_id', type: 'uuid', note: '影片 ID' },
+              { name: 'status', type: 'enum', note: 'active / completed / interrupted' }, { name: 'uploaded_bytes', type: 'bigint', note: '已耐久寫入位元組' }
+            ] },
+            { id: 'transcode_job', label: 'transcode_jobs', key: 'job_id', schema: [
+              { name: 'job_id', type: 'uuid', note: 'DAG 工作 ID' }, { name: 'video_id', type: 'uuid', note: '影片 ID' },
+              { name: 'status', type: 'enum', note: 'queued / running / completed' }, { name: 'worker', type: 'varchar', note: '執行的 worker' }
+            ] },
+            { id: 'rendition', label: 'renditions', key: 'rendition_id', schema: [
+              { name: 'rendition_id', type: 'uuid', note: '轉碼輸出 ID' }, { name: 'video_id', type: 'uuid', note: '影片 ID' },
+              { name: 'profile', type: 'varchar', note: '360p / 480p / 720p' }, { name: 'object_key', type: 'varchar', note: '物件儲存鍵' }
+            ] },
+            { id: 'view_event', label: 'view_events', schema: [
+              { name: 'event_id', type: 'uuid', note: '觀看事件' }, { name: 'video_id', type: 'uuid', note: '影片 ID' },
+              { name: 'region', type: 'varchar', note: '來源地區' }, { name: 'delivery', type: 'varchar', note: 'CDN hit / origin' }
+            ] },
+            { id: 'search_query', label: 'search_queries', schema: [
+              { name: 'query_id', type: 'uuid', note: '查詢事件' }, { name: 'query', type: 'varchar', note: '搜尋字串' }, { name: 'region', type: 'varchar', note: '來源地區' }
+            ] }
+          ]
+        },
+        {
+          id: 'youtubeObjects', nodeId: 'storage', kind: 'object storage', label: '原始影片儲存系統',
+          description: '保存創作者剛上傳、尚未轉碼的原始影片；轉碼工作程序從這裡讀取輸入。',
+          tables: [{ id: 'objects', label: 'raw video objects', key: 'object_key', schema: [
+            { name: 'object_key', type: 'varchar', note: '物件鍵' }, { name: 'video_id', type: 'uuid', note: '影片 ID' },
+            { name: 'kind', type: 'enum', note: 'raw' }, { name: 'bytes', type: 'bigint', note: '物件大小' }
+          ] }]
+        },
+        {
+          id: 'youtubeRenditions', nodeId: 'transcodedStorage', kind: 'object storage', label: '已轉碼影片儲存系統',
+          description: '保存轉碼完成的各解析度影片；串流伺服器與 CDN 從這裡取得可播放內容。',
+          tables: [{ id: 'objects', label: 'rendition objects', key: 'object_key', schema: [
+            { name: 'object_key', type: 'varchar', note: '各畫質輸出物件鍵' }, { name: 'video_id', type: 'uuid', note: '影片 ID' },
+            { name: 'profile', type: 'varchar', note: '360p / 480p / 720p' }, { name: 'bytes', type: 'bigint', note: '轉碼後物件大小' }
+          ] }]
+        },
+        {
+          id: 'youtubeCompletionQueue', nodeId: 'completionQueue', kind: 'durable queue', label: '完成事件訊息佇列',
+          description: '轉碼輸出確實落地後才加入完成事件；處理器可重試，不必讓轉碼工作同步等待資料庫。',
+          tables: [{ id: 'messages', label: 'completion events', key: 'event_id', schema: [
+            { name: 'event_id', type: 'uuid', note: '完成事件 ID' }, { name: 'video_id', type: 'uuid', note: '影片 ID' },
+            { name: 'event', type: 'enum', note: 'transcode.completed' }, { name: 'status', type: 'enum', note: 'queued / handled' }
+          ] }]
+        },
+        {
+          id: 'youtubeCache', nodeId: 'metadataCache', kind: 'cache', label: '影片 Metadata 快取',
+          description: '提供熱門影片資料；上架完成時寫入最新 ready 狀態。',
+          tables: [{ id: 'entries', label: 'cache entries', key: 'cache_key', schema: [
+            { name: 'cache_key', type: 'varchar', note: 'video:{id}' }, { name: 'video_id', type: 'uuid', note: '影片 ID' },
+            { name: 'status', type: 'enum', note: 'ready / invalidated' }
+          ] }]
+        }
+      ]
+    },
+    operationFactory: (kind, seq, ctx) => {
+      const pad = String(seq).padStart(3, '0');
+      const videoId = `video-${pad}`;
+      const region = ctx.regionId || 'us';
+      const at = `第 ${ctx.month} 月 / #${seq}`;
+      if (kind === 'upload') {
+        const title = ctx.payload?.title || `教學影片 ${pad}`;
+        const bytes = Number(ctx.payload?.size_bytes) || (260 + seq * 20) * MB;
+        return {
+          label: `上傳「${title}」`,
+          payload: { video_id: videoId, title, size_bytes: bytes, region, upload_mode: ctx.choices.has('preSignedUpload') ? 'pre-signed direct' : 'via API' },
+          writesOnHop: [
+            { nodeId: 'metadataDB', storeId: 'youtubeMetadata', tableId: 'video', key: 'video_id', row: { video_id: videoId, title, owner_id: 'creator-demo', status: 'uploading', size_bytes: bytes, created_at: at } },
+            { nodeId: 'metadataDB', storeId: 'youtubeMetadata', tableId: 'upload_session', key: 'session_id', row: { session_id: `upload-${pad}`, video_id: videoId, status: 'active', uploaded_bytes: 0 } }
+          ],
+          writesOnComplete: [
+            { storeId: 'youtubeMetadata', tableId: 'video', key: 'video_id', row: { video_id: videoId, status: 'ready' } },
+            { storeId: 'youtubeMetadata', tableId: 'upload_session', key: 'session_id', row: { session_id: `upload-${pad}`, video_id: videoId, status: 'completed', uploaded_bytes: bytes } },
+            { storeId: 'youtubeMetadata', tableId: 'transcode_job', key: 'job_id', row: { job_id: `job-${pad}`, video_id: videoId, status: 'completed', worker: `worker-${(seq - 1) % 3 + 1}` } },
+            { storeId: 'youtubeMetadata', tableId: 'rendition', key: 'rendition_id', row: { rendition_id: `rendition-${pad}-720p`, video_id: videoId, profile: '720p', object_key: `renditions/${videoId}/720p.m3u8` } },
+            { storeId: 'youtubeObjects', tableId: 'objects', key: 'object_key', row: { object_key: `raw/${videoId}`, video_id: videoId, kind: 'raw', bytes } },
+            { storeId: 'youtubeRenditions', tableId: 'objects', key: 'object_key', row: { object_key: `renditions/${videoId}/720p.m3u8`, video_id: videoId, profile: '720p', bytes: Math.round(bytes * 0.58) } },
+            { storeId: 'youtubeCompletionQueue', tableId: 'messages', key: 'event_id', row: { event_id: `complete-${pad}`, video_id: videoId, event: 'transcode.completed', status: 'handled' } },
+            { storeId: 'youtubeCache', tableId: 'entries', key: 'cache_key', row: { cache_key: `video:${videoId}`, video_id: videoId, status: 'ready' } }
+          ],
+          writesOnFail: [{ storeId: 'youtubeMetadata', tableId: 'upload_session', key: 'session_id', row: { session_id: `upload-${pad}`, video_id: videoId, status: 'interrupted' } }]
+        };
+      }
+      if (kind === 'search') return {
+        label: `搜尋影片 #${pad}`,
+        payload: { query: `system design ${pad}`, region },
+        writesOnComplete: [{ storeId: 'youtubeMetadata', tableId: 'search_query', row: { query_id: `query-${pad}`, query: `system design ${pad}`, region } }]
+      };
+      return {
+        label: `觀看影片 #${pad}`,
+        payload: { video_id: `video-${String(Math.max(1, seq)).padStart(3, '0')}`, region },
+        writesOnComplete: [{ storeId: 'youtubeMetadata', tableId: 'view_event', row: { event_id: `view-${pad}`, video_id: `video-${String(Math.max(1, seq)).padStart(3, '0')}`, region, delivery: ctx.choices.has('cdnTier') ? 'CDN / origin 依命中率' : 'origin' } }]
+      };
+    },
     components: [
       {
         id: 'cdnTier',
@@ -114,7 +221,7 @@
         shortName: 'API 備援',
         presence: 'always',
         desc: '伺服器是無狀態的，單台當機時負載平衡器能把流量導到其他伺服器——差別在於備援容量是「隨時待命」還是「當下才開」。這裡只管搜尋／上架影片這條線；觀看影片走的是另一組完全獨立的「串流伺服器」，備援策略要另外決定，兩邊不會互相牽動。',
-        ...ref('sd14-s02-p01'),
+        ...ref('sd14-s09-p04'),
         options: [
           { ...OFF_ALWAYS('無備援（壞掉沒有人接手）'), instances: 1 },
           { id: 'autoScale', label: '自動擴縮容（觸發後約 3–5 分鐘生效）', cost: 1, instances: 2, desc: '負載升高時自動開新機器，成本較低，但生效前這幾分鐘容量會偏緊。' },
@@ -140,7 +247,7 @@
         shortName: 'DB 主從複寫',
         presence: 'always',
         desc: 'Master 當機時需要有東西頂替——差別在於用自動選舉還是人工確認來完成這次切換。資料庫本身一直都在，這裡選的是「它壞掉的時候有沒有人接手」。',
-        ...ref('sd14-s04-p01'),
+        ...ref('sd14-s09-p04'),
         options: [
           OFF_ALWAYS('沒有複本（單一 Master，壞了就停擺）'),
           { id: 'manual', label: '人工手動切換（約 5 分鐘，但更可控）', cost: 1, desc: '需要人工確認才切換，恢復較慢，但避免自動系統誤判造成的腦裂風險。' },
@@ -153,7 +260,7 @@
         shortName: '快取複寫',
         presence: 'always',
         desc: '快取資料複寫的節點數決定了能同時扛住幾個節點掛掉，也決定了成本。快取本身一直都在，這裡選的是它有幾份複本。',
-        ...ref('sd14-s02-p02'),
+        ...ref('sd14-s09-p05'),
         options: [
           OFF_ALWAYS('單一節點，沒有複本'),
           { id: 'replica2', label: '兩節點複寫', cost: 2, desc: '其中一個掛掉，另一個立刻頂上，多數情況夠用。' },
@@ -166,7 +273,7 @@
         shortName: '轉碼容錯',
         presence: 'always',
         desc: '任務工作程序當機時，任務排程器可以把工作重新指派給其他工作程序——差別在於重派後是「從頭重轉」還是「接著中斷點繼續」。轉碼管線本身一直在跑，這裡選的是它出事時怎麼救。',
-        ...ref('sd14-s09-p01'),
+        ...ref('sd14-s09-p05'),
         options: [
           { ...OFF_ALWAYS('沒有容錯（當掉就卡死）'), instances: 1 },
           { id: 'reassign', label: '偵測＋重新指派（從頭重轉）', cost: 2, instances: 2, desc: '換一個工作程序處理，但沒有進度紀錄，只能整個任務重來。' },
@@ -191,7 +298,7 @@
         shortName: '斷點續傳',
         presence: 'optional',
         desc: '上傳中斷後能從已成功的位元組繼續，不必整份重傳一次 GB 等級的原始檔。沒啟用時，系統根本沒有記錄「傳到哪裡」的地方。',
-        ...ref('sd14-s03-p01'),
+        ...ref('sd14-s03-p02'),
         options: [
           { id: 'off', label: '不啟用（中斷就整份重傳）', cost: 0 },
           { id: 'on', label: '啟用斷點續傳', cost: 1, desc: '維護 upload session 狀態需要一點額外成本，但能大幅減少大檔案重傳的浪費。' }
@@ -220,7 +327,7 @@
     },
     topology: (() => {
       return {
-        viewBox: '0 0 1300 950',
+        viewBox: '0 0 1450 950',
         regionIds: ['tw', 'us', 'jp'],
         regionLabel: { tw: '台灣', us: '美國', jp: '日本' },
         crossRegionWeight: 3.4,
@@ -229,20 +336,29 @@
           ...regionNode('us', '美國', 400, 460, 520),
           {
             id: 'transcodeArch', kind: 'component', componentId: 'transcodeResilience', label: '轉碼架構',
-            region: '美國', zone: '美國主機房（後端）', x: 1050, y: 380, pool: true, extraInstanceCost: 2,
+            region: '美國', zone: '美國主機房（後端）', x: 1080, y: 340, pool: true, extraInstanceCost: 2,
             arriveLabel: 'DAG 排程器指派任務給某一台工作程序'
           },
-          { id: 'storage', kind: 'fixed', label: '儲存系統', region: '美國', zone: '美國主機房（後端）', x: 1050, y: 460, arriveLabel: '寫入或讀取原始／已轉碼影片' },
-          { id: 'metadataCache', kind: 'component', componentId: 'cacheReplica', label: 'Metadata 快取', region: '美國', zone: '美國主機房（後端）', x: 1050, y: 540, arriveLabel: '從 Metadata 快取節點取得資料' },
-          { id: 'metadataDB', kind: 'component', componentId: 'dbMasterSlave', label: 'Metadata 資料庫', region: '美國', zone: '美國主機房（後端）', x: 1050, y: 645, size: 'small', arriveLabel: '讀取或寫入 Metadata 資料庫' },
+          { id: 'storage', kind: 'fixed', label: '原始影片儲存', region: '美國', zone: '美國主機房（後端）', x: 880, y: 340, arriveLabel: '耐久保存尚未轉碼的原始影片' },
+          { id: 'transcodedStorage', kind: 'fixed', label: '已轉碼影片儲存', region: '美國', zone: '美國主機房（後端）', x: 1280, y: 340, arriveLabel: '保存各解析度輸出，供 CDN 與串流伺服器取得' },
+          { id: 'completionQueue', kind: 'fixed', label: '完成事件佇列', region: '美國', zone: '美國主機房（後端）', x: 1280, y: 500, arriveLabel: '排入 transcode.completed 事件' },
+          { id: 'completionHandler', kind: 'fixed', label: '完成事件處理器', region: '美國', zone: '美國主機房（後端）', x: 1080, y: 500, arriveLabel: '取出事件，可靠地更新 Metadata' },
+          { id: 'metadataCache', kind: 'component', componentId: 'cacheReplica', label: 'Metadata 快取', region: '美國', zone: '美國主機房（後端）', x: 980, y: 650, arriveLabel: '更新或取得影片 Metadata 快取' },
+          { id: 'metadataDB', kind: 'component', componentId: 'dbMasterSlave', label: 'Metadata 資料庫', region: '美國', zone: '美國主機房（後端）', x: 1210, y: 650, size: 'small', arriveLabel: '讀取或寫入影片狀態與轉碼結果' },
           ...regionNode('jp', '日本', 720, 780, 840),
-          { id: 'uploadBadge', kind: 'component', componentId: 'resumableUpload', label: '斷點續傳', x: 1050, y: 220, size: 'small', arriveLabel: '檢查已成功的位元組位置' },
-          { id: 'preSignedBadge', kind: 'component', componentId: 'preSignedUpload', label: '預簽名直傳', x: 860, y: 880, size: 'small', arriveLabel: '直接對原始儲存系統上傳，略過 API 伺服器' }
+          { id: 'uploadBadge', kind: 'component', componentId: 'resumableUpload', label: '斷點續傳', x: 880, y: 500, size: 'small', arriveLabel: '檢查已成功的位元組位置' },
+          { id: 'preSignedBadge', kind: 'component', componentId: 'preSignedUpload', label: '預簽名直傳', x: 880, y: 210, size: 'small', arriveLabel: '取得授權後直接把原始影片上傳到物件儲存' }
         ],
         edges: [
           ...regionEdges('tw'), ...regionEdges('us'), ...regionEdges('jp'),
           { from: 'storage', to: 'transcodeArch' },
-          { from: 'storage', to: 'uploadBadge', kind: 'stub' }
+          { from: 'transcodeArch', to: 'transcodedStorage' },
+          { from: 'transcodedStorage', to: 'completionQueue' },
+          { from: 'completionQueue', to: 'completionHandler' },
+          { from: 'completionHandler', to: 'metadataDB' },
+          { from: 'completionHandler', to: 'metadataCache' },
+          { from: 'storage', to: 'uploadBadge', kind: 'stub' },
+          { from: 'preSignedBadge', to: 'storage', requiresComponent: 'preSignedUpload' }
         ],
         // `regionId` picks which region's edge stack the request enters through. Watching a
         // video (`watch`) never visits `apiServer_*` — it's routed entirely through the region's
@@ -250,15 +366,36 @@
         // tiers. The backend origin it eventually reaches is always the same centralized
         // cluster, so a Taiwan/Japan request's last leg into that cluster is the one
         // crossRegionWeight makes visibly slower; a US request's isn't.
+        computeFlows: (kind, ctx, regionId = 'us') => {
+          if (kind !== 'upload') return null;
+          const r = regionId;
+          const metadata = {
+            id: 'metadata',
+            label: 'Metadata：先建立影片與 upload session，再更新快取',
+            nodes: [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'metadataDB', `apiServer_${r}`, 'metadataCache', `apiServer_${r}`, `loadBalancer_${r}`, `users_${r}`]
+          };
+          const bytes = ctx.has('preSignedUpload')
+            ? {
+                id: 'bytes',
+                label: '位元組：預簽直傳 → 轉碼 → 完成事件 → 更新 Metadata',
+                nodes: [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, `loadBalancer_${r}`, `users_${r}`, 'preSignedBadge', 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB', 'completionHandler', 'metadataCache']
+              }
+            : {
+                id: 'bytes',
+                label: '位元組：API 中轉 → 轉碼 → 完成事件 → 更新 Metadata',
+                nodes: [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB', 'completionHandler', 'metadataCache']
+              };
+          return [metadata, bytes];
+        },
         computeFlow: (kind, ctx, regionId = 'us') => {
           const r = regionId;
           if (kind === 'upload') {
             return ctx.has('preSignedUpload')
-              ? [`users_${r}`, 'storage', 'transcodeArch', 'storage']
-              : [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'storage', 'transcodeArch', 'storage'];
+              ? [`users_${r}`, 'preSignedBadge', 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB']
+              : [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB'];
           }
           if (kind === 'search') {
-            return [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'metadataCache', `apiServer_${r}`, `users_${r}`];
+            return [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'metadataCache', `apiServer_${r}`, `loadBalancer_${r}`, `users_${r}`];
           }
           // Where the video bytes physically come from, which is exactly what the CDN decision
           // buys you and the one thing the picture has to tell the truth about:
@@ -270,10 +407,10 @@
           //               have to go all the way to the origin and back out through the edge.
           const cdn = ctx.option('cdnTier');
           if (cdn.id === 'off') {
-            return [`users_${r}`, `loadBalancer_${r}`, `streamServer_${r}`, 'storage', `streamServer_${r}`, `loadBalancer_${r}`, `users_${r}`];
+            return [`users_${r}`, `loadBalancer_${r}`, `streamServer_${r}`, 'transcodedStorage', `streamServer_${r}`, `loadBalancer_${r}`, `users_${r}`];
           }
           if (Math.random() < (cdn.hitRate || 0)) return [`users_${r}`, `cdn_${r}`, `users_${r}`];
-          return [`users_${r}`, `cdn_${r}`, `loadBalancer_${r}`, `streamServer_${r}`, 'storage', `streamServer_${r}`, `loadBalancer_${r}`, `cdn_${r}`, `users_${r}`];
+          return [`users_${r}`, `cdn_${r}`, `loadBalancer_${r}`, `streamServer_${r}`, 'transcodedStorage', `streamServer_${r}`, `loadBalancer_${r}`, `cdn_${r}`, `users_${r}`];
         }
       };
     })(),
@@ -410,7 +547,7 @@
         id: 'finale',
         title: '跨年夜：流量暴增＋快取不穩＋轉碼工作程序同時出狀況',
         relevantComponents: ['apiRedundancy', 'cacheReplica', 'transcodeResilience'],
-        demoFlow: ['users_us', 'loadBalancer_us', 'apiServer_us', 'metadataCache', 'storage', 'transcodeArch'],
+        demoFlow: ['users_us', 'loadBalancer_us', 'apiServer_us', 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataCache'],
         narrative: '跨年夜：全站最大流量同時考驗 API 容量、Metadata 快取穩定性與轉碼管線，任何一環撐不住都會被放大。',
         resolve: ctx => {
           const shields = ['apiRedundancy', 'cacheReplica', 'transcodeResilience'].filter(id => ctx.has(id)).length;
