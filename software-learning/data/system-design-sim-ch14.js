@@ -28,6 +28,7 @@
   // ---------------------------------------------------------------------------------------
   const regionNode = (r, label, yUpper, yCenter, yLower) => [
     { id: `users_${r}`, kind: 'user', label: `觀眾（${label}）`, region: label, regionKey: r, x: 90, y: yCenter, arriveLabel: '使用者裝置收到回應' },
+    { id: `clientChunker_${r}`, kind: 'fixed', label: `上傳分塊器（${label}）`, region: label, regionKey: r, x: 280, y: yLower, size: 'small', arriveLabel: '瀏覽器串流讀取原始影片，切成可重試的小封包並計算 checksum' },
     { id: `cdn_${r}`, kind: 'component', componentId: 'cdnTier', label: `CDN（${label}）`, region: label, regionKey: r, x: 280, y: yUpper, arriveLabel: '檢查這部影片有沒有在這個地區的邊緣節點命中' },
     { id: `loadBalancer_${r}`, kind: 'fixed', label: `Load Balancer（${label}）`, region: label, regionKey: r, x: 480, y: yCenter, arriveLabel: '健康檢查後依路徑把請求導向 API 或串流伺服器群組' },
     {
@@ -46,6 +47,8 @@
 
   const regionEdges = r => [
     { from: `users_${r}`, to: `loadBalancer_${r}` },
+    { from: `users_${r}`, to: `clientChunker_${r}` },
+    { from: `clientChunker_${r}`, to: `loadBalancer_${r}` },
     { from: `loadBalancer_${r}`, to: `apiServer_${r}` },
     // Both CDN legs are gated on the CDN actually existing: with 不建 CDN selected there is
     // no edge node in this region at all, so these two wires go dashed and computeFlow
@@ -57,7 +60,7 @@
     { from: `apiServer_${r}`, to: 'storage' },
     { from: `apiServer_${r}`, to: 'metadataCache' },
     { from: `apiServer_${r}`, to: 'metadataDB', kind: 'stub' },
-    { from: `users_${r}`, to: 'preSignedBadge', kind: 'stub', requiresComponent: 'preSignedUpload' }
+    { from: `clientChunker_${r}`, to: 'preSignedBadge', kind: 'stub', requiresComponent: 'preSignedUpload' }
   ];
 
   window.SYSTEM_DESIGN_SIM['sd-book-14'] = {
@@ -70,6 +73,7 @@
       '**架構是你自己蓋的**：下面的「架構編輯」可以**新增／移除地區**（新地區會照同一份藍圖生出自己的 CDN、LB、串流與 API 伺服器），節點旁的 **＋／－** 可以加開或收掉機器，「＋100 人」會在你選的地區生出一個**獨立的使用者群組節點**，還能直接拖到別的地區——拖過去，那一區的負載就跟著變。',
       '**容量是真的在算的**：地區觀眾數 ÷ 那一區的機器容量 = 負載率，超過 100% 變紅色，每推進一個月會扣播放品質分數。總觀眾人數是固定的，多開一個地區就是把同一群人分散開來。',
       '**CDN 決定流量從哪裡出來**：沒建 CDN 時每一次觀看都要回源到你自己的串流伺服器；建了之後大多數觀看在地區 CDN 就直接回覆，根本不碰後面的機器——封包動畫會直接顯示這個差別。',
+      '**影片不是一整顆送出去**：瀏覽器會先用上傳分塊器串流讀取原始影片，切成可獨立重試的小封包並計算 checksum。模擬上傳時會看到一列粉紅色影片封包依序送出；紫色是 Metadata，黃色才是一般 API 請求。',
       '**測試觀眾（🙋）**：他站在哪個地區的框裡就由那一區服務，可以拖到別區，也可以按「讓觀眾隨機走動」讓他自己亂走。訊號不良區可以拖、也可以拉右下角縮放。注意畫質**不會馬上變**——正在傳的那一段會照原畫質播完，要等下一段收到之後才會降或升，跟真實播放器一樣。',
       '拓樸圖上每個地區各有自己獨立的 CDN、Load Balancer——後面又分成兩條路：搜尋／上架影片打「API 伺服器」，觀看影片走「串流伺服器」，兩者是分開的伺服器群組，不會互相影響。後端則完整保留教材的原始儲存、轉碼、已轉碼儲存、完成事件佇列／處理器、Metadata DB／快取；跨海過去在動畫上會明顯變慢。'
     ],
@@ -372,18 +376,27 @@
           const metadata = {
             id: 'metadata',
             label: 'Metadata：先建立影片與 upload session，再更新快取',
-            nodes: [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'metadataDB', `apiServer_${r}`, 'metadataCache', `apiServer_${r}`, `loadBalancer_${r}`, `users_${r}`]
+            payloadType: 'metadata',
+            nodes: [`users_${r}`, `clientChunker_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'metadataDB', `apiServer_${r}`, 'metadataCache', `apiServer_${r}`, `loadBalancer_${r}`, `users_${r}`]
           };
           const bytes = ctx.has('preSignedUpload')
             ? {
                 id: 'bytes',
-                label: '位元組：預簽直傳 → 轉碼 → 完成事件 → 更新 Metadata',
-                nodes: [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, `loadBalancer_${r}`, `users_${r}`, 'preSignedBadge', 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB', 'completionHandler', 'metadataCache']
+                label: '影片封包：客戶端切分 → 預簽直傳 → 轉碼 → 完成事件',
+                payloadType: 'video',
+                packetCount: 6,
+                packetLabel: '原始影片',
+                chunkBytes: 4 * MB,
+                nodes: [`users_${r}`, `clientChunker_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, `loadBalancer_${r}`, `clientChunker_${r}`, 'preSignedBadge', 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB', 'completionHandler', 'metadataCache']
               }
             : {
                 id: 'bytes',
-                label: '位元組：API 中轉 → 轉碼 → 完成事件 → 更新 Metadata',
-                nodes: [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB', 'completionHandler', 'metadataCache']
+                label: '影片封包：客戶端切分 → API 中轉 → 轉碼 → 完成事件',
+                payloadType: 'video',
+                packetCount: 6,
+                packetLabel: '原始影片',
+                chunkBytes: 4 * MB,
+                nodes: [`users_${r}`, `clientChunker_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB', 'completionHandler', 'metadataCache']
               };
           return [metadata, bytes];
         },
@@ -391,8 +404,8 @@
           const r = regionId;
           if (kind === 'upload') {
             return ctx.has('preSignedUpload')
-              ? [`users_${r}`, 'preSignedBadge', 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB']
-              : [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB'];
+              ? [`users_${r}`, `clientChunker_${r}`, 'preSignedBadge', 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB']
+              : [`users_${r}`, `clientChunker_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'storage', 'transcodeArch', 'transcodedStorage', 'completionQueue', 'completionHandler', 'metadataDB'];
           }
           if (kind === 'search') {
             return [`users_${r}`, `loadBalancer_${r}`, `apiServer_${r}`, 'metadataCache', `apiServer_${r}`, `loadBalancer_${r}`, `users_${r}`];

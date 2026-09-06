@@ -72,6 +72,9 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10}
 .sim-topo-region{fill:rgba(139,92,246,.06);stroke:rgba(139,92,246,.4);stroke-dasharray:6 5;stroke-width:1.5}
 .sim-topo-region-label{fill:#c4b5fd;font-size:12px;font-weight:700}
 .sim-topo-edge{stroke-width:2.5;transition:stroke .2s ease,opacity .2s ease}
+.sim-topo-edges{transition:opacity .2s ease}
+.sim-topo-wrap.connections-hidden .sim-topo-edges,.sim-sandbox-canvas-wrap.connections-hidden .sandbox-edges-group{opacity:0;pointer-events:none}
+.sandbox-edges-group{transition:opacity .2s ease}
 .sim-topo-edge.active{stroke:var(--accent);opacity:.9}
 .sim-topo-edge.inactive{stroke:#3a3a4d;stroke-dasharray:5 5;opacity:.55}
 .sim-topo-edge.stub{stroke-width:1.5}
@@ -123,16 +126,22 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10}
 .sim-topo-load{text-anchor:middle;font-size:9.5px;fill:#7f7f95;pointer-events:none;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .sim-topo-load.over{fill:var(--sim-bad);font-weight:800}
 .sim-node-stepper{cursor:pointer}
-.sim-node-stepper circle{fill:#1b1b27;stroke:#4a4a66;stroke-width:1.5}
+.sim-topo-node.component .sim-node-stepper circle{fill:#1b1b27;stroke:#4a4a66;stroke-width:1.5;filter:none}
 .sim-node-stepper text{text-anchor:middle;font-size:13px;font-weight:800;fill:#c7c7d4;pointer-events:none}
-.sim-node-stepper:hover circle,.sim-node-stepper:focus circle{stroke:var(--accent);fill:rgba(110,168,254,.2);outline:none}
+.sim-topo-node.component .sim-node-stepper:hover circle,.sim-topo-node.component .sim-node-stepper:focus circle{stroke:var(--accent);fill:rgba(110,168,254,.2);outline:none;filter:drop-shadow(0 0 4px rgba(110,168,254,.45))}
 .sim-node-stepper.disabled circle{opacity:.35}
 .sim-node-stepper.disabled text{opacity:.35}
 .sim-token,.sim-token-demo,.sim-token-event{fill:var(--accent);stroke:#0a0a10;stroke-width:1.5}
 .sim-token-event.ok{fill:var(--sim-good)}
 .sim-token-event.bad{fill:var(--sim-bad)}
-.sim-token-demo.upload{fill:var(--accent-2)}
+.sim-token-demo.payload-video{fill:#ff4fa3}
+.sim-token-demo.payload-file{fill:#25d0e8}
+.sim-token-demo.payload-metadata{fill:#a78bfa}
+.sim-token-demo.payload-api{fill:#facc15}
+.sim-token-demo.payload-notification{fill:#fb923c}
 .sim-token-ambient{r:3.5px;fill:var(--accent);opacity:.55;stroke:none}
+.sim-token-ambient.payload-video{fill:#ff4fa3}
+.sim-token-ambient.payload-file{fill:#25d0e8}
 .sim-token-segment{stroke:#0a0a10;stroke-width:1;opacity:.9}
 .sim-token-segment.q-720p{fill:var(--sim-good)}
 .sim-token-segment.q-480p{fill:var(--sim-warn)}
@@ -140,6 +149,14 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10}
 .sim-burst-dot{fill:var(--accent-2);animation:simBurst .85s ease-out forwards}
 .sim-topo-hint{margin:8px 0 14px;font-size:.78rem;color:var(--muted)}
 .sim-topo-controls{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
+.sim-payload-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:-4px 0 14px;color:var(--muted);font-size:.76rem}
+.sim-payload-legend span{display:inline-flex;align-items:center;gap:6px}
+.sim-payload-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;border:1px solid #090910;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+.sim-payload-legend i.payload-video{background:#ff4fa3}
+.sim-payload-legend i.payload-file{background:#25d0e8}
+.sim-payload-legend i.payload-metadata{background:#a78bfa}
+.sim-payload-legend i.payload-api{background:#facc15}
+.sim-payload-legend i.payload-notification{background:#fb923c}
 .sim-topo-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 22px;padding-top:12px;border-top:1px solid var(--border)}
 .sim-topo-legend-item{font-size:.78rem;color:#d7d7e2;text-decoration:none;display:inline-flex;gap:5px;align-items:baseline;flex-wrap:wrap;max-width:280px}
 .sim-topo-legend-item small{color:var(--accent);font-weight:700}

@@ -10,10 +10,11 @@
     title: '雲端硬碟保衛戰：一個位元組都不能掉',
     subtitle: '你接手一個雲端硬碟服務。這一題的請求數其實很小（上傳 API 峰值只有 480 QPS），真正的難點是每個請求後面帶著的位元組，以及那句寫在第一條的非功能需求——資料丟失是不可接受的。12 個月內，你會遇到大檔案上傳中斷、區塊伺服器當機、儲存區域故障、metadata 主庫掛掉、兩台裝置看到不同版本、儲存帳單暴增、通知服務重連風暴。',
     briefing: [
-      '**先玩下面的「上傳可視化實驗室」**。它把課本圖 15-14 那張時序圖整個演出來：檔案被切成 4 MB 的區塊，逐塊壓縮、加密、送進雲端儲存；同一時間另一條路先把 metadata 寫成 **pending**。你可以在傳到一半時把任何一台伺服器打掛，親眼看到哪些區塊是安全的、哪些當場丟失、以及檔案狀態會怎樣。',
+      '**先玩下面的「上傳可視化實驗室」**。它把課本圖 15-14 那張時序圖整個演出來：客戶端串流讀取檔案並切成 4 MB 區塊，再逐塊送往區塊伺服器驗證、壓縮、加密，最後寫進雲端儲存；同一時間另一條路先把 metadata 寫成 **pending**。你可以在傳到一半時把任何一台伺服器打掛，親眼看到哪些區塊是安全的、哪些當場丟失、以及檔案狀態會怎樣。',
       '**三台伺服器掛掉的後果完全不同**：區塊伺服器掛 → 正在處理的區塊中斷，已寫入的安全；雲端儲存掛 → 新區塊落不了地；**API 伺服器掛 → 位元組照樣安全寫進去，但「上傳完成」的回調沒人收，檔案永遠卡在 pending，別的裝置看得到卻不能下載**。這三種是不一樣的故障，救法也不一樣。',
       '**斷點續傳決定重來的代價**：有它，恢復後從中斷的地方接著傳；沒有它，剛才寫進去的全部白費、整份從頭來。實驗室右下角會直接算給你看浪費了多少。',
       '**差異同步決定第二次上傳的代價**：上傳完成後按「改幾個區塊後再傳一次」，有差異同步時只有變動的格子會重跑，其餘全部跳過；沒有的話整份重來。10 GB 的檔案改兩個區塊，差別是 8 MB 對 10 GB。',
+      '**看球色就知道正在傳什麼**：青色小球是檔案區塊、紫色是 Metadata、黃色是 API 請求、橘色是變更通知。按一般上傳會看到客戶端先切出多個區塊，再分別送往區塊伺服器。',
       '**節點上的符號**：✓ 有做保護 · ⚠ 元件照跑但沒備援 · ✕ 這個東西你還沒建（例如還沒建離線備份佇列），流量不會經過它。點節點上方有底線的策略文字可以換做法。',
       '這一章的容量不是瓶頸，所以沒有負載率——記分的是**可用率**與**資料完整度**。每個月初決定各項能力要用哪一種做法，事件發生時不能再改變主意。'
     ],
@@ -390,9 +391,10 @@
       crossRegionWeight: 2.6,
       nodes: [
         { id: 'users', kind: 'user', label: '使用者（瀏覽器／App）', region: '客戶端', x: 90, y: 330, arriveLabel: '裝置收到同步結果' },
+        { id: 'clientChunker', kind: 'fixed', label: '客戶端分塊器', region: '客戶端', x: 90, y: 150, size: 'small', arriveLabel: '串流讀取檔案，切成 4 MB 區塊並建立每塊 checksum' },
         { id: 'resumableBadge', kind: 'component', componentId: 'resumableUpload', label: '斷點續傳', region: '客戶端', x: 90, y: 500, size: 'small', arriveLabel: '查詢已成功寫入的位元組位置' },
 
-        { id: 'blockServer', kind: 'component', componentId: 'blockServerRedundancy', label: '區塊伺服器', region: '服務層', x: 320, y: 150, pool: true, extraInstanceCost: 2, arriveLabel: '切分成 4MB 區塊，逐塊壓縮與加密' },
+        { id: 'blockServer', kind: 'component', componentId: 'blockServerRedundancy', label: '區塊伺服器', region: '服務層', x: 320, y: 150, pool: true, extraInstanceCost: 2, arriveLabel: '逐塊驗證 checksum、壓縮與加密' },
         { id: 'deltaBadge', kind: 'component', componentId: 'blockSync', label: '差異同步', region: '服務層', x: 320, y: 40, size: 'small', arriveLabel: '比對雜湊，只挑出真正變動的區塊' },
         { id: 'loadBalancer', kind: 'fixed', label: 'Load Balancer', region: '服務層', x: 320, y: 330, arriveLabel: '在 API 伺服器之間平均分配請求' },
         { id: 'apiServer', kind: 'component', componentId: 'apiRedundancy', label: 'API 伺服器', region: '服務層', x: 540, y: 330, pool: true, extraInstanceCost: 1, arriveLabel: '驗證身份、更新檔案的 metadata' },
@@ -409,7 +411,8 @@
         { id: 'offlineQueueNode', kind: 'component', componentId: 'offlineQueue', label: '離線備份佇列', region: '通知層', zone: '通知層', x: 800, y: 560, arriveLabel: '客戶端離線時先把變動存起來' }
       ],
       edges: [
-        { from: 'users', to: 'blockServer' },
+        { from: 'users', to: 'clientChunker' },
+        { from: 'clientChunker', to: 'blockServer' },
         { from: 'users', to: 'loadBalancer' },
         { from: 'users', to: 'notifyService' },
         { from: 'users', to: 'resumableBadge', kind: 'stub', requiresComponent: 'resumableUpload' },
@@ -436,18 +439,22 @@
           {
             id: 'metadata',
             label: 'Metadata：先寫入 pending，立刻通知其他裝置',
+            payloadType: 'metadata',
             nodes: ['users', 'loadBalancer', 'apiServer', 'metadataDB', 'apiServer', 'notifyService', 'users']
           },
           {
             id: 'bytes',
-            label: '位元組：切分／壓縮／加密／落地，再 callback 改成 uploaded',
-            nodes: ['users', 'blockServer', 'cloudStorage', 'apiServer', 'metadataDB', 'apiServer', 'notifyService', 'users']
+            label: '檔案區塊：客戶端切分 → 逐塊壓縮／加密／落地 → callback',
+            payloadType: 'file',
+            packetCount: 7,
+            packetLabel: '檔案',
+            nodes: ['users', 'clientChunker', 'blockServer', 'cloudStorage', 'apiServer', 'metadataDB', 'apiServer', 'notifyService', 'users']
           }
         ];
       },
       computeFlow: (kind, ctx) => {
         if (kind === 'upload') {
-          return ['users', 'blockServer', 'cloudStorage', 'apiServer', 'metadataDB', 'apiServer', 'notifyService', 'users'];
+          return ['users', 'clientChunker', 'blockServer', 'cloudStorage', 'apiServer', 'metadataDB', 'apiServer', 'notifyService', 'users'];
         }
         if (kind === 'search') {
           return ctx.has('offlineQueue')

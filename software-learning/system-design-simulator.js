@@ -232,6 +232,9 @@
       // one centre point on every repaint, which meant adding #3 moved #1/#2 and made it
       // impossible to lay a pool out by hand.
       instancePositions: {},
+      // Structural wires can be hidden when a dense architecture becomes hard to read. Keep
+      // the preference in state so month changes and topology rebuilds do not turn them back on.
+      showConnections: true,
       // Machines the player has pulled the plug on, keyed "<nodeId>::<index>".
       instanceDown: {},
       // The editable copy of the architecture (see topoOf) plus the audience weight per region.
@@ -472,11 +475,27 @@
     return currentOptionId(sim, node.componentId, state) !== 'off';
   }
 
-  function edgesSvg(sim, state) {
+  function edgeEndpointOptions(sim, state, node) {
+    if (!node?.pool) return [{ x: node.x, y: node.y, idx: null }];
+    return clusterPositions(sim, state, node).map((point, idx) => ({ ...point, idx }));
+  }
+
+  // A pool is not one dot. Every visible machine gets its own structural wire, so adding #2
+  // visibly adds a connection and dragging #2 moves that connection with it. A pool-to-pool
+  // edge draws all valid pairs because either load balancer may choose any healthy instance.
+  function expandedEdges(sim, state) {
     const topo = topoOf(sim, state);
-    return topo.edges.map(e => {
+    return topo.edges.flatMap(e => {
       const a = findNode(topo, e.from), b = findNode(topo, e.to);
-      if (!a || !b) return '';
+      if (!a || !b) return [];
+      return edgeEndpointOptions(sim, state, a).flatMap(from =>
+        edgeEndpointOptions(sim, state, b).map(to => ({ edge: e, from, to }))
+      );
+    });
+  }
+
+  function edgesSvg(sim, state) {
+    return expandedEdges(sim, state).map(({ edge: e, from, to }) => {
       // An edge is only "inactive" when it explicitly requires a capability that's off (e.g. a
       // direct-upload bypass that only exists once you've turned it on). It must NOT go dashed
       // just because the node at one end is a resilience/cost capability that's currently off —
@@ -485,7 +504,9 @@
       // The node's own ✓/✕ colour is what shows whether that capability is currently on.
       const isActive = !e.requiresComponent || currentOptionId(sim, e.requiresComponent, state) !== 'off';
       const cls = ['sim-topo-edge', e.kind === 'stub' ? 'stub' : '', isActive ? 'active' : 'inactive'].filter(Boolean).join(' ');
-      return `<line class="${cls}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" data-edge="${esc(e.from)}-${esc(e.to)}"/>`;
+      const fromKey = from.idx == null ? e.from : instanceKey(e.from, from.idx);
+      const toKey = to.idx == null ? e.to : instanceKey(e.to, to.idx);
+      return `<line class="${cls}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" data-edge="${esc(e.from)}-${esc(e.to)}" data-edge-route="${esc(fromKey)}--${esc(toKey)}"/>`;
     }).join('');
   }
 
@@ -518,16 +539,28 @@
   // diagram. They live inside the node's own <g>, so they're rebuilt whenever the node repaints;
   // their clicks are handled by one delegated capture-phase listener on the svg (see
   // wireTopologyControls) rather than per-element listeners that would die on every repaint.
-  function instanceStepperSvg(sim, state, n, count) {
-    // Controls belong to the logical pool anchor, not to a particular machine. Individual
-    // machines may now be dragged anywhere, so deriving the control position from their spread
-    // would make the ＋/－ buttons jump around the canvas.
-    const dx = 43;
+  function poolLayout(positions, radius) {
+    const xs = positions.map(p => p.x), ys = positions.map(p => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    return {
+      x: (minX + maxX) / 2,
+      top: minY - radius,
+      bottom: maxY + radius
+    };
+  }
+
+  function instanceStepperSvg(sim, state, n, count, layout) {
+    // Put the controls on their own row below the whole machine group. They follow the group's
+    // live bounding box, rather than remaining at the obsolete logical anchor after a machine
+    // has been dragged away.
+    const y = layout.bottom + 37;
+    const dx = 14;
     const atMax = count >= MAX_INSTANCES;
     const atMin = (state.extraInstances?.[n.id] || 0) <= 0;
     const btn = (offset, delta, glyph, disabled, label) => `<g class="sim-node-stepper${disabled ? ' disabled' : ''}" data-instance-delta="${delta}" data-instance-node="${esc(n.id)}" role="button" tabindex="0" aria-label="${esc(label)}">
-          <circle cx="${n.x + offset}" cy="${n.y}" r="9"/>
-          <text x="${n.x + offset}" y="${n.y + 4}">${glyph}</text>
+          <circle cx="${layout.x + offset}" cy="${y}" r="9"/>
+          <text x="${layout.x + offset}" y="${y + 4}">${glyph}</text>
         </g>`;
     return btn(-dx, -1, '−', atMin, `${n.label}：減少一台機器`) + btn(dx, 1, '+', atMax, `${n.label}：增加一台機器`);
   }
@@ -539,6 +572,10 @@
     const r = n.pool ? 13 : n.size === 'small' ? 15 : n.kind === 'user' ? 25 : 23;
     const labelOffset = n.size === 'small' ? 15 : n.kind === 'user' ? 25 : 23;
     const positions = clusterPositions(sim, state, n);
+    const layout = n.pool ? poolLayout(positions, r) : { x: n.x, top: n.y - r, bottom: n.y + r };
+    const uiX = layout.x;
+    const labelY = n.pool ? layout.bottom + 17 : n.y + labelOffset + 14;
+    const costY = n.pool ? layout.top - 10 : n.y - labelOffset - 6;
     const opt = isComponent ? currentOption(sim, n.componentId, state) : null;
     const aliveCount = n.pool ? aliveInstanceIndexes(sim, state, n).length : 1;
     const countNote = n.pool ? `（${aliveCount}/${positions.length} 台運作中）` : '';
@@ -560,11 +597,11 @@
     const headText = n.kind === 'user'
       ? (n.headcount ? `${numFmt(n.headcount)} 人` : `已服務 ${numFmt(state.usersServed || 0)} 人`)
       : '';
-    const badge = headText ? `<text class="sim-topo-badge" x="${n.x}" y="${n.y + labelOffset + 30}">${esc(headText)}</text>` : '';
+    const badge = headText ? `<text class="sim-topo-badge" x="${uiX}" y="${n.y + labelOffset + 30}">${esc(headText)}</text>` : '';
     const store = storeForNode(sim, n.id);
     const storedRows = store && Runtime ? Runtime.tableRowCount(state.runtime, store.id) : 0;
     const storeBadge = store
-      ? `<text class="sim-topo-data-count" x="${n.x + 25}" y="${n.y - 20}">🗃 ${storedRows}</text>`
+      ? `<text class="sim-topo-data-count" x="${uiX + 25}" y="${layout.top - 7}">🗃 ${storedRows}</text>`
       : '';
     // ✓ protected · ⚠ running but with no redundancy · ✕ not built at all · ✕(red, dead) a
     // machine whose plug you pulled. The old two-state ✓/✕ was the source of "the server is X,
@@ -591,15 +628,15 @@
     }).join('');
     const load = nodeLoad(sim, state, n);
     const loadText = load
-      ? `<text class="sim-topo-load${load.ratio > 1 ? ' over' : ''}" x="${n.x}" y="${n.y + labelOffset + 28}">負載 ${numFmt(load.demand)} / ${numFmt(load.capacity)}（${load.capacity ? Math.round(load.ratio * 100) + '%' : '全部當機'}）</text>`
+      ? `<text class="sim-topo-load${load.ratio > 1 ? ' over' : ''}" x="${uiX}" y="${n.pool ? layout.bottom + 54 : n.y + labelOffset + 28}">負載 ${numFmt(load.demand)} / ${numFmt(load.capacity)}（${load.capacity ? Math.round(load.ratio * 100) + '%' : '全部當機'}）</text>`
       : '';
     const absentNote = !present
-      ? `<text class="sim-topo-absent" x="${n.x}" y="${n.y + labelOffset + 28}">（未建置，流量不會經過這裡）</text>` : '';
+      ? `<text class="sim-topo-absent" x="${uiX}" y="${n.pool ? layout.bottom + 54 : n.y + labelOffset + 28}">（未建置，流量不會經過這裡）</text>` : '';
     return `${machines}${storeBadge}
-        <text class="sim-topo-label" x="${n.x}" y="${n.y + labelOffset + 14}">${esc(n.label)}</text>
-        ${costText ? `<text class="sim-topo-cost${interactive ? ' strategy' : ''}" x="${n.x}" y="${n.y - labelOffset - 6}"${interactive ? ' data-strategy-hit="1" role="button" tabindex="0"' : ''}>${esc(costText)}</text>` : ''}
+        <text class="sim-topo-label" x="${uiX}" y="${labelY}">${esc(n.label)}</text>
+        ${costText ? `<text class="sim-topo-cost${interactive ? ' strategy' : ''}" x="${uiX}" y="${costY}"${interactive ? ' data-strategy-hit="1" role="button" tabindex="0"' : ''}>${esc(costText)}</text>` : ''}
         ${loadText}${absentNote}${badge}
-        ${interactive && n.pool ? instanceStepperSvg(sim, state, n, positions.length) : ''}`;
+        ${interactive && n.pool ? instanceStepperSvg(sim, state, n, positions.length, layout) : ''}`;
   }
 
   function nodeClassName(sim, state, n, interactive) {
@@ -652,14 +689,8 @@
   // Edges are pure geometry between two node positions, so a moved node has to drag its wires
   // with it. Patching the existing <line> elements keeps the drag smooth (no full SVG rebuild).
   function repaintEdges(root, sim, state) {
-    const topo = topoOf(sim, state);
-    (topo?.edges || []).forEach(e => {
-      const a = findNode(topo, e.from), b = findNode(topo, e.to);
-      const line = root.querySelector(`[data-edge="${e.from}-${e.to}"]`);
-      if (!a || !b || !line) return;
-      line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
-      line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
-    });
+    const group = root.querySelector('.sim-topo-edges');
+    if (group) group.innerHTML = edgesSvg(sim, state);
   }
 
   function repaintNodes(root, sim, state) {
@@ -796,6 +827,16 @@
     </details>`;
   }
 
+  function payloadLegendHtml() {
+    return `<div class="sim-payload-legend" aria-label="傳輸球顏色圖例">
+      <span><i class="payload-video"></i>影片串流</span>
+      <span><i class="payload-file"></i>檔案／區塊</span>
+      <span><i class="payload-metadata"></i>Metadata 資料</span>
+      <span><i class="payload-api"></i>API 請求</span>
+      <span><i class="payload-notification"></i>通知事件</span>
+    </div>`;
+  }
+
   function svgTopology(sim, state, { interactive = false, showControls = false } = {}) {
     const topo = topoOf(sim, state);
     if (!topo) return '<p class="sim-topo-missing">這個場景還沒有拓樸圖資料。</p>';
@@ -812,18 +853,19 @@
     // label renders at about 3px and the whole thing is unreadable. The scroll wrapper lets the
     // stylesheet give the SVG a real minimum width on small screens and pan it sideways instead,
     // which is the only way a diagram this dense stays legible on a phone.
-    return `<div class="sim-topo-wrap ${interactive ? '' : 'locked'}">
+    const connectionVisible = state.showConnections !== false;
+    return `<div class="sim-topo-wrap ${interactive ? '' : 'locked'}${connectionVisible ? '' : ' connections-hidden'}">
       <div class="sim-topo-scroll">
         <svg class="sim-topo" viewBox="${esc(topo.viewBox)}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="架構拓樸圖">
           ${regionBoxesSvg(topo)}
-          ${edgesSvg(sim, state)}
+          <g class="sim-topo-edges">${edgesSvg(sim, state)}</g>
           ${nodesSvg(sim, state, interactive)}
           ${interactive && showControls ? dragViewerSvg(sim, state) : ''}
         </svg>
       </div>
       <p class="sim-topo-scroll-hint">← 左右滑動可以看完整張架構圖 →</p>
       ${interactive
-        ? '<p class="sim-topo-hint"><b>拖曳單獨一台機器</b>（#1／#2…）可以自由排位置；短按它則模擬拔掉／插回。<b>拖曳其他節點</b>也能重排整張架構；<b>點資料庫／儲存節點</b>可看 schema、資料與收到的 request；<b>點節點上方有底線的策略文字</b>才會切換備援做法。＋／− 會真正新增／收掉一台機器。節點只有在資料抵達時才會發光。</p>'
+        ? '<p class="sim-topo-hint"><b>拖曳單獨一台機器</b>（#1／#2…）可以自由排位置，它自己的連線會跟著移動；短按它則模擬拔掉／插回。<b>拖曳其他節點</b>也能重排整張架構；<b>點資料庫／儲存節點</b>可看 schema、資料與收到的 request。伺服器群組名稱下方的 ＋／− 會真正新增／收掉一台機器。</p>'
         : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法與當時開的機器數量決定。</p>'}
       ${showControls ? `<div class="sim-topo-controls">
         <button class="button secondary sim-add-users" type="button" data-add="100">${esc(sim.addUsersLabel || '＋100 使用者')}</button>
@@ -832,7 +874,9 @@
         ${sim.demoLabels?.search ? `<button class="button secondary sim-demo" type="button" data-kind="search">${esc(sim.demoLabels.search)}</button>` : ''}
         ${sim.concurrentViewersLabel ? `<button class="button secondary sim-demo-concurrent" type="button" data-count="10">${esc(sim.concurrentViewersLabel)}</button>` : ''}
         ${sim.dragViewerSim ? `<button class="button secondary sim-wander-btn" type="button" data-viewer-wander aria-pressed="false">${esc(lex(sim, 'wanderIdle'))}</button>` : ''}
+        <button class="button secondary sim-connections-btn" type="button" data-toggle-connections aria-pressed="${connectionVisible}">${connectionVisible ? '🙈 隱藏連線' : '🔗 顯示連線'}</button>
       </div>
+      ${payloadLegendHtml()}
       ${runtimeSummaryHtml(sim, state)}
       ${sim.mutableTopology ? architectureEditorHtml(sim, state) : ''}` : ''}
       ${speedControls}
@@ -1171,16 +1215,18 @@
     // can move numbers on unrelated boxes (turning the CDN off multiplies every region's
     // streaming-server load), and a diagram showing stale load figures is worse than none.
     repaintNodes(root, sim, state);
+    // A strategy may change a pool's baseline instance count, which changes the number of
+    // concrete wires just as surely as pressing the ＋ button does.
+    repaintEdges(root, sim, state);
     // Only edges that explicitly require this component ever change state when it's toggled —
     // every other edge is a static structural connection (see the note in edgesSvg above).
     topo.edges.forEach(e => {
       if (e.requiresComponent !== componentId) return;
       const isActive = currentOptionId(sim, componentId, state) !== 'off';
-      const line = root.querySelector(`[data-edge="${e.from}-${e.to}"]`);
-      if (line) {
+      root.querySelectorAll(`[data-edge="${e.from}-${e.to}"]`).forEach(line => {
         line.classList.toggle('active', isActive);
         line.classList.toggle('inactive', !isActive);
-      }
+      });
     });
     const legendEl = root.querySelector(`[data-legend="${componentId}"]`);
     if (legendEl) {
@@ -1283,7 +1329,7 @@
           mapPoint: originNode ? (nodeId, p) => (nodeId === `users_${regionId}` ? { x: originNode.x, y: originNode.y } : p) : undefined,
           durationScale: 0.9 + Math.random() * 0.35,
           token: {
-            className: 'ambient',
+            className: `ambient payload-${sim.chapterId === 'sd-book-14' ? 'video' : 'file'}`,
             tokenClass: 'sim-token-ambient',
             onDone: circle => setTimeout(() => circle?.remove(), 300 / (state.speed || 1))
           }
@@ -1301,16 +1347,41 @@
     const flows = raw || [topo.computeFlow?.(kind, ctx, regionId) || []];
     return flows.map((flow, i) => Array.isArray(flow)
       ? { id: `branch-${i + 1}`, label: '', nodes: flow }
-      : { id: flow.id || `branch-${i + 1}`, label: flow.label || '', nodes: flow.nodes || [] }
+      : {
+          id: flow.id || `branch-${i + 1}`,
+          label: flow.label || '',
+          nodes: flow.nodes || [],
+          payloadType: flow.payloadType,
+          packetCount: flow.packetCount,
+          packetLabel: flow.packetLabel,
+          chunkBytes: flow.chunkBytes
+        }
     ).filter(flow => flow.nodes.length > 1);
   }
 
-  function flashTopologyHop(root, fromId, toId) {
+  function payloadTypeFor(sim, kind, flow) {
+    if (flow?.payloadType) return flow.payloadType;
+    if (flow?.id === 'metadata') return 'metadata';
+    if (kind === 'search') return sim.chapterId === 'sd-book-15' ? 'notification' : 'api';
+    if (kind === 'upload' || kind === 'watch') return sim.chapterId === 'sd-book-14' ? 'video' : 'file';
+    return 'api';
+  }
+
+  function edgeRouteKey(nodeId, machine) {
+    return machine ? instanceKey(nodeId, machine.idx) : nodeId;
+  }
+
+  function flashTopologyHop(root, fromId, toId, fromMachine, toMachine) {
     const node = root.querySelector(`[data-node="${toId}"]`);
     node?.classList.add('receiving');
     setTimeout(() => node?.classList.remove('receiving'), 760);
     if (!fromId) return;
-    const edge = root.querySelector(`[data-edge="${fromId}-${toId}"]`) || root.querySelector(`[data-edge="${toId}-${fromId}"]`);
+    const direct = `${edgeRouteKey(fromId, fromMachine)}--${edgeRouteKey(toId, toMachine)}`;
+    const reverse = `${edgeRouteKey(toId, toMachine)}--${edgeRouteKey(fromId, fromMachine)}`;
+    const edge = root.querySelector(`[data-edge-route="${direct}"]`)
+      || root.querySelector(`[data-edge-route="${reverse}"]`)
+      || root.querySelector(`[data-edge="${fromId}-${toId}"]`)
+      || root.querySelector(`[data-edge="${toId}-${fromId}"]`);
     edge?.classList.add('transmitting');
     setTimeout(() => edge?.classList.remove('transmitting'), 760);
   }
@@ -1364,35 +1435,72 @@
 
     flows.forEach((flow, flowIndex) => {
       if (flow.label) traceLine(root, `${request.id} 分支 ${flowIndex + 1}：${flow.label}`, '');
-      let previous = '';
-      const handle = spawnRequest(root, sim, state, svgEl, flow.nodes, {
-        token: {
-          className: `${kind} branch-${flowIndex + 1}`,
-          tokenClass: 'sim-token-demo',
-          radius: flows.length > 1 ? 6 + flowIndex : 7,
-          onHop: (idx, machine, nodeId) => {
-            const n = findNode(topoOf(sim, state), nodeId);
-            const which = machine ? ` #${machine.idx + 1}` : '';
-            Runtime.visitNode(state.runtime, request, nodeId, `${flow.label || kind}${which}`);
-            flashTopologyHop(root, previous, nodeId);
-            previous = nodeId;
-            (spec.writesOnHop || []).forEach((write, writeIndex) => {
-              if (write.nodeId !== nodeId || appliedHopWrites.has(writeIndex)) return;
-              appliedHopWrites.add(writeIndex);
-              applyRuntimeWrites(state, [write], request);
-              repaintNodes(root, sim, state);
-            });
-            traceLine(root, `${request.id} 抵達「${n?.label || nodeId}」${which}${n?.arriveLabel ? '：' + n.arriveLabel : ''}`);
-          },
-          onDone: circle => {
-            setTimeout(() => circle?.remove(), 320);
-            settleBranch(flow.id, true);
-          }
-        },
-        onLost: () => settleBranch(flow.id, false),
-        onBlocked: () => settleBranch(flow.id, false)
-      });
-      if (!handle && !settled.has(flow.id)) settleBranch(flow.id, false);
+      const payloadType = payloadTypeFor(sim, kind, flow);
+      const visualPacketLimit = Math.max(1, Math.min(12, Number(flow.packetCount) || 1));
+      const logicalPacketCount = visualPacketLimit > 1
+        ? Math.max(1, Number(spec.payload?.block_count)
+          || (flow.chunkBytes && spec.payload?.size_bytes ? Math.ceil(Number(spec.payload.size_bytes) / Number(flow.chunkBytes)) : 0)
+          || visualPacketLimit)
+        : 1;
+      const packetCount = Math.min(visualPacketLimit, logicalPacketCount);
+      if (packetCount > 1) {
+        const visualNote = logicalPacketCount > packetCount ? `；畫面抽樣顯示其中 ${packetCount} 個` : '';
+        traceLine(root, `${request.id} 客戶端先把${flow.packetLabel || '內容'}切成 ${logicalPacketCount} 個可獨立重試的小封包${visualNote}，並依序送出。`, 'ok');
+      }
+      let packetsRemaining = packetCount;
+      let packetFailed = false;
+      const settlePacket = ok => {
+        packetsRemaining -= 1;
+        if (!ok) packetFailed = true;
+        if (packetsRemaining === 0) settleBranch(flow.id, !packetFailed);
+      };
+      for (let packetIndex = 0; packetIndex < packetCount; packetIndex++) {
+        setTimeout(() => {
+          let previous = '';
+          let previousMachine = null;
+          let packetSettled = false;
+          const settleThisPacket = ok => {
+            if (packetSettled) return;
+            packetSettled = true;
+            settlePacket(ok);
+          };
+          const verbose = packetIndex === 0;
+          const handle = spawnRequest(root, sim, state, svgEl, flow.nodes, {
+            trace: verbose,
+            token: {
+              className: `${kind} branch-${flowIndex + 1} payload-${payloadType} packet-${packetIndex + 1}`,
+              tokenClass: 'sim-token-demo',
+              radius: packetCount > 1 ? 4.5 : (flows.length > 1 ? 6 + flowIndex : 7),
+              onHop: (idx, machine, nodeId) => {
+                const n = findNode(topoOf(sim, state), nodeId);
+                const which = machine ? ` #${machine.idx + 1}` : '';
+                if (verbose) Runtime.visitNode(state.runtime, request, nodeId, `${flow.label || kind}${which}`);
+                flashTopologyHop(root, previous, nodeId, previousMachine, machine);
+                previous = nodeId;
+                previousMachine = machine;
+                if (!verbose) {
+                  if (machine) traceLine(root, `${request.id} ${logicalPacketCount > packetCount ? '視覺抽樣 · ' : ''}${flow.packetLabel || '內容'}封包 ${packetIndex + 1}/${packetCount} →「${n?.label || nodeId}」 #${machine.idx + 1}`);
+                  return;
+                }
+                (spec.writesOnHop || []).forEach((write, writeIndex) => {
+                  if (write.nodeId !== nodeId || appliedHopWrites.has(writeIndex)) return;
+                  appliedHopWrites.add(writeIndex);
+                  applyRuntimeWrites(state, [write], request);
+                  repaintNodes(root, sim, state);
+                });
+                traceLine(root, `${request.id} 抵達「${n?.label || nodeId}」${which}${n?.arriveLabel ? '：' + n.arriveLabel : ''}`);
+              },
+              onDone: circle => {
+                setTimeout(() => circle?.remove(), 320);
+                settleThisPacket(true);
+              }
+            },
+            onLost: () => settleThisPacket(false),
+            onBlocked: () => settleThisPacket(false)
+          });
+          if (!handle) settleThisPacket(false);
+        }, packetIndex * Math.max(70, 170 / (state.speed || 1)));
+      }
     });
   }
 
@@ -1465,6 +1573,14 @@
       });
     });
     root.querySelector('[data-request-ledger]')?.addEventListener('click', () => onInspectStore?.('__requests'));
+    root.querySelector('[data-toggle-connections]')?.addEventListener('click', event => {
+      state.showConnections = state.showConnections === false;
+      const visible = state.showConnections !== false;
+      root.querySelector('.sim-topo-wrap')?.classList.toggle('connections-hidden', !visible);
+      event.currentTarget.setAttribute('aria-pressed', String(visible));
+      event.currentTarget.textContent = visible ? '🙈 隱藏連線' : '🔗 顯示連線';
+      traceLine(root, visible ? '🔗 已顯示架構連線。' : '🙈 已隱藏架構連線；節點與傳輸球仍會照常運作。');
+    });
     root.querySelectorAll('.sim-add-users').forEach(btn => {
       btn.onclick = () => {
         const batch = Number(btn.dataset.add || 100);
@@ -1557,6 +1673,7 @@
         pos.x = clamp(point.x - offset.x, vx + 18, vx + vw - 18);
         pos.y = clamp(point.y - offset.y, vy + 18, vy + vh - 18);
         repaintNodes(root, sim, state);
+        repaintEdges(root, sim, state);
       });
       const finishInstanceDrag = () => {
         if (!dragInstance) return;
@@ -1661,7 +1778,7 @@
         for (let i = 0; i < count; i++) {
           setTimeout(() => {
             spawnToken(svgEl, route.points, {
-              className: 'concurrent', tokenClass: 'sim-token-ambient',
+              className: `concurrent payload-${sim.chapterId === 'sd-book-14' ? 'video' : 'file'}`, tokenClass: 'sim-token-ambient',
               durationMs: pathDurationMs(weights, state.speed, 0.95 + Math.random() * 0.2),
               weights,
               guard: () => routeStillAlive(state, route.chosen),
@@ -2876,6 +2993,7 @@
         setInstanceDown(state, nodeId, removedIndex, false);
       }
       repaintNodes(root, sim, state);
+      repaintEdges(root, sim, state);
       refreshLoadSummary(root, sim, state);
       const load = nodeLoad(sim, state, node);
       traceLine(root, `「${node.label}」${delta > 0 ? '加開' : '收掉'}一台機器，現在共 ${base + nextExtra} 台${
@@ -3145,6 +3263,7 @@
       simFrom: state.simFrom,
       simTo: state.simTo,
       simPayload: state.simPayload,
+      showConnections: state.showConnections !== false,
       runtime: Runtime?.clone(state.runtime) || state.runtime
     };
   }
@@ -3166,6 +3285,7 @@
       activeRegion: raw.activeRegion || raw.regions?.[0] || 'A 區',
       simFrom: raw.simFrom || '', simTo: raw.simTo || '',
       simPayload: raw.simPayload || '{"action":"demo"}',
+      showConnections: raw.showConnections !== false,
       runtime: Runtime?.hydrateRuntime(raw.runtime, { stores: [] }) || {
         requestSeq: 0, counts: {}, requests: [], nodeActivity: {}, routeCursor: {}, stores: {}
       }
@@ -3225,7 +3345,7 @@
           </div>
           <button class="button secondary sim-sandbox-clear" type="button">清空畫布</button>
         </div>
-        <div class="sim-sandbox-canvas-wrap">
+        <div class="sim-sandbox-canvas-wrap${state.showConnections === false ? ' connections-hidden' : ''}">
           <div class="sim-topo-scroll">
             <svg class="sim-topo sim-sandbox-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="img" aria-label="自訂拓樸圖畫布">
               <defs><marker id="sandbox-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>
@@ -3240,10 +3360,12 @@
             <input class="sim-sandbox-payload" type="text" value="${esc(state.simPayload || '')}" aria-label="Request payload" placeholder='{"action":"upload"}'>
             <button class="button sim-sandbox-simulate-btn" type="button">▶ 模擬請求</button>
             <button class="button secondary sim-sandbox-check-btn" type="button">🔍 檢查架構</button>
+            <button class="button secondary sim-sandbox-connections-btn" type="button" aria-pressed="${state.showConnections !== false}">${state.showConnections === false ? '🔗 顯示連線' : '🙈 隱藏連線'}</button>
             <button class="button secondary sim-sandbox-export-btn" type="button">⬇️ 匯出 JSON</button>
             <button class="button secondary sim-sandbox-import-btn" type="button">⬆️ 匯入 JSON</button>
             <input class="sim-sandbox-import-file" type="file" accept="application/json,.json" hidden>
           </div>
+          ${payloadLegendHtml()}
           <div class="sim-trace">
             <div class="sim-trace-head"><span>即時處理紀錄</span><button class="sim-trace-clear" type="button">清空</button></div>
             <div class="sim-trace-body"></div>
@@ -3430,6 +3552,15 @@
     root.querySelector('.sim-sandbox-sim-from')?.addEventListener('change', evt => { state.simFrom = evt.target.value; saveSandboxState(state); });
     root.querySelector('.sim-sandbox-sim-to')?.addEventListener('change', evt => { state.simTo = evt.target.value; saveSandboxState(state); });
     root.querySelector('.sim-sandbox-payload')?.addEventListener('input', evt => { state.simPayload = evt.target.value; saveSandboxState(state); });
+    root.querySelector('.sim-sandbox-connections-btn')?.addEventListener('click', event => {
+      state.showConnections = state.showConnections === false;
+      const visible = state.showConnections !== false;
+      root.querySelector('.sim-sandbox-canvas-wrap')?.classList.toggle('connections-hidden', !visible);
+      event.currentTarget.setAttribute('aria-pressed', String(visible));
+      event.currentTarget.textContent = visible ? '🙈 隱藏連線' : '🔗 顯示連線';
+      saveSandboxState(state);
+      traceLine(root, visible ? '🔗 已顯示自訂場景連線。' : '🙈 已隱藏自訂場景連線；模擬請求仍會沿原路徑傳送。');
+    });
 
     // "Does this actually connect to anything" answered for real: BFS over the edges the player
     // drew, then a genuine spawnToken animation along whatever path exists — reusing the exact
@@ -3446,6 +3577,11 @@
       let payload;
       try { payload = JSON.parse(state.simPayload || '{}'); }
       catch { payload = { value: state.simPayload || '' }; }
+      const payloadHint = String(payload.type || payload.kind || payload.action || '').toLowerCase();
+      const payloadType = /video|影片/.test(payloadHint) ? 'video'
+        : /file|upload|block|檔案|區塊/.test(payloadHint) ? 'file'
+          : /metadata|data|資料/.test(payloadHint) ? 'metadata'
+            : /notify|event|通知/.test(payloadHint) ? 'notification' : 'api';
       const request = Runtime?.beginRequest(state.runtime, {
         kind: 'request',
         label: `${fromNode?.label || fromId} → ${toNode?.label || toId}`,
@@ -3457,6 +3593,7 @@
       let previousId = '';
       spawnToken(svgEl, waypoints, {
         tokenClass: 'sim-token-demo',
+        className: `payload-${payloadType}`,
         durationMs: 1600,
         onHop: idx => {
           const nodeId = path[idx];
