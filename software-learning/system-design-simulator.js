@@ -2495,6 +2495,11 @@
   function renderAbrLab(sim) {
     const cs = sim.abrSim;
     if (!cs) return '';
+    const durationSec = (cs.segments || 12) * (cs.segmentSec || 5);
+    const durationLabel = durationSec >= 3600
+      ? `${String(Math.floor(durationSec / 3600)).padStart(2, '0')}:${String(Math.floor((durationSec % 3600) / 60)).padStart(2, '0')}:${String(durationSec % 60).padStart(2, '0')}`
+      : `${String(Math.floor(durationSec / 60)).padStart(2, '0')}:${String(durationSec % 60).padStart(2, '0')}`;
+    const startLabel = durationSec >= 3600 ? '00:00:00' : '00:00';
     return `<section class="sim-abrlab">
       <h2>🎬 ${esc(cs.label || 'CDN 與美國來源站播放體驗')}</h2>
       <p class="sim-abrlab-desc">${esc(cs.desc || '同一部影片每段只有 5 秒。比較從本地 CDN 命中與跨海回美國來源站時，下載時間如何消耗緩衝、造成轉圈圈，並觸發播放器自動降低解析度。')}</p>
@@ -2520,7 +2525,7 @@
           <span class="sim-video-source" data-abr-source>尚未開始</span>
           <span class="sim-video-quality" data-abr-quality>--</span>
           <div class="sim-video-progress"><i data-abr-progress></i></div>
-          <span class="sim-video-time" data-abr-time>00:00 / 01:00</span>
+          <span class="sim-video-time" data-abr-time>${startLabel} / ${durationLabel}</span>
         </div>
         <div class="sim-video-metrics">
           <div><small>目前來源</small><strong data-abr-source-stat>--</strong></div>
@@ -2596,6 +2601,9 @@
     };
     const fmtTime = seconds => {
       const value = Math.max(0, Math.floor(seconds || 0));
+      if (totalDuration >= 3600) {
+        return `${String(Math.floor(value / 3600)).padStart(2, '0')}:${String(Math.floor((value % 3600) / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+      }
       return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
     };
     const segmentByIndex = (st, index) => st.segments.find(seg => seg.idx === index);
@@ -2635,7 +2643,7 @@
         : st.lastDownloadSec ? `上一段 ${st.lastDownloadSec.toFixed(1)} 秒` : '--';
       status.textContent = st.finished
         ? `✅ 播放完成 · 轉圈圈 ${st.stalls} 次 · 最終畫質 ${currentQuality.label}`
-        : `${stalled ? '⏳ 轉圈圈' : '▶ 正常播放'} · 播放 ${st.playhead.toFixed(0)} 秒 · 緩衝 ${st.buffer.toFixed(1)} 秒 · 已收到 ${st.received}/${st.total} 個 5 秒片段`;
+        : `${stalled ? '⏳ 轉圈圈' : '▶ 正常播放'} · 播放 ${fmtTime(st.playhead)} · 緩衝 ${st.buffer.toFixed(1)} 秒 · 已收到 ${st.received}/${st.total} 個 5 秒片段`;
       cdnBtn.classList.toggle('active', st.mode === 'cdn' && st.playing);
       originBtn.classList.toggle('active', st.mode === 'origin' && st.playing);
       stopBtn.disabled = !st.playing;
@@ -2643,7 +2651,7 @@
       viewer?.classList.toggle('buffering', stalled);
       viewerPlayback?.classList.toggle('active', st.playing);
       viewerPlayback?.classList.toggle('buffering', stalled);
-      if (viewerTitle) viewerTitle.textContent = st.finished ? '✓ 播放完成' : stalled ? '⏳ 轉圈圈' : st.playing ? `▶ 播放 ${Math.floor(st.playhead)} 秒` : '已停止播放';
+      if (viewerTitle) viewerTitle.textContent = st.finished ? '✓ 播放完成' : stalled ? '⏳ 轉圈圈' : st.playing ? `▶ ${fmtTime(st.playhead)}` : '已停止播放';
       if (viewerMeta) viewerMeta.textContent = `${profile.short} · 緩衝 ${st.buffer.toFixed(1)} 秒`;
       viewerProgress?.setAttribute('width', String(clamp((st.playhead / totalDuration) * 92)));
       if (viewerQuality) {
@@ -2652,6 +2660,7 @@
       }
     };
 
+    const visibleSegmentCount = 12;
     const appendSegBlock = seg => {
       const div = document.createElement('div');
       div.className = `sim-abr-seg q-${seg.qualityId}${seg.causedStall ? ' stalled' : ''}`;
@@ -2661,6 +2670,20 @@
         ? '第 1 段已預先載入，可以先正常播放 5 秒'
         : `第 ${seg.idx} 段 · ${seg.sizeMB.toFixed(2)} MB · 下載 ${seg.downloadSec.toFixed(1)} 秒`;
       strip.appendChild(div);
+      const visible = Array.from(strip.querySelectorAll('.sim-abr-seg'));
+      while (visible.length > visibleSegmentCount) visible.shift()?.remove();
+      const omitted = Math.max(0, seg.idx - visible.length);
+      let more = strip.querySelector('.sim-abr-seg-more');
+      if (omitted > 0) {
+        if (!more) {
+          more = document.createElement('div');
+          more.className = 'sim-abr-seg-more';
+          strip.prepend(more);
+        }
+        more.textContent = `前 ${omitted} 段已收到…`;
+      } else {
+        more?.remove();
+      }
     };
 
     const stopPlayback = (finished = false, announce = true) => {
@@ -2698,7 +2721,11 @@
 
     const fetchNext = generation => {
       const st = state.abr;
-      if (!st?.playing || generation !== state.abrGeneration || st.fetching || st.received >= st.total || st.buffer >= maxBuffer) return;
+      // Reserve room for the entire next segment before requesting it. Previously a request
+      // could start with 14 seconds buffered, then Math.min(15, 14 + 5) silently discarded four
+      // playable seconds while still counting the segment as received. A one-hour video made
+      // that accounting bug especially visible because playback ran out long before its end.
+      if (!st?.playing || generation !== state.abrGeneration || st.fetching || st.received >= st.total || st.buffer > maxBuffer - segmentSec) return;
       const profile = sources[st.mode];
       const quality = ladder.find(q => q.id === st.fetchQualityId) || ladder[ladder.length - 1];
       const index = st.received + 1;
@@ -2725,7 +2752,7 @@
           tokenClass: 'sim-token-segment',
           className: `q-${quality.id}`,
           radius: 5 + Math.max(0, ladder.findIndex(q => q.id === quality.id)) * 4,
-          durationMs: Math.max(220, downloadSec * simSecondMs / (state.speed || 1)),
+          durationMs: Math.max(60, 180 / (state.speed || 1), downloadSec * simSecondMs / (state.speed || 1)),
           onHop: (hopIndex, machine, nodeId) => {
             flashTopologyHop(root, previousId, nodeId, previousMachine, machine);
             previousId = nodeId;

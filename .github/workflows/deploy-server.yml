@@ -53,9 +53,9 @@ jobs:
             echo "== Smoke test deployed terminology assets =="
             curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-terms.js?v=terms-clean-20260820-teaching'
             curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-glossary.js?v=teaching-20260820'
-            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book-teaching-guides.js?v=teaching-20260820'
-            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book-translation-overrides.js?v=readability-20260820'
-            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book.js?v=teaching-20260820'
+            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book-teaching-guides.js?v=cat-20260905a'
+            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book-translation-overrides.js?v=alignment-20260905'
+            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book.js?v=flows-20260905d'
             curl -fsS -o /dev/null 'http://127.0.0.1:20600/software-learning/system-design-terms.js?v=terms-clean-20260820-teaching'
-            curl -fsS -o /dev/null 'http://127.0.0.1:20600/software-learning/data/system-design-book-translation-overrides.js?v=readability-20260820'
+            curl -fsS -o /dev/null 'http://127.0.0.1:20600/software-learning/data/system-design-book-translation-overrides.js?v=alignment-20260905'
             echo "Terminology and readability assets served from running container."
