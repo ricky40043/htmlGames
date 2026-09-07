@@ -2835,18 +2835,20 @@
       fetchNext(generation);
     };
 
+    const ensureCdnEnabled = () => {
+      if (currentOptionId(sim, 'cdnTier', state) !== 'off') return;
+      const option = findComponent(sim, 'cdnTier')?.options.find(item => item.id !== 'off');
+      if (!option) return;
+      state.choice.cdnTier = option.id;
+      updateComponentVisual(root, sim, state, 'cdnTier');
+      refreshLoadSummary(root, sim, state);
+      traceLine(root, `⚡ 播放器已啟用「${option.label}」，上方 CDN 圓球同步變成打勾。`, 'ok');
+    };
+
     const start = mode => {
       stopPlayback(false, false);
       // Choosing the CDN comparison also visibly builds the CDN if it is currently absent.
-      if (mode === 'cdn' && currentOptionId(sim, 'cdnTier', state) === 'off') {
-        const option = findComponent(sim, 'cdnTier')?.options.find(item => item.id !== 'off');
-        if (option) {
-          state.choice.cdnTier = option.id;
-          updateComponentVisual(root, sim, state, 'cdnTier');
-          refreshLoadSummary(root, sim, state);
-          traceLine(root, `⚡ 比較器已啟用「${option.label}」，上方 CDN 圓球同步變成打勾。`, 'ok');
-        }
-      }
+      if (mode === 'cdn') ensureCdnEnabled();
       if (state.dragViewerTimer) clearTimeout(state.dragViewerTimer);
       state.dragViewerTimer = null;
       state.dragViewerGen = (state.dragViewerGen || 0) + 1;
@@ -2866,8 +2868,39 @@
       state.abrTimer = setInterval(() => playbackTick(generation), simSecondMs / (state.speed || 1));
     };
 
-    cdnBtn.onclick = () => start('cdn');
-    originBtn.onclick = () => start('origin');
+    const switchSource = mode => {
+      if (mode === 'cdn') ensureCdnEnabled();
+      const st = state.abr;
+      if (!st?.playing) {
+        start(mode);
+        return;
+      }
+      if (st.mode === mode) {
+        paint();
+        return;
+      }
+      if (state.abrFetchHandle) {
+        state.abrFetchHandle.stop?.();
+        state.abrFetchHandle.circle?.remove();
+        state.abrFetchHandle = null;
+      }
+      if (state.abrTimer) clearInterval(state.abrTimer);
+      state.abrTimer = null;
+      st.fetching = false;
+      st.mode = mode;
+      st.lastDownloadSec = 0;
+      const generation = ++state.abrGeneration;
+      traceLine(root, `🔀 架構來源已切換成「${sources[mode].label}」；保留目前 ${fmtTime(st.playhead)} 的播放位置與 ${st.buffer.toFixed(1)} 秒緩衝，下一顆影片球改走新路徑。`, 'head');
+      paint();
+      fetchNext(generation);
+      state.abrTimer = setInterval(() => playbackTick(generation), simSecondMs / (state.speed || 1));
+    };
+
+    // The topology is the source of truth. The buttons remain useful for comparison, but the
+    // CDN circle above can now change the running player's route without resetting playback.
+    state.syncAbrSource = () => switchSource(currentOptionId(sim, 'cdnTier', state) === 'off' ? 'origin' : 'cdn');
+    cdnBtn.onclick = () => switchSource('cdn');
+    originBtn.onclick = () => switchSource('origin');
     stopBtn.onclick = () => stopPlayback(false);
     state.repaceAbr = () => {
       if (state.abrTimer) clearInterval(state.abrTimer);
@@ -2888,6 +2921,8 @@
         state.abrTimer = setInterval(() => playbackTick(generation), simSecondMs / (state.speed || 1));
         fetchNext(generation);
       }
+    } else {
+      start(currentOptionId(sim, 'cdnTier', state) === 'off' ? 'origin' : 'cdn');
     }
   }
 
@@ -3323,6 +3358,7 @@
       // Changing a strategy can change instance counts and, through the CDN, every region's
       // load — refresh the overload banner and the cost readout, not just the diagram.
       refreshLoadSummary(root, sim, state);
+      if (componentId === 'cdnTier') state.syncAbrSource?.();
       // The test viewer's probe only announces where its bytes come from when that changes;
       // clearing the marker here makes it re-announce right after you flip a capability, which
       // is exactly the moment you want to see "…now it comes from the CDN instead" in the log.
