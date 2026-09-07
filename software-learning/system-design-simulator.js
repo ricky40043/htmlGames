@@ -223,6 +223,10 @@
       month: 0, uptime: 100, qoe: 100, costEff: 100, choice: {}, usersServed: 0, speed: 1,
       chunk: null, chunkTimer: null,
       abr: null, abrTimer: null,
+      // Optional 100-user traffic generator. One timer launches one randomized operation at a
+      // time; requests already in flight keep finishing if the player stops the generator.
+      randomTraffic: { active: false, launched: 0, total: 100, counts: { watch: 0, search: 0, upload: 0 } },
+      randomTrafficTimer: null,
       // Machines the player added by hand with the ＋ buttons on the topology, on top of
       // whatever baseline the chosen redundancy strategy already gives that node. Keyed by node
       // id, so each region's pool scales independently (adding Taiwan streaming servers must not
@@ -865,7 +869,7 @@
       </div>
       <p class="sim-topo-scroll-hint">← 左右滑動可以看完整張架構圖 →</p>
       ${interactive
-        ? '<p class="sim-topo-hint"><b>拖曳單獨一台機器</b>（#1／#2…）可以自由排位置，它自己的連線會跟著移動；短按它則模擬拔掉／插回。<b>拖曳其他節點</b>也能重排整張架構；<b>點資料庫／儲存節點</b>可看 schema、資料與收到的 request。伺服器群組名稱下方的 ＋／− 會真正新增／收掉一台機器。</p>'
+        ? '<p class="sim-topo-hint"><b>點一般能力節點的圓球</b>就能直接切換成打勾／下一種策略。伺服器群組的圓球是單台機器：拖曳可移動，短按可拔掉／插回；群組策略請點上方有底線的文字。<b>點資料庫／儲存節點</b>可看 schema 與資料。伺服器群組名稱下方的 ＋／− 會真正新增／收掉一台機器。</p>'
         : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法與當時開的機器數量決定。</p>'}
       ${showControls ? `<div class="sim-topo-controls">
         <button class="button secondary sim-add-users" type="button" data-add="100">${esc(sim.addUsersLabel || '＋100 使用者')}</button>
@@ -873,6 +877,7 @@
         <button class="button secondary sim-demo" type="button" data-kind="upload">${esc(sim.demoLabels?.upload || '⬆ 模擬一次寫入請求')}</button>
         ${sim.demoLabels?.search ? `<button class="button secondary sim-demo" type="button" data-kind="search">${esc(sim.demoLabels.search)}</button>` : ''}
         ${sim.concurrentViewersLabel ? `<button class="button secondary sim-demo-concurrent" type="button" data-count="10">${esc(sim.concurrentViewersLabel)}</button>` : ''}
+        <button class="button secondary sim-random-traffic-btn${state.randomTraffic?.active ? ' active' : ''}" type="button" data-random-traffic aria-pressed="${!!state.randomTraffic?.active}">${state.randomTraffic?.active ? `⏹ 停止隨機模式（${state.randomTraffic.launched}/${state.randomTraffic.total}）` : '🎲 啟動 100 人隨機操作'}</button>
         ${sim.dragViewerSim ? `<button class="button secondary sim-wander-btn" type="button" data-viewer-wander aria-pressed="false">${esc(lex(sim, 'wanderIdle'))}</button>` : ''}
         <button class="button secondary sim-connections-btn" type="button" data-toggle-connections aria-pressed="${connectionVisible}">${connectionVisible ? '🙈 隱藏連線' : '🔗 顯示連線'}</button>
       </div>
@@ -1504,6 +1509,73 @@
     });
   }
 
+  function randomTrafficButtonText(state) {
+    const rt = state.randomTraffic;
+    return rt?.active
+      ? `⏹ 停止隨機模式（${rt.launched}/${rt.total}）`
+      : '🎲 啟動 100 人隨機操作';
+  }
+
+  function paintRandomTrafficButton(root, state) {
+    const btn = root.querySelector('[data-random-traffic]');
+    if (!btn) return;
+    const active = !!state.randomTraffic?.active;
+    btn.textContent = randomTrafficButtonText(state);
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', String(active));
+  }
+
+  function stopRandomTraffic(root, state, announce = true) {
+    if (state.randomTrafficTimer) clearTimeout(state.randomTrafficTimer);
+    state.randomTrafficTimer = null;
+    const rt = state.randomTraffic;
+    if (!rt?.active) return;
+    rt.active = false;
+    paintRandomTrafficButton(root, state);
+    if (announce) {
+      traceLine(root, `⏹ 已停止隨機模式：共送出 ${rt.launched} 個操作（觀看／下載 ${rt.counts.watch}、搜尋／通知 ${rt.counts.search}、上傳 ${rt.counts.upload}）。已在傳輸中的封包仍會完成。`);
+    }
+  }
+
+  function wireRandomTraffic(root, sim, state) {
+    const btn = root.querySelector('[data-random-traffic]');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      if (state.randomTraffic?.active) {
+        stopRandomTraffic(root, state);
+        return;
+      }
+      if (state.randomTrafficTimer) clearTimeout(state.randomTrafficTimer);
+      state.randomTraffic = { active: true, launched: 0, total: 100, counts: { watch: 0, search: 0, upload: 0 } };
+      paintRandomTrafficButton(root, state);
+      traceLine(root, '🎲 100 人隨機操作模式啟動：每位虛擬使用者會隨機觀看／下載、搜尋／接收通知或上傳；每個操作都走真實節點、伺服器分流與資料寫入。', 'head');
+
+      const launchNext = () => {
+        const rt = state.randomTraffic;
+        if (!rt?.active) return;
+        if (rt.launched >= rt.total) {
+          rt.active = false;
+          state.randomTrafficTimer = null;
+          paintRandomTrafficButton(root, state);
+          traceLine(root, `✅ 100 人隨機模式完成：觀看／下載 ${rt.counts.watch}、搜尋／通知 ${rt.counts.search}、上傳 ${rt.counts.upload}。所有 Request 與寫入資料都保留可查。`, 'done');
+          return;
+        }
+        // Read traffic is normally the majority; upload remains frequent enough that the player
+        // can see packetization and persistent writes without turning all 100 operations into a
+        // wall of multi-packet animations.
+        const roll = Math.random();
+        const kind = roll < 0.58 ? 'watch' : roll < 0.82 ? 'search' : 'upload';
+        rt.launched += 1;
+        rt.counts[kind] += 1;
+        runTopologyDemo(root, sim, state, kind);
+        paintRandomTrafficButton(root, state);
+        const delay = Math.max(90, (220 + Math.random() * 260) / (state.speed || 1));
+        state.randomTrafficTimer = setTimeout(launchNext, delay);
+      };
+      launchNext();
+    });
+  }
+
   function wireTopologyControls(root, sim, state, onCycle, onInstanceDelta, onInstanceKill, onStructureChange, onLoadChange, onInspectStore) {
     const svgEl = root.querySelector('svg.sim-topo');
     if (!svgEl) return;
@@ -1550,13 +1622,16 @@
           state._suppressNodeClick = null;
           return;
         }
-        if (g.dataset.storeId && !event?.target?.closest?.('[data-strategy-hit]')) {
+        const strategyHit = event?.target?.closest?.('[data-strategy-hit]');
+        const circleHit = event?.target?.closest?.('circle');
+        if (g.dataset.storeId && !strategyHit) {
           onInspectStore?.(g.dataset.storeId);
           return;
         }
-        // Pointer users change a strategy only through its underlined label. This keeps the node
-        // body available for dragging and, on data nodes, for opening the inspector.
-        if (event?.type === 'click' && !event.target.closest?.('[data-strategy-hit]')) return;
+        // A normal capability circle is the primary switch. Pool circles are intercepted above
+        // because they represent concrete machines (kill/recover), while data-node circles keep
+        // opening the inspector. Empty space and labels do not accidentally change strategy.
+        if (event?.type === 'click' && !strategyHit && !circleHit) return;
         onCycle(g.dataset.toggle);
       };
       g.addEventListener('click', activate);
@@ -1753,6 +1828,7 @@
     root.querySelectorAll('.sim-demo').forEach(btn => {
       btn.onclick = () => runTopologyDemo(root, sim, state, btn.dataset.kind);
     });
+    wireRandomTraffic(root, sim, state);
     // "N people watching the SAME video" is a different demonstration than the generic +users
     // ambient traffic: waypoints (and therefore the picked region + picked pool instance) are
     // resolved ONCE and shared by every spawned token, so they visibly all ride the identical
@@ -3032,6 +3108,7 @@
     wireDragViewer(root, sim, state);
 
     root.querySelector('.sim-advance').onclick = () => {
+      stopRandomTraffic(root, state, false);
       if (state.month >= sim.months) {
         state.phase = 'summary';
         return render(root, sim, state);

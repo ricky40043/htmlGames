@@ -149,6 +149,7 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10}
 .sim-burst-dot{fill:var(--accent-2);animation:simBurst .85s ease-out forwards}
 .sim-topo-hint{margin:8px 0 14px;font-size:.78rem;color:var(--muted)}
 .sim-topo-controls{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
+.sim-random-traffic-btn.active{border-color:var(--sim-good)!important;color:var(--sim-good)!important;background:rgba(74,222,128,.1)!important}
 .sim-payload-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:-4px 0 14px;color:var(--muted);font-size:.76rem}
 .sim-payload-legend span{display:inline-flex;align-items:center;gap:6px}
 .sim-payload-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;border:1px solid #090910;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
