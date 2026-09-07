@@ -719,7 +719,22 @@
     const dv = state.dragViewer;
     if (!cs || !dv) return '';
     const ladder = cs.ladder || sim.abrSim?.ladder || [];
-    const qLabel = ladder.find(q => q.id === dv.qualityId)?.label || dv.qualityId || '--';
+    const playback = state.abr;
+    const playbackQuality = playback && (playback.playing || playback.finished) ? playback.lastQualityLabel : '';
+    const qLabel = playbackQuality || ladder.find(q => q.id === dv.qualityId)?.label || dv.qualityId || '--';
+    const qId = playback
+      ? (ladder.find(q => q.label === playbackQuality)?.id || playback.fetchQualityId || dv.qualityId)
+      : dv.qualityId;
+    const totalDuration = (sim.abrSim?.segments || 12) * (sim.abrSim?.segmentSec || 5);
+    const playbackProgress = playback ? clamp((playback.playhead / totalDuration) * 92) : 0;
+    const playbackStatus = !playback ? '等待選擇來源'
+      : playback.finished ? '✓ 播放完成'
+        : playback.playing && playback.buffer <= 0 ? '⏳ 轉圈圈'
+          : playback.playing ? `▶ 播放 ${Math.floor(playback.playhead)} 秒`
+            : '已停止播放';
+    const playbackMeta = playback
+      ? `${playback.mode === 'cdn' ? 'CDN' : '美國回源'} · 緩衝 ${playback.buffer.toFixed(1)} 秒`
+      : '等待綠球補進緩衝';
     const z = state.badZone || { x: cs.zone.x, y: cs.zone.y, width: cs.zone.width, height: cs.zone.height };
     const zw = z.width ?? cs.zone.width, zh = z.height ?? cs.zone.height;
     const regionName = topoOf(sim, state)?.regionLabel?.[dv.regionId] || dv.regionId || '';
@@ -729,11 +744,20 @@
         <text class="sim-drag-zone-label" x="${z.x + 10}" y="${z.y + 22}">${esc(cs.zone.label)}</text>
         <rect class="sim-drag-zone-handle" data-zone-handle x="${z.x + zw - 9}" y="${z.y + zh - 9}" width="18" height="18" rx="4"><title>拖曳這個角可以縮放訊號不良區</title></rect>
       </g>
-      <g class="sim-drag-viewer${dv.inZone ? ' in-zone' : ''}" data-drag-viewer tabindex="0" role="button" aria-label="拖曳測試觀眾到別的地區或訊號不良區，或按 Enter 切換">
+      <g class="sim-drag-viewer${dv.inZone ? ' in-zone' : ''}${playback?.playing ? ' watching' : ''}${playback?.playing && playback.buffer <= 0 ? ' buffering' : ''}" data-drag-viewer tabindex="0" role="button" aria-label="拖曳測試觀眾到別的地區或訊號不良區，或按 Enter 切換">
         <circle cx="${dv.x}" cy="${dv.y}" r="14"/>
         <text class="sim-drag-viewer-emoji" x="${dv.x}" y="${dv.y + 5}">🙋</text>
-        <text class="sim-drag-viewer-quality q-${esc(dv.qualityId || '')}" x="${dv.x}" y="${dv.y + 30}">${esc(qLabel)}</text>
+        <text class="sim-drag-viewer-quality q-${esc(qId || '')}" x="${dv.x}" y="${dv.y + 30}">${esc(qLabel)}</text>
         <text class="sim-drag-viewer-region" x="${dv.x}" y="${dv.y + 44}">${esc(regionName ? `由${regionName}服務` : '')}</text>
+        <g class="sim-viewer-playback${playback?.playing ? ' active' : ''}${playback?.playing && playback.buffer <= 0 ? ' buffering' : ''}" data-viewer-playback transform="translate(${dv.x + 20} ${dv.y - 55})" aria-hidden="true">
+          <path d="M0 42 L-8 50 L4 47"/>
+          <rect width="116" height="47" rx="8"/>
+          <circle class="sim-viewer-live-dot" cx="11" cy="13" r="4"/>
+          <text class="sim-viewer-playback-title" data-viewer-playback-title x="20" y="16">${esc(playbackStatus)}</text>
+          <text class="sim-viewer-playback-meta" data-viewer-playback-meta x="9" y="30">${esc(playbackMeta)}</text>
+          <rect class="sim-viewer-progress-track" x="9" y="36" width="92" height="4" rx="2"/>
+          <rect class="sim-viewer-progress-fill" data-viewer-playback-progress x="9" y="36" width="${playbackProgress}" height="4" rx="2"/>
+        </g>
       </g>`;
   }
 
@@ -2474,9 +2498,24 @@
     return `<section class="sim-abrlab">
       <h2>🎬 ${esc(cs.label || 'CDN 與美國來源站播放體驗')}</h2>
       <p class="sim-abrlab-desc">${esc(cs.desc || '同一部影片每段只有 5 秒。比較從本地 CDN 命中與跨海回美國來源站時，下載時間如何消耗緩衝、造成轉圈圈，並觸發播放器自動降低解析度。')}</p>
+      <div class="sim-abr-session-link"><span>🙋</span><strong>上方測試觀眾的即時播放器</strong><b>綠色影片球抵達小人 → 才增加 5 秒緩衝 → 畫面繼續移動</b></div>
       <div class="sim-video-player idle" data-abr-player>
         <div class="sim-video-stage">
-          <div class="sim-video-scene"><span class="sim-video-playmark">▶</span><b data-abr-screen-text>選一種來源開始播放</b></div>
+          <div class="sim-video-scene">
+            <div class="sim-demo-video" aria-hidden="true">
+              <i class="sim-demo-sun"></i>
+              <i class="sim-demo-cloud cloud-a"></i>
+              <i class="sim-demo-cloud cloud-b"></i>
+              <i class="sim-demo-mountain mountain-a"></i>
+              <i class="sim-demo-mountain mountain-b"></i>
+              <i class="sim-demo-road"></i>
+              <i class="sim-demo-road-lines"></i>
+              <i class="sim-demo-car">🚙</i>
+            </div>
+            <span class="sim-video-playmark">▶</span>
+            <b data-abr-screen-text>選一種來源開始播放</b>
+            <em data-abr-frame>畫面格 0000</em>
+          </div>
           <div class="sim-video-spinner" aria-label="重新緩衝中"></div>
           <span class="sim-video-source" data-abr-source>尚未開始</span>
           <span class="sim-video-quality" data-abr-quality>--</span>
@@ -2521,6 +2560,7 @@
 
     const player = root.querySelector('[data-abr-player]');
     const screenText = root.querySelector('[data-abr-screen-text]');
+    const frameText = root.querySelector('[data-abr-frame]');
     const sourceBadge = root.querySelector('[data-abr-source]');
     const qualityBadge = root.querySelector('[data-abr-quality]');
     const progressFill = root.querySelector('[data-abr-progress]');
@@ -2569,6 +2609,12 @@
       const currentQuality = ladder.find(q => q.id === activeSeg?.qualityId) || ladder[ladder.length - 1];
       const profile = sources[st.mode];
       const stalled = st.playing && st.buffer <= 0;
+      const viewer = root.querySelector('[data-drag-viewer]');
+      const viewerPlayback = root.querySelector('[data-viewer-playback]');
+      const viewerTitle = root.querySelector('[data-viewer-playback-title]');
+      const viewerMeta = root.querySelector('[data-viewer-playback-meta]');
+      const viewerProgress = root.querySelector('[data-viewer-playback-progress]');
+      const viewerQuality = root.querySelector('.sim-drag-viewer-quality');
       bufferFill.style.width = `${clamp((st.buffer / maxBuffer) * 100)}%`;
       bufferFill.classList.toggle('low', st.buffer <= 2);
       player.classList.toggle('stalled', stalled);
@@ -2580,6 +2626,7 @@
       qualityBadge.className = `sim-video-quality q-${currentQuality.id}`;
       progressFill.style.width = `${clamp((st.playhead / totalDuration) * 100)}%`;
       timeText.textContent = `${fmtTime(st.playhead)} / ${fmtTime(totalDuration)}`;
+      if (frameText) frameText.textContent = `畫面格 ${String(Math.floor(st.playhead * 24)).padStart(4, '0')}`;
       sourceStat.textContent = `${profile.short} · ${profile.throughput.toFixed(1)} Mbps`;
       bufferStat.textContent = `${st.buffer.toFixed(1)} 秒${stalled ? '（已耗盡）' : ''}`;
       segmentStat.textContent = `${activeIndex}/${st.total} · ${currentQuality.label}`;
@@ -2592,6 +2639,17 @@
       cdnBtn.classList.toggle('active', st.mode === 'cdn' && st.playing);
       originBtn.classList.toggle('active', st.mode === 'origin' && st.playing);
       stopBtn.disabled = !st.playing;
+      viewer?.classList.toggle('watching', st.playing);
+      viewer?.classList.toggle('buffering', stalled);
+      viewerPlayback?.classList.toggle('active', st.playing);
+      viewerPlayback?.classList.toggle('buffering', stalled);
+      if (viewerTitle) viewerTitle.textContent = st.finished ? '✓ 播放完成' : stalled ? '⏳ 轉圈圈' : st.playing ? `▶ 播放 ${Math.floor(st.playhead)} 秒` : '已停止播放';
+      if (viewerMeta) viewerMeta.textContent = `${profile.short} · 緩衝 ${st.buffer.toFixed(1)} 秒`;
+      viewerProgress?.setAttribute('width', String(clamp((st.playhead / totalDuration) * 92)));
+      if (viewerQuality) {
+        viewerQuality.textContent = currentQuality.label;
+        viewerQuality.setAttribute('class', `sim-drag-viewer-quality q-${currentQuality.id}`);
+      }
     };
 
     const appendSegBlock = seg => {
@@ -2685,6 +2743,9 @@
             live.buffer = Math.min(maxBuffer, live.buffer + segmentSec);
             live.segments.push(seg);
             appendSegBlock(seg);
+            const viewer = root.querySelector('[data-drag-viewer]');
+            viewer?.classList.add('receiving');
+            setTimeout(() => viewer?.classList.remove('receiving'), 420 / (state.speed || 1));
             const nextIdx = chooseNextQuality(live, profile, downloadSec);
             const nextQuality = ladder[nextIdx];
             if (nextQuality.id !== quality.id) {
@@ -2845,6 +2906,7 @@
     const emojiText = g.querySelector('.sim-drag-viewer-emoji');
     const qualityText = g.querySelector('.sim-drag-viewer-quality');
     const regionText = g.querySelector('.sim-drag-viewer-region');
+    const playbackHud = g.querySelector('[data-viewer-playback]');
     const zoneG = root.querySelector('[data-drag-zone]');
     const zoneRect = root.querySelector('.sim-drag-zone');
     const zoneLabel = root.querySelector('.sim-drag-zone-label');
@@ -2882,6 +2944,7 @@
       qualityText.setAttribute('y', y + 30);
       regionText?.setAttribute('x', x);
       regionText?.setAttribute('y', y + 44);
+      playbackHud?.setAttribute('transform', `translate(${x + 20} ${y - 55})`);
       // This viewer belongs to whichever region's drawn box they are standing in. Step outside
       // every box and nothing hands them over to someone else — a device does not lose its
       // region by sitting between two rectangles — so the last region keeps serving them.
@@ -3213,9 +3276,9 @@
         ${meterRow(lab.cost, state.costEff, state.costEff >= 80 ? 'good' : state.costEff >= 50 ? 'warn' : 'bad')}
       </div>
       ${svgTopology(sim, state, { interactive: true, showControls: true })}
+      ${renderAbrLab(sim)}
       ${renderUploadLab(sim)}
       ${renderChunkLab(sim)}
-      ${renderAbrLab(sim)}
       ${nextEvent ? `<div class="sim-hint">下個月可能會發生足以考驗架構的事件——先決定好要不要調整能力配置。</div>` : ''}
       <button class="button sim-advance" type="button">${state.month >= sim.months ? '查看今年總結' : `推進到第 ${state.month + 1} 個月`}</button>
       ${historyChart(state.history, sim.months, lab)}
