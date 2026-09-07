@@ -224,6 +224,24 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10}
 .sim-abrlab{margin:0 0 22px;padding:18px 20px;border:1px solid var(--border);border-radius:14px;background:rgba(110,168,254,.05)}
 .sim-abrlab h2{margin:0 0 8px;font-size:1.02rem}
 .sim-abrlab-desc{margin:0 0 14px;color:var(--muted);font-size:.85rem;line-height:1.6}
+.sim-video-player{display:grid;grid-template-columns:minmax(300px,1.4fr) minmax(230px,1fr);gap:14px;margin:0 0 14px;padding:12px;border:1px solid #343449;border-radius:14px;background:#0a0a10}
+.sim-video-stage{position:relative;min-height:190px;overflow:hidden;border-radius:10px;background:radial-gradient(circle at 45% 35%,rgba(110,168,254,.22),transparent 34%),linear-gradient(145deg,#18243a,#090c14 72%);box-shadow:inset 0 0 40px rgba(0,0,0,.5)}
+.sim-video-scene{position:absolute;inset:0;display:grid;place-content:center;gap:8px;text-align:center;color:#dbeafe}
+.sim-video-playmark{font-size:2.2rem;color:rgba(255,255,255,.75);filter:drop-shadow(0 0 10px rgba(110,168,254,.65))}
+.sim-video-scene b{font-size:.88rem}
+.sim-video-player.playing .sim-video-scene{animation:simVideoScene 2.4s ease-in-out infinite alternate}
+.sim-video-player.stalled .sim-video-scene{opacity:.38;animation:none}
+.sim-video-spinner{display:none;position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px;border:4px solid rgba(255,255,255,.22);border-top-color:#fff;border-radius:50%;animation:simSpinner .75s linear infinite}
+.sim-video-player.stalled .sim-video-spinner{display:block}
+.sim-video-source,.sim-video-quality{position:absolute;top:10px;padding:4px 7px;border-radius:6px;background:rgba(0,0,0,.72);font-size:.7rem;font-weight:800}
+.sim-video-source{left:10px;color:#bfdbfe}.sim-video-quality{right:10px;color:#0a0a10}
+.sim-video-quality.q-720p{background:var(--sim-good)}.sim-video-quality.q-480p{background:var(--sim-warn)}.sim-video-quality.q-360p{background:var(--sim-bad)}
+.sim-video-progress{position:absolute;left:12px;right:12px;bottom:25px;height:5px;overflow:hidden;border-radius:99px;background:rgba(255,255,255,.2)}
+.sim-video-progress i{display:block;width:0;height:100%;background:var(--sim-bad);transition:width .2s linear}
+.sim-video-time{position:absolute;left:12px;bottom:7px;color:#e5e7eb;font-size:.66rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.sim-video-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
+.sim-video-metrics>div{padding:11px;border:1px solid var(--border);border-radius:9px;background:#13131d}
+.sim-video-metrics small,.sim-video-metrics strong{display:block}.sim-video-metrics small{margin-bottom:5px;color:var(--muted);font-size:.66rem}.sim-video-metrics strong{color:#e5e7eb;font-size:.78rem;line-height:1.35}
 .sim-abr-buffer-row{display:flex;align-items:center;gap:10px;margin:0 0 10px}
 .sim-abr-buffer-label{font-size:.78rem;color:var(--muted);white-space:nowrap}
 .sim-abr-buffer-track{flex:1;height:10px;border-radius:999px;background:#0c0c13;border:1px solid var(--border);overflow:hidden}
@@ -236,7 +254,13 @@ svg.sim-topo{width:100%;height:auto;display:block;background:#0a0a10}
 .sim-abr-seg.q-480p{background:var(--sim-warn)}
 .sim-abr-seg.q-360p{background:var(--sim-bad)}
 .sim-abr-seg.stalled{outline:2px solid #fff;outline-offset:1px}
+.sim-abr-ball-legend{margin:-3px 0 13px;color:var(--muted);font-size:.72rem;line-height:1.7}
+.sim-abr-ball-legend span{display:inline-block;vertical-align:middle;margin-right:4px;border:1px solid #090910;border-radius:50%}
+.sim-abr-ball-legend .q-720p{width:16px;height:16px;background:var(--sim-good)}.sim-abr-ball-legend .q-480p{width:12px;height:12px;background:var(--sim-warn)}.sim-abr-ball-legend .q-360p{width:8px;height:8px;background:var(--sim-bad)}
 .sim-abrlab-actions{display:flex;gap:10px;flex-wrap:wrap}
+.sim-abrlab-actions .active{border-color:var(--sim-good)!important;color:var(--sim-good)!important;background:rgba(74,222,128,.1)!important}
+@keyframes simSpinner{to{transform:rotate(360deg)}}
+@keyframes simVideoScene{from{filter:brightness(.88);transform:scale(1)}to{filter:brightness(1.12);transform:scale(1.025)}}
 .sim-drag-zone-g{cursor:grab;touch-action:none}
 .sim-drag-zone-g.dragging{cursor:grabbing}
 .sim-drag-zone-g:hover .sim-drag-zone,.sim-drag-zone-g:focus .sim-drag-zone{fill:rgba(251,113,133,.18);outline:none}
@@ -346,6 +370,7 @@ svg.sim-sandbox-svg{width:100%;height:auto;display:block;background:#0a0a10;bord
   .result-actions .button{width:100%}
 }
 @media(max-width:620px){.sim-comp-grid{grid-template-columns:1fr}.sim-topo-controls,.sim-chunklab-actions,.sim-abrlab-actions,.sim-sandbox-toolbar{flex-direction:column}.sim-topo-controls .button,.sim-chunklab-actions .button,.sim-abrlab-actions .button,.sim-sandbox-toolbar select,.sim-sandbox-payload{width:100%}.sim-sandbox-layout{grid-template-columns:1fr}.sim-sandbox-palette{flex-direction:row;flex-wrap:wrap}.sim-palette-item{flex:1 1 72px}}
+@media(max-width:620px){.sim-video-player{grid-template-columns:1fr}.sim-video-stage{min-height:170px}}
 
 /* ---------- 上傳可視化實驗室 ---------- */
 .sim-uploadlab{margin-top:20px;padding:20px;background:rgba(22,22,31,.94);border:1px solid var(--border);border-radius:18px}

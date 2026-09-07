@@ -222,7 +222,7 @@
     return {
       month: 0, uptime: 100, qoe: 100, costEff: 100, choice: {}, usersServed: 0, speed: 1,
       chunk: null, chunkTimer: null,
-      abr: null, abrTimer: null,
+      abr: null, abrTimer: null, abrFetchHandle: null, abrGeneration: 0,
       // Optional 100-user traffic generator. One timer launches one randomized operation at a
       // time; requests already in flight keep finishing if the player stops the generator.
       randomTraffic: { active: false, launched: 0, total: 100, counts: { watch: 0, search: 0, upload: 0 } },
@@ -1871,6 +1871,7 @@
         // The test viewer's segment cadence is derived from the speed, so it has to be re-paced
         // rather than left running at the rate it was started with.
         state.repaceDragViewer?.();
+        state.repaceAbr?.();
       };
     });
   }
@@ -2463,158 +2464,341 @@
     if (state.upload.running) schedule();
   }
 
-  // ---------- Adaptive bitrate playback sandbox ----------
-  // A free-play "watch this play out" experiment, separate from the scripted monthly events:
-  // playback is cut into fixed-length segments, and each segment's quality is decided by the
-  // bandwidth the player *just* measured — the standard throughput-based ABR behaviour every
-  // real DASH/HLS video player uses. You can force the network to degrade or recover at any
-  // point and watch the quality (and, if the network is bad enough for long enough, the buffer)
-  // react in real time, one segment at a time.
+  // ---------- CDN/origin adaptive-bitrate playback comparison ----------
+  // Playback and downloading run on separate clocks, so a slow segment can genuinely exhaust
+  // the five-second buffer and make the player spin before ABR selects a smaller rendition.
 
   function renderAbrLab(sim) {
     const cs = sim.abrSim;
     if (!cs) return '';
     return `<section class="sim-abrlab">
-      <h2>📶 ${esc(cs.label || '自適應畫質播放實驗室')}</h2>
-      <p class="sim-abrlab-desc">${esc(cs.desc || '模擬播放一部影片，畫面切成一個個固定長度的片段：每段要用什麼畫質，由播放器當下量測到的頻寬決定。')}</p>
-      <div class="sim-abr-buffer-row"><span class="sim-abr-buffer-label">緩衝區</span><div class="sim-abr-buffer-track"><div class="sim-abr-buffer-fill" style="width:0%"></div></div></div>
-      <p class="sim-abr-status">尚未開始</p>
+      <h2>🎬 ${esc(cs.label || 'CDN 與美國來源站播放體驗')}</h2>
+      <p class="sim-abrlab-desc">${esc(cs.desc || '同一部影片每段只有 5 秒。比較從本地 CDN 命中與跨海回美國來源站時，下載時間如何消耗緩衝、造成轉圈圈，並觸發播放器自動降低解析度。')}</p>
+      <div class="sim-video-player idle" data-abr-player>
+        <div class="sim-video-stage">
+          <div class="sim-video-scene"><span class="sim-video-playmark">▶</span><b data-abr-screen-text>選一種來源開始播放</b></div>
+          <div class="sim-video-spinner" aria-label="重新緩衝中"></div>
+          <span class="sim-video-source" data-abr-source>尚未開始</span>
+          <span class="sim-video-quality" data-abr-quality>--</span>
+          <div class="sim-video-progress"><i data-abr-progress></i></div>
+          <span class="sim-video-time" data-abr-time>00:00 / 01:00</span>
+        </div>
+        <div class="sim-video-metrics">
+          <div><small>目前來源</small><strong data-abr-source-stat>--</strong></div>
+          <div><small>播放緩衝</small><strong data-abr-buffer-stat>0.0 秒</strong></div>
+          <div><small>目前片段</small><strong data-abr-segment-stat>--</strong></div>
+          <div><small>下載耗時</small><strong data-abr-download-stat>--</strong></div>
+        </div>
+      </div>
+      <div class="sim-abr-buffer-row"><span class="sim-abr-buffer-label">可播放緩衝</span><div class="sim-abr-buffer-track"><div class="sim-abr-buffer-fill" style="width:0%"></div></div></div>
+      <p class="sim-abr-status">先選擇「台灣 CDN 命中」或「跨海回美國來源站」。</p>
       <div class="sim-abr-strip"></div>
+      <div class="sim-abr-ball-legend"><span class="q-720p"></span>720p：球最大、位元組最多　<span class="q-480p"></span>480p　<span class="q-360p"></span>360p：球最小、下載最快</div>
       <div class="sim-abrlab-actions">
-        <button class="button secondary sim-abr-start" type="button">${esc(cs.startLabel || '▶ 開始播放')}</button>
-        <button class="button secondary sim-abr-degrade" type="button" disabled>🐌 模擬網路變差</button>
-        <button class="button secondary sim-abr-recover" type="button" disabled>🚀 模擬網路恢復</button>
+        <button class="button secondary sim-abr-cdn" type="button">⚡ 用台灣 CDN 命中播放</button>
+        <button class="button secondary sim-abr-origin" type="button">🌎 跨海回美國來源站播放</button>
+        <button class="button secondary sim-abr-stop" type="button" disabled>⏹ 停止播放</button>
       </div>
     </section>`;
   }
 
+  // Full playback experience model. Playback consumes one buffered second at a time while the
+  // next five-second media segment downloads independently across the real topology. This makes
+  // the causal chain visible: a 720p origin segment is large, crosses the slow US path, misses
+  // its five-second deadline, empties the buffer and produces a spinner; ABR then requests a
+  // smaller segment that travels faster and lets playback recover. A CDN hit follows the short
+  // local path and stays ahead of the playhead.
   function wireAbrLab(root, sim, state) {
     const cs = sim.abrSim;
     if (!cs) return;
-    // A previous mount may have left a ticking interval pointed at now-detached DOM nodes —
-    // always clear it before wiring the fresh one.
     if (state.abrTimer) { clearInterval(state.abrTimer); state.abrTimer = null; }
+    if (state.abrFetchHandle) {
+      state.abrFetchHandle.stop?.();
+      state.abrFetchHandle.circle?.remove();
+      state.abrFetchHandle = null;
+      if (state.abr) state.abr.fetching = false;
+    }
 
+    const player = root.querySelector('[data-abr-player]');
+    const screenText = root.querySelector('[data-abr-screen-text]');
+    const sourceBadge = root.querySelector('[data-abr-source]');
+    const qualityBadge = root.querySelector('[data-abr-quality]');
+    const progressFill = root.querySelector('[data-abr-progress]');
+    const timeText = root.querySelector('[data-abr-time]');
+    const sourceStat = root.querySelector('[data-abr-source-stat]');
+    const bufferStat = root.querySelector('[data-abr-buffer-stat]');
+    const segmentStat = root.querySelector('[data-abr-segment-stat]');
+    const downloadStat = root.querySelector('[data-abr-download-stat]');
     const bufferFill = root.querySelector('.sim-abr-buffer-fill');
     const status = root.querySelector('.sim-abr-status');
     const strip = root.querySelector('.sim-abr-strip');
-    const startBtn = root.querySelector('.sim-abr-start');
-    const degradeBtn = root.querySelector('.sim-abr-degrade');
-    const recoverBtn = root.querySelector('.sim-abr-recover');
-    if (!strip) return;
+    const cdnBtn = root.querySelector('.sim-abr-cdn');
+    const originBtn = root.querySelector('.sim-abr-origin');
+    const stopBtn = root.querySelector('.sim-abr-stop');
+    const svgEl = root.querySelector('svg.sim-topo');
+    if (!strip || !player || !svgEl) return;
 
     const ladder = cs.ladder;
     const segmentSec = cs.segmentSec || 5;
-    const maxBuffer = cs.maxBufferSec || 15;
+    const totalSegments = cs.segments || 12;
+    const totalDuration = totalSegments * segmentSec;
+    const maxBuffer = cs.maxBufferSec || 20;
+    const simSecondMs = cs.simSecondMs || 250;
+    const sources = {
+      cdn: {
+        label: '台灣 CDN 命中', short: 'CDN', throughput: 18, latency: 0.08,
+        ...(cs.sources?.cdn || {})
+      },
+      origin: {
+        label: '美國來源站（跨海回源）', short: '美國回源', throughput: 2.8, latency: 1.6,
+        ...(cs.sources?.origin || {})
+      }
+    };
+    const fmtTime = seconds => {
+      const value = Math.max(0, Math.floor(seconds || 0));
+      return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+    };
+    const segmentByIndex = (st, index) => st.segments.find(seg => seg.idx === index);
+    const activeSegmentIndex = st => Math.min(st.total, Math.floor(Math.min(st.playhead, totalDuration - 0.001) / segmentSec) + 1);
 
-    const setStatus = () => {
+    const paint = () => {
       const st = state.abr;
+      if (!st) return;
+      const activeIndex = activeSegmentIndex(st);
+      const activeSeg = segmentByIndex(st, activeIndex) || st.segments[st.segments.length - 1];
+      const currentQuality = ladder.find(q => q.id === activeSeg?.qualityId) || ladder[ladder.length - 1];
+      const profile = sources[st.mode];
+      const stalled = st.playing && st.buffer <= 0;
       bufferFill.style.width = `${clamp((st.buffer / maxBuffer) * 100)}%`;
       bufferFill.classList.toggle('low', st.buffer <= 2);
-      const curQ = ladder.find(q => q.id === st.qualityId);
-      status.textContent = st.idx >= st.total
-        ? `✅ 播放完成 · 共 ${st.total} 個片段`
-        : `播放中 · 第 ${st.idx}/${st.total} 段 · 目前畫質 ${curQ?.label || st.qualityId} · 緩衝 ${st.buffer.toFixed(1)} 秒`;
+      player.classList.toggle('stalled', stalled);
+      player.classList.toggle('playing', st.playing && !stalled);
+      player.classList.toggle('idle', !st.playing && st.playhead <= 0);
+      screenText.textContent = stalled ? '網路跟不上：重新緩衝中…' : st.finished ? '播放完成' : st.playing ? `正在播放第 ${activeIndex} 段` : '播放已停止';
+      sourceBadge.textContent = profile.label;
+      qualityBadge.textContent = currentQuality.label;
+      qualityBadge.className = `sim-video-quality q-${currentQuality.id}`;
+      progressFill.style.width = `${clamp((st.playhead / totalDuration) * 100)}%`;
+      timeText.textContent = `${fmtTime(st.playhead)} / ${fmtTime(totalDuration)}`;
+      sourceStat.textContent = `${profile.short} · ${profile.throughput.toFixed(1)} Mbps`;
+      bufferStat.textContent = `${st.buffer.toFixed(1)} 秒${stalled ? '（已耗盡）' : ''}`;
+      segmentStat.textContent = `${activeIndex}/${st.total} · ${currentQuality.label}`;
+      downloadStat.textContent = st.fetching
+        ? `第 ${st.fetching.idx} 段預估 ${st.fetching.downloadSec.toFixed(1)} 秒`
+        : st.lastDownloadSec ? `上一段 ${st.lastDownloadSec.toFixed(1)} 秒` : '--';
+      status.textContent = st.finished
+        ? `✅ 播放完成 · 轉圈圈 ${st.stalls} 次 · 最終畫質 ${currentQuality.label}`
+        : `${stalled ? '⏳ 轉圈圈' : '▶ 正常播放'} · 播放 ${st.playhead.toFixed(0)} 秒 · 緩衝 ${st.buffer.toFixed(1)} 秒 · 已收到 ${st.received}/${st.total} 個 5 秒片段`;
+      cdnBtn.classList.toggle('active', st.mode === 'cdn' && st.playing);
+      originBtn.classList.toggle('active', st.mode === 'origin' && st.playing);
+      stopBtn.disabled = !st.playing;
     };
 
     const appendSegBlock = seg => {
       const div = document.createElement('div');
-      div.className = `sim-abr-seg q-${seg.qualityId}${seg.stalled ? ' stalled' : ''}`;
-      div.textContent = ladder.find(q => q.id === seg.qualityId)?.label || seg.qualityId;
-      div.title = `第 ${seg.idx} 段 · 量測頻寬 ${seg.mbps.toFixed(1)} Mbps`;
+      div.className = `sim-abr-seg q-${seg.qualityId}${seg.causedStall ? ' stalled' : ''}`;
+      const quality = ladder.find(q => q.id === seg.qualityId);
+      div.textContent = `${seg.idx} · ${quality?.label || seg.qualityId}`;
+      div.title = seg.initial
+        ? '第 1 段已預先載入，可以先正常播放 5 秒'
+        : `第 ${seg.idx} 段 · ${seg.sizeMB.toFixed(2)} MB · 下載 ${seg.downloadSec.toFixed(1)} 秒`;
       strip.appendChild(div);
     };
 
-    const finish = () => {
-      clearInterval(state.abrTimer);
+    const stopPlayback = (finished = false, announce = true) => {
+      if (state.abrTimer) clearInterval(state.abrTimer);
       state.abrTimer = null;
-      startBtn.disabled = false;
-      degradeBtn.disabled = true;
-      recoverBtn.disabled = true;
-      setStatus();
-      const stalls = state.abr.segments.filter(s => s.stalled).length;
-      traceLine(root, `— 播放結束，共 ${state.abr.total} 個片段，其中 ${stalls} 次卡頓重新緩衝 —`, 'done');
-    };
-
-    const tickAbr = () => {
+      if (state.abrFetchHandle) {
+        state.abrFetchHandle.stop?.();
+        state.abrFetchHandle.circle?.remove();
+        state.abrFetchHandle = null;
+      }
       const st = state.abr;
-      if (st.idx >= st.total) { finish(); return; }
-      const [lo, hi] = st.condition === 'poor' ? (cs.poorMbpsRange || [0.4, 1.6]) : (cs.goodMbpsRange || [4.0, 7.5]);
-      const measured = lo + Math.random() * (hi - lo);
-      const curIdx = Math.max(0, ladder.findIndex(q => q.id === st.qualityId));
-      // The highest tier the measured throughput can actually sustain right now.
-      let sustainableIdx = 0;
+      if (!st) return;
+      st.playing = false;
+      st.fetching = false;
+      st.finished = finished;
+      state.abrGeneration += 1;
+      paint();
+      if (announce) traceLine(root, finished
+        ? `— 影片播放完成：${sources[st.mode].label}，共轉圈圈 ${st.stalls} 次，最後播放畫質 ${st.lastQualityLabel} —`
+        : `⏹ 已停止播放比較（${sources[st.mode].label}）。`, finished ? 'done' : '');
+    };
+
+    const chooseNextQuality = (st, profile, downloadSec) => {
+      // Throughput alone is insufficient: latency is included so a nominally sustainable 480p
+      // segment that still arrives after its five-second deadline is correctly rejected.
+      let sustainable = 0;
       for (let i = ladder.length - 1; i >= 0; i--) {
-        if (measured >= ladder[i].mbps * 0.9) { sustainableIdx = i; break; }
+        const projected = profile.latency + (ladder[i].mbps * segmentSec) / profile.throughput;
+        if (projected <= segmentSec * 0.86) { sustainable = i; break; }
       }
-      // Step down (possibly more than one tier at once) whenever the current tier isn't
-      // sustainable; step up only ONE tier at a time even with plenty of headroom to spare —
-      // real ABR players are conservative about climbing back up right after a drop.
-      let nextIdx;
-      if (sustainableIdx < curIdx) nextIdx = sustainableIdx;
-      else if (curIdx < ladder.length - 1 && measured > ladder[curIdx + 1].mbps * 1.3) nextIdx = curIdx + 1;
-      else nextIdx = curIdx;
-      const chosen = ladder[nextIdx];
-      const downloadTimeSec = (chosen.mbps * segmentSec) / measured;
-      st.buffer = downloadTimeSec > segmentSec
-        ? st.buffer - (downloadTimeSec - segmentSec)
-        : Math.min(maxBuffer, st.buffer + (segmentSec - downloadTimeSec));
-      let stalled = false;
-      if (st.buffer <= 0) {
-        stalled = true;
-        st.buffer = 1; // small grace buffer so playback can resume next tick
-        nextIdx = 0; // be maximally conservative right after a stall
-      }
-      st.qualityId = ladder[nextIdx].id;
-      st.idx += 1;
-      const seg = { idx: st.idx, qualityId: ladder[nextIdx].id, mbps: measured, stalled };
-      st.segments.push(seg);
-      appendSegBlock(seg);
-      if (stalled) {
-        traceLine(root, `⚠️ 第 ${seg.idx} 段：緩衝區見底，播放卡頓！量測頻寬僅 ${measured.toFixed(1)} Mbps，畫質降到最低的「${ladder[0].label}」重新開始累積緩衝。`, 'bad');
-      } else {
-        const tone = nextIdx === curIdx ? '' : nextIdx < curIdx ? 'bad' : 'ok';
-        traceLine(root, `第 ${seg.idx}/${st.total} 段（第 ${(seg.idx - 1) * segmentSec}–${seg.idx * segmentSec} 秒）：量測頻寬 ${measured.toFixed(1)} Mbps，選擇畫質「${chosen.label}」`, tone);
-      }
-      setStatus();
-      if (st.idx >= st.total) finish();
+      const current = Math.max(0, ladder.findIndex(q => q.id === st.fetchQualityId));
+      if (downloadSec > segmentSec || st.buffer <= segmentSec) return Math.min(current, sustainable);
+      return sustainable > current ? current + 1 : sustainable;
     };
 
-    const start = () => {
-      state.abr = { idx: 0, total: cs.segments, qualityId: ladder[ladder.length - 1].id, buffer: maxBuffer * 0.4, condition: 'normal', segments: [] };
+    const fetchNext = generation => {
+      const st = state.abr;
+      if (!st?.playing || generation !== state.abrGeneration || st.fetching || st.received >= st.total || st.buffer >= maxBuffer) return;
+      const profile = sources[st.mode];
+      const quality = ladder.find(q => q.id === st.fetchQualityId) || ladder[ladder.length - 1];
+      const index = st.received + 1;
+      const sizeMbit = quality.mbps * segmentSec;
+      const sizeMB = sizeMbit / 8;
+      const downloadSec = profile.latency + sizeMbit / profile.throughput;
+      st.fetching = { idx: index, qualityId: quality.id, downloadSec, sizeMB };
+      paint();
+
+      const r = state.dragViewer?.regionId || 'tw';
+      const flowIds = st.mode === 'cdn'
+        ? [`users_${r}`, `cdn_${r}`, `users_${r}`]
+        : [`users_${r}`, `loadBalancer_${r}`, `streamServer_${r}`, 'transcodedStorage', `streamServer_${r}`, `loadBalancer_${r}`, `users_${r}`];
+      const wasStalled = st.buffer <= 0;
+      traceLine(root, `🎞️ 請求第 ${index}/${st.total} 段 ${quality.label}：${sizeMB.toFixed(2)} MB，從${profile.label}預估要 ${downloadSec.toFixed(1)} 秒。`, st.mode === 'origin' && downloadSec > segmentSec ? 'bad' : '');
+      let previousId = '';
+      let previousMachine = null;
+      const handle = spawnRequest(root, sim, state, svgEl, flowIds, {
+        trace: false,
+        mapPoint: (nodeId, point) => nodeId === `users_${r}` && state.dragViewer
+          ? { x: state.dragViewer.x, y: state.dragViewer.y }
+          : point,
+        token: {
+          tokenClass: 'sim-token-segment',
+          className: `q-${quality.id}`,
+          radius: 5 + Math.max(0, ladder.findIndex(q => q.id === quality.id)) * 4,
+          durationMs: Math.max(220, downloadSec * simSecondMs / (state.speed || 1)),
+          onHop: (hopIndex, machine, nodeId) => {
+            flashTopologyHop(root, previousId, nodeId, previousMachine, machine);
+            previousId = nodeId;
+            previousMachine = machine;
+          },
+          onDone: circle => {
+            circle?.remove();
+            if (generation !== state.abrGeneration || !state.abr?.playing) return;
+            state.abrFetchHandle = null;
+            const live = state.abr;
+            const seg = { idx: index, qualityId: quality.id, sizeMB, downloadSec, causedStall: wasStalled || live.buffer <= 0 };
+            live.fetching = false;
+            live.received = index;
+            live.lastDownloadSec = downloadSec;
+            live.buffer = Math.min(maxBuffer, live.buffer + segmentSec);
+            live.segments.push(seg);
+            appendSegBlock(seg);
+            const nextIdx = chooseNextQuality(live, profile, downloadSec);
+            const nextQuality = ladder[nextIdx];
+            if (nextQuality.id !== quality.id) {
+              const lower = nextIdx < ladder.findIndex(q => q.id === quality.id);
+              traceLine(root, `📉 第 ${index} 段下載 ${downloadSec.toFixed(1)} 秒${downloadSec > segmentSec ? `，超過片段本身的 ${segmentSec} 秒` : ''}；ABR 下一段從 ${quality.label} 改抓 ${nextQuality.label}（球會更小、傳得更快）。`, lower ? 'bad' : 'ok');
+            }
+            live.fetchQualityId = nextQuality.id;
+            if (live.stallActive && live.buffer > 0) {
+              live.stallActive = false;
+              traceLine(root, `▶ 第 ${index} 段終於抵達，累積 ${live.buffer.toFixed(0)} 秒緩衝，停止轉圈並恢復播放。`, 'ok');
+            }
+            paint();
+            fetchNext(generation);
+          }
+        },
+        onLost: () => {
+          if (generation !== state.abrGeneration || !state.abr) return;
+          state.abr.fetching = false;
+          state.abrFetchHandle = null;
+          traceLine(root, `💥 第 ${index} 段傳輸失敗，播放器會保持轉圈並重新請求。`, 'bad');
+          paint();
+          setTimeout(() => fetchNext(generation), 260 / (state.speed || 1));
+        },
+        onBlocked: () => {
+          if (generation !== state.abrGeneration || !state.abr) return;
+          state.abr.fetching = false;
+          state.abrFetchHandle = null;
+          paint();
+        }
+      });
+      state.abrFetchHandle = handle;
+    };
+
+    const playbackTick = generation => {
+      const st = state.abr;
+      if (!st?.playing || generation !== state.abrGeneration) return;
+      if (st.buffer > 0) {
+        const beforeIndex = activeSegmentIndex(st);
+        st.buffer = Math.max(0, st.buffer - 1);
+        st.playhead = Math.min(totalDuration, st.playhead + 1);
+        const afterIndex = activeSegmentIndex(st);
+        if (afterIndex !== beforeIndex) {
+          const seg = segmentByIndex(st, afterIndex);
+          if (seg) {
+            const quality = ladder.find(item => item.id === seg.qualityId);
+            st.lastQualityLabel = quality?.label || seg.qualityId;
+            traceLine(root, `📺 播放進入第 ${afterIndex} 段，畫面解析度現在是 ${st.lastQualityLabel}。`);
+          }
+        }
+      } else if (!st.stallActive) {
+        st.stallActive = true;
+        st.stalls += 1;
+        traceLine(root, `⏳ 播到 ${st.playhead.toFixed(0)} 秒時，5 秒緩衝已用完，但下一段還沒下載完成——畫面開始轉圈圈。`, 'bad');
+      }
+      if (st.playhead >= totalDuration) {
+        stopPlayback(true);
+        return;
+      }
+      paint();
+      fetchNext(generation);
+    };
+
+    const start = mode => {
+      stopPlayback(false, false);
+      // Choosing the CDN comparison also visibly builds the CDN if it is currently absent.
+      if (mode === 'cdn' && currentOptionId(sim, 'cdnTier', state) === 'off') {
+        const option = findComponent(sim, 'cdnTier')?.options.find(item => item.id !== 'off');
+        if (option) {
+          state.choice.cdnTier = option.id;
+          updateComponentVisual(root, sim, state, 'cdnTier');
+          refreshLoadSummary(root, sim, state);
+          traceLine(root, `⚡ 比較器已啟用「${option.label}」，上方 CDN 圓球同步變成打勾。`, 'ok');
+        }
+      }
+      if (state.dragViewerTimer) clearTimeout(state.dragViewerTimer);
+      state.dragViewerTimer = null;
+      state.dragViewerGen = (state.dragViewerGen || 0) + 1;
+      const generation = ++state.abrGeneration;
+      const firstQuality = ladder[ladder.length - 1];
+      state.abr = {
+        mode, playing: true, finished: false, playhead: 0, buffer: segmentSec,
+        total: totalSegments, received: 1, fetching: false, stalls: 0, stallActive: false,
+        fetchQualityId: firstQuality.id, lastQualityLabel: firstQuality.label, lastDownloadSec: 0,
+        segments: [{ idx: 1, qualityId: firstQuality.id, sizeMB: firstQuality.mbps * segmentSec / 8, downloadSec: 0, initial: true }]
+      };
       strip.innerHTML = '';
-      startBtn.disabled = true;
-      degradeBtn.disabled = false;
-      recoverBtn.disabled = true;
-      traceLine(root, `— 開始播放：${cs.label || '影片'}（共 ${cs.segments} 個 ${segmentSec} 秒片段，起始畫質「${ladder[ladder.length - 1].label}」）—`, 'head');
-      setStatus();
-      state.abrTimer = setInterval(tickAbr, (cs.tickMs || 650) / (state.speed || 1));
+      appendSegBlock(state.abr.segments[0]);
+      traceLine(root, `— 從${sources[mode].label}開始播放：第一個 ${segmentSec} 秒的 ${firstQuality.label} 片段已在播放器內，所以前五秒一定正常；同時立刻下載第 2 段 —`, 'head');
+      paint();
+      fetchNext(generation);
+      state.abrTimer = setInterval(() => playbackTick(generation), simSecondMs / (state.speed || 1));
     };
 
-    startBtn.onclick = start;
-    degradeBtn.onclick = () => {
-      state.abr.condition = 'poor';
-      degradeBtn.disabled = true;
-      recoverBtn.disabled = false;
-      traceLine(root, '📉 模擬網路狀況變差（頻寬大幅下降）', 'bad');
-    };
-    recoverBtn.onclick = () => {
-      state.abr.condition = 'normal';
-      recoverBtn.disabled = true;
-      degradeBtn.disabled = false;
-      traceLine(root, '📈 模擬網路狀況恢復正常', 'ok');
+    cdnBtn.onclick = () => start('cdn');
+    originBtn.onclick = () => start('origin');
+    stopBtn.onclick = () => stopPlayback(false);
+    state.repaceAbr = () => {
+      if (state.abrTimer) clearInterval(state.abrTimer);
+      state.abrTimer = null;
+      if (!state.abr?.playing) return;
+      const generation = state.abrGeneration;
+      state.abrTimer = setInterval(() => playbackTick(generation), simSecondMs / (state.speed || 1));
     };
 
-    // Restore the panel if playback was already in progress before this re-render.
+    // A topology rebuild keeps the same playback state. The detached packet is restarted for
+    // the current segment against the newly positioned nodes, while the player clock resumes.
     if (state.abr) {
-      const finished = state.abr.idx >= state.abr.total;
-      startBtn.disabled = !finished;
-      degradeBtn.disabled = finished || state.abr.condition === 'poor';
-      recoverBtn.disabled = finished || state.abr.condition === 'normal';
       state.abr.segments.forEach(appendSegBlock);
-      setStatus();
-      if (!finished) {
-        state.abrTimer = setInterval(tickAbr, (cs.tickMs || 650) / (state.speed || 1));
+      paint();
+      if (state.abr.playing) {
+        const generation = ++state.abrGeneration;
+        state.abr.fetching = false;
+        state.abrTimer = setInterval(() => playbackTick(generation), simSecondMs / (state.speed || 1));
+        fetchNext(generation);
       }
     }
   }
@@ -2860,6 +3044,9 @@
     // segment after the decision, and you can watch the small red packet travel across the
     // diagram before the label follows it down. Real players behave this way.
     const tick = () => {
+      // The explicit CDN-vs-origin player owns the same viewer while it is running. Keep this
+      // background probe alive but quiet, then resume it after the comparison stops.
+      if (state.abr?.playing) { scheduleNext(); return; }
       stepWander();
       const dv = state.dragViewer;
       const r = dv.regionId;
@@ -3109,6 +3296,14 @@
 
     root.querySelector('.sim-advance').onclick = () => {
       stopRandomTraffic(root, state, false);
+      if (state.abrTimer) clearInterval(state.abrTimer);
+      state.abrTimer = null;
+      if (state.abrFetchHandle) {
+        state.abrFetchHandle.stop?.();
+        state.abrFetchHandle.circle?.remove();
+        state.abrFetchHandle = null;
+      }
+      if (state.abr) state.abr.playing = false;
       if (state.month >= sim.months) {
         state.phase = 'summary';
         return render(root, sim, state);
@@ -3223,6 +3418,8 @@
     root.querySelector('.sim-restart').onclick = () => {
       if (state.chunkTimer) clearInterval(state.chunkTimer);
       if (state.abrTimer) clearInterval(state.abrTimer);
+      state.abrFetchHandle?.stop?.();
+      state.abrFetchHandle?.circle?.remove();
       if (state.dragViewerTimer) clearTimeout(state.dragViewerTimer);
       Object.assign(state, newState(sim));
       render(root, sim, state);
