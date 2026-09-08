@@ -4138,7 +4138,7 @@
       renderSandbox(root, sandboxState);
       return;
     }
-    if (chapterId === 'sd-book-14' && params.get('mode') !== 'lesson' && window.mountYouTubeWorld) {
+    if (chapterId === 'sd-book-14' && params.get('mode') === 'world' && window.mountYouTubeWorld) {
       window.mountYouTubeWorld(root);
       return;
     }

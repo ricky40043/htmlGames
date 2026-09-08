@@ -13,11 +13,11 @@
         let dragging = null;
         const option = (id, label) => `<option value="${esc(id)}">${esc(label)}</option>`;
         root.innerHTML = `<section class="yw-app">
-            <div class="yw-heading"><div><span class="yw-eyebrow">CHAPTER 14 / LIVE WORLD</span><h1>YouTube 系統設計遊樂園</h1><p>預設每個區域 1 位使用者持續活動。點一個人追蹤體驗，點一台機器查看與處理故障。</p></div><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson">12 月課程關卡 ↗</a></div>
+            <div class="yw-heading"><div><span class="yw-eyebrow">CHAPTER 14 / LIVE WORLD</span><h1>YouTube 系統設計遊樂園</h1><p>全場預設只有我的角色 1 人，每次可新增 1～10 人。點一個人追蹤體驗，點一台機器查看與處理故障。</p></div><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson">12 月課程關卡 ↗</a></div>
             <div class="yw-toolbar" aria-label="世界控制"><button data-action="pause">暫停世界</button><button data-action="step">單步 0.1 秒</button><label>速度 <select id="yw-speed">${[1,5,20].map(n=>option(n,n+'x')).join('')}</select></label><strong id="yw-clock">00:00</strong><span>1x = 真實時間</span><label>種子 <input id="yw-seed" type="number" value="14" min="1" max="4294967295"></label><button data-action="reset">同種子重新開始</button><span id="yw-notice" role="status"></span></div>
             <div class="yw-metrics" id="yw-metrics"></div>
             <div class="yw-workspace"><div class="yw-main">
-                <div class="yw-build"><label>人群所在地 <select id="yw-group-region"></select></label><button data-action="add-users">＋100 位使用者</button><label>新據點名稱 <input id="yw-region-name" maxlength="24" placeholder="例如：新加坡"></label><button data-action="add-region">建立服務據點</button></div>
+                <div class="yw-build"><label>人群所在地 <select id="yw-group-region"></select></label><label>新增人數 <select id="yw-add-count">${Array.from({length:10},(_,i)=>`<option value="${i+1}">${i+1} 人</option>`).join('')}</select></label><button data-action="add-users">新增使用者</button><label>新據點名稱 <input id="yw-region-name" maxlength="24" placeholder="例如：新加坡"></label><button data-action="add-region">建立服務據點</button></div>
                 <div class="yw-options">${[['cdn','啟用 CDN 快取'],['arrivals','持續進出與使用'],['wander','觀眾隨機走動'],['autoFaults','定期隨機故障'],['autoRepair','25 秒後自動修復'],['resumable','保留已確認上傳塊'],['directUpload','预簽 URL 直接上傳']].map(([id,label])=>`<label><input type="checkbox" data-option="${id}" ${world.options[id]?'checked':''}>${label.replace('预','預')}</label>`).join('')}</div>
                 <div class="yw-legend"><span>● 播放</span><span>◌ 緩衝／等待</span><span>↑ 上傳／轉碼</span><span>斜線區：最後一哩嚴重弱網</span><span id="yw-sampling"></span></div>
                 <div class="yw-topology"><svg id="yw-links" class="yw-links" aria-hidden="true"></svg><div id="yw-regions" class="yw-regions"></div>
@@ -202,7 +202,7 @@
                 case 'search': world.search(u.id);break;
                 case 'watch': world.watch(u.id,el('watch-video').value);break;
                 case 'upload': notice(world.upload(u.id)?'已建立上傳；在影片生命週期查看每一塊與轉碼任務。':'此人正在上傳，或進行中影片已達上限。');break;
-                case 'add-users': world.addUsers(100,el('group-region').value);notice(`世界共 ${world.users.length} 人（上限 500），包含我的角色。`);break;
+                case 'add-users': world.addUsers(Math.max(1,Math.min(10,Number(el('add-count').value)||1)),el('group-region').value);notice(`世界共 ${world.users.length} 人（上限 500），包含我的角色。`);break;
                 case 'add-region': notice(world.addRegion(el('region-name').value)?'服務據點已建立；人口位置不變，可調整服務路由。':'請輸入不重複名稱，最多 6 個據點。');break;
                 case 'toggle-machine': if(m)world.setMachine(m.id,!m.up);break;
                 case 'add-machine': if(m)notice(world.addMachine(m.kind,m.region)?'已新增同區機器，共用佇列開始分流。':'同類機器每區最多 8 台。');break;
