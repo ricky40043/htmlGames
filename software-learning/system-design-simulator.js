@@ -949,7 +949,7 @@
   };
 
   function rowsTableHtml(table) {
-    const rows = (table.rows || []).slice(-20).reverse();
+    const rows = table.newestFirst ? (table.rows || []).slice(0, 20) : (table.rows || []).slice(-20).reverse();
     const schemaFields = (table.schema || []).map(field => typeof field === 'string' ? field : field.name);
     const rowFields = rows.flatMap(row => Object.keys(row || {}));
     const fields = [...new Set([...schemaFields, ...rowFields])].slice(0, 9);
@@ -995,7 +995,7 @@
     }));
     const title = requestMode ? 'Request 總覽' : store.label;
     const content = requestMode
-      ? rowsTableHtml({ label: 'requests', rows: requestRows, schema: [
+      ? rowsTableHtml({ label: 'requests', newestFirst: true, rows: requestRows, schema: [
           { name: 'request_id', type: 'string', note: '每按一次操作就建立新的唯一 ID' },
           { name: 'type', type: 'enum', note: 'upload / watch / search' },
           { name: 'status', type: 'enum', note: 'running / completed / failed' },
@@ -4136,6 +4136,10 @@
       const sandboxState = loadSandboxState();
       window.__simTestHooks.stateRef = () => sandboxState;
       renderSandbox(root, sandboxState);
+      return;
+    }
+    if (chapterId === 'sd-book-14' && params.get('mode') !== 'lesson' && window.mountYouTubeWorld) {
+      window.mountYouTubeWorld(root);
       return;
     }
     const sim = window.SYSTEM_DESIGN_SIM?.[chapterId];
