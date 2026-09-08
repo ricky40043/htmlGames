@@ -13,7 +13,7 @@
         let dragging = null;
         const option = (id, label) => `<option value="${esc(id)}">${esc(label)}</option>`;
         root.innerHTML = `<section class="yw-app">
-            <div class="yw-heading"><div><span class="yw-eyebrow">CHAPTER 14 / LIVE WORLD</span><h1>YouTube 系統設計遊樂園</h1><p>100 位使用者持續活動。點一個人追蹤體驗，點一台機器查看與處理故障。</p></div><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson">12 月課程關卡 ↗</a></div>
+            <div class="yw-heading"><div><span class="yw-eyebrow">CHAPTER 14 / LIVE WORLD</span><h1>YouTube 系統設計遊樂園</h1><p>預設每個區域 1 位使用者持續活動。點一個人追蹤體驗，點一台機器查看與處理故障。</p></div><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson">12 月課程關卡 ↗</a></div>
             <div class="yw-toolbar" aria-label="世界控制"><button data-action="pause">暫停世界</button><button data-action="step">單步 0.1 秒</button><label>速度 <select id="yw-speed">${[1,5,20].map(n=>option(n,n+'x')).join('')}</select></label><strong id="yw-clock">00:00</strong><span>1x = 真實時間</span><label>種子 <input id="yw-seed" type="number" value="14" min="1" max="4294967295"></label><button data-action="reset">同種子重新開始</button><span id="yw-notice" role="status"></span></div>
             <div class="yw-metrics" id="yw-metrics"></div>
             <div class="yw-workspace"><div class="yw-main">
@@ -194,7 +194,7 @@
             switch(b.dataset.action) {
                 case 'pause': paused=!paused;accumulator=0;break;
                 case 'step': paused=true;world.step(0.1);accumulator=0;break;
-                case 'reset': world=new World(Number(el('seed').value));selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;accumulator=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});el('machine-detail').textContent='點選機器查看';notice('已用同種子重建 100 人世界，暫停中。');break;
+                case 'reset': world=new World(Number(el('seed').value));selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;accumulator=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});el('machine-detail').textContent='點選機器查看';notice('已用同種子重置世界，暫停中。');break;
                 case 'my-user': selectedUser=1;selectedMachine=null;break;
                 case 'clear-machine': selectedMachine=null;break;
                 case 'weak': world.moveUser(u.id,u.region,.78,.75);break;

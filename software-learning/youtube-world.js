@@ -11,7 +11,7 @@
     const LADDER = [{ id: '360p', mbps: 1 }, { id: '480p', mbps: 2.5 }, { id: '720p', mbps: 5 }];
     const TYPES = { stream: '串流', api: 'API', cdn: 'CDN', storage: '物件儲存', worker: '轉碼 Worker', db: 'Metadata DB' };
     class World {
-        constructor(seed = 14, population = 100) {
+        constructor(seed = 14, population = null) {
             this.seed = seed >>> 0 || 14;
             this.randomState = this.seed;
             this.time = 0;
@@ -31,7 +31,11 @@
             this.addMachine('storage', 'us'); this.addMachine('db', 'us');
             this.addMachine('worker', 'us'); this.addMachine('worker', 'us');
             for (let i = 0; i < 3; i++) this.videos.push({ id: `video-${++this.seq.video}`, title: ['系統設計入門', '世界旅行', '城市日常'][i], status: 'ready', renditions: LADDER.map(q => q.id), views: 0, jobs: [], chunks: [] });
-            this.addUsers(population);
+            if (typeof population === 'number') {
+                this.addUsers(population);
+            } else {
+                this.regions.forEach(r => this.addUsers(1, r.id));
+            }
         }
         random() {
             this.randomState = (1664525 * this.randomState + 1013904223) >>> 0;
