@@ -260,7 +260,7 @@
       runtime: Runtime?.createRuntime(dataModelOf(sim)) || {
         requestSeq: 0, counts: {}, requests: [], nodeActivity: {}, routeCursor: {}, stores: {}
       },
-      log: [], history: [{ month: 0, uptime: 100, qoe: 100 }], phase: 'briefing'
+      log: [], history: [{ month: 0, uptime: 100, qoe: 100 }], phase: 'briefing', summarySaved: null
     };
   }
 
@@ -3519,7 +3519,7 @@
   function renderSummary(root, sim, state) {
     const score = Math.round(state.uptime * 0.4 + state.qoe * 0.35 + state.costEff * 0.25);
     const grade = sim.grade(score);
-    const saved = saveProgress(sim.chapterId, { score, grade: grade.letter });
+    const saved = state.summarySaved || (state.summarySaved = saveProgress(sim.chapterId, { score, grade: grade.letter }));
     const lab = labels(sim);
     root.innerHTML = `<section class="sim-screen sim-summary">
       <div class="eyebrow">今年結束</div>
@@ -4150,6 +4150,32 @@
     }
     document.title = `模擬關卡｜${sim.title}`;
     const state = newState(sim);
+    if (chapterId === 'sd-book-14' && window.YouTubeModes) {
+      const keys = ['month', 'uptime', 'qoe', 'costEff', 'choice', 'usersServed', 'speed', 'extraInstances', 'instancePositions', 'showConnections', 'instanceDown', 'regionWeight', 'nextRegionSeq', 'nextGroupSeq', 'badZone', 'log', 'history', 'phase', 'summarySaved'];
+      const saved = window.YouTubeModes.load();
+      if (saved?.lesson) {
+        keys.forEach(key => { if (saved.lesson[key] !== undefined) state[key] = saved.lesson[key]; });
+        if (saved.topo) state.topo = { ...state.topo, ...saved.topo };
+        if (saved.dragViewer) state.dragViewer = { ...state.dragViewer, ...saved.dragViewer, wander: false };
+        if (saved.runtime) {
+          state.runtime = Runtime.hydrateRuntime(saved.runtime, dataModelOf(sim));
+          state.runtime.requests.forEach(request => {
+            if (request.status === 'running') { request.status = 'failed'; request.finishedAt = '切換頁面'; }
+          });
+        }
+        if (state.phase === 'event') {
+          state.pendingEvent = sim.events.find(event => event.month === state.month);
+          if (!state.pendingEvent || state.log.some(entry => entry.month === state.month && entry.title === state.pendingEvent.title)) state.phase = 'play';
+        }
+        window.YouTubeModes.notice('已恢復課程進度、架構設定與資料；教學動畫可重新啟動。');
+      }
+      window.YouTubeModes.register(() => ({
+        lesson: Object.fromEntries(keys.map(key => [key, state[key]])),
+        topo: state.topo,
+        dragViewer: state.dragViewer,
+        runtime: state.runtime
+      }));
+    }
     // The live state object, so the automated tests can assert on the same architecture the
     // screen is actually rendering (jsdom has no way to read it back out of the SVG).
     window.__simTestHooks.stateRef = () => state;

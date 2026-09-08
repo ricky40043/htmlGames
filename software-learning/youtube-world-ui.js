@@ -11,6 +11,17 @@
         let world = new World(14), selectedUser = 1, selectedMachine = null, paused = false, speed = 1, requestPage = 0, requestFilter = 'all', selectedRequest = null;
         let last = performance.now(), accumulator = 0, painted = 0, regionSignature = '', userSignature = '', machineSignature = '', videoSignature = '', inspectorSignature = '', requestPaint = 0;
         let dragging = null;
+        const savedMode = window.YouTubeModes?.load();
+        if (savedMode?.world?.users?.length && savedMode.world.cache instanceof Set) {
+            world = Object.assign(new World(savedMode.world.seed, 0), savedMode.world);
+            selectedUser = world.user(savedMode.selectedUser)?.id || 1;
+            selectedMachine = savedMode.selectedMachine || null;
+            selectedRequest = savedMode.selectedRequest || null;
+            speed = savedMode.speed || 1;
+            paused = true;
+            window.YouTubeModes.notice('已恢復實際運作進度，暫停中；按「繼續世界」接著觀察。');
+        }
+        window.YouTubeModes?.register(() => ({ world, selectedUser, selectedMachine, selectedRequest, speed }));
         const option = (id, label) => `<option value="${esc(id)}">${esc(label)}</option>`;
         root.innerHTML = `<section class="yw-app">
             <div class="yw-heading"><div><span class="yw-eyebrow">CHAPTER 14 / LIVE WORLD</span><h1>YouTube 系統設計遊樂園</h1><p>全場預設只有我的角色 1 人，每次可新增 1～10 人。點一個人追蹤體驗，點一台機器查看與處理故障。</p></div><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson">12 月課程關卡 ↗</a></div>
@@ -231,6 +242,8 @@
             if(!paused&&!document.hidden){accumulator+=dt*speed;while(accumulator>=.1){world.step(.1);accumulator-=.1;}}
             if(now-painted>250){paint();painted=now;}requestAnimationFrame(frame);
         }
+        el('speed').value = speed;
+        root.querySelectorAll('[data-option]').forEach(c => { c.checked = world.options[c.dataset.option]; });
         paint(true);requestAnimationFrame(frame);
     };
 })();
