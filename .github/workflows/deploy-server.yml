@@ -50,12 +50,28 @@ jobs:
 
             /home/ricky/deployments/scripts/deploy-app.sh htmlGames
 
-            echo "== Smoke test deployed terminology assets =="
-            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-terms.js?v=terms-clean-20260820-teaching'
-            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-glossary.js?v=teaching-20260820'
-            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book-teaching-guides.js?v=cat-20260905a'
-            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book-translation-overrides.js?v=alignment-20260905'
-            curl -fsS http://127.0.0.1:20600/software-learning/system-design-chapter.html | grep -F 'system-design-book.js?v=flows-20260905d'
-            curl -fsS -o /dev/null 'http://127.0.0.1:20600/software-learning/system-design-terms.js?v=terms-clean-20260820-teaching'
-            curl -fsS -o /dev/null 'http://127.0.0.1:20600/software-learning/data/system-design-book-translation-overrides.js?v=alignment-20260905'
+            # 這裡原本把快取版本號寫死（例如 system-design-book.js?v=flows-20260905d），
+            # 所以每次有人正常地升級快取版本，部署就會紅一次——實際上容器已經換好了，
+            # 只是這個檢查在比對一個過期的字串。改成與版本號無關：
+            #   1. 該有的教材資源有沒有被頁面引用（不管它掛的是哪一版）
+            #   2. 頁面上引用到的每一個 js/css 是不是真的抓得到
+            # 第 2 點比原本更嚴格，版本號打錯、檔案漏掉都會被擋下來。
+            echo "== Smoke test deployed assets =="
+            BASE=http://127.0.0.1:20600/software-learning
+            fail=0
+            for page in system-design-chapter.html system-design-simulator.html; do
+              body=$(curl -fsS "$BASE/$page") || { echo "FAIL: 取不到 $page"; fail=1; continue; }
+              for asset in system-design-terms.js system-design-glossary.js \
+                           system-design-book-teaching-guides.js \
+                           system-design-book-translation-overrides.js system-design-book.js; do
+                case "$page" in
+                  system-design-chapter.html)
+                    printf '%s' "$body" | grep -qF "$asset?v=" || { echo "FAIL: $page 沒有引用 $asset"; fail=1; } ;;
+                esac
+              done
+              for rel in $(printf '%s' "$body" | grep -oE '(src|href)="[^"]+\.(js|css)\?v=[^"]*"' | sed -E 's/^[a-z]+="//; s/"$//'); do
+                curl -fsS -o /dev/null "$BASE/$rel" || { echo "FAIL: $page 引用的 $rel 抓不到"; fail=1; }
+              done
+            done
+            [ "$fail" -eq 0 ] || exit 1
             echo "Terminology and readability assets served from running container."
