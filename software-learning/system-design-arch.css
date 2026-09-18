@@ -1,0 +1,267 @@
+/* 互動架構圖（arch）與逐頁即時互動（probe）
+   設計原則：一頁一張真正的架構圖，節點可點、資料流可逐步播放，
+   而不是把書上的方塊圖降級成 ASCII 或條列。 */
+
+.book-arch{
+  margin:22px 0;
+  border:1px solid var(--border);
+  border-radius:16px;
+  background:linear-gradient(145deg,#0b0c14,#10111c);
+  overflow:hidden;
+}
+
+.book-arch-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  padding:13px 15px;
+  border-bottom:1px solid var(--border);
+  background:rgba(110,168,254,.055);
+}
+.book-arch-head>div{display:grid;gap:3px;min-width:0}
+.book-arch-head strong{font-size:.9rem;line-height:1.4}
+.book-arch-head small{color:var(--muted);font-size:.71rem;line-height:1.5}
+
+.book-arch-flows{display:flex;gap:7px;flex-wrap:wrap;flex-shrink:0}
+.book-arch-flows button{
+  padding:7px 12px;
+  border-radius:999px;
+  border:1px solid #343449;
+  background:var(--panel-2);
+  color:#d7d7e2;
+  font-size:.73rem;
+  font-weight:700;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:border-color .18s ease,background .18s ease,color .18s ease;
+}
+.book-arch-flows button:hover{border-color:#4a4a66}
+.book-arch-flows button.active{
+  border-color:#60a5fa;
+  background:rgba(96,165,250,.18);
+  color:#bfdbfe;
+}
+
+/* ---- 畫布：節點用 grid 排版，連線用 SVG 疊在上面 ---- */
+.book-arch-stage{position:relative;padding:20px 18px;overflow-x:auto}
+.book-arch-canvas{position:relative;min-width:520px}
+
+.book-arch-lines{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  overflow:visible;
+  z-index:0;
+}
+.book-arch-line{
+  fill:none;
+  stroke:#3a3b52;
+  stroke-width:1.7;
+  transition:stroke .22s ease,stroke-width .22s ease,opacity .22s ease;
+}
+.book-arch-line.dim{opacity:.22}
+.book-arch-line.related{stroke:#6ea8fe;stroke-width:2.2}
+.book-arch-line.active{
+  stroke:#60a5fa;
+  stroke-width:3;
+  filter:drop-shadow(0 0 6px rgba(96,165,250,.75));
+}
+.book-arch-line.done{stroke:rgba(74,222,128,.6)}
+
+.book-arch-edgelabel{
+  fill:var(--muted);
+  font-size:10.5px;
+  font-weight:700;
+  paint-order:stroke;
+  stroke:#0b0c14;
+  stroke-width:3.5px;
+  stroke-linejoin:round;
+  transition:fill .2s ease;
+}
+.book-arch-edgelabel.dim{opacity:.25}
+.book-arch-edgelabel.active,.book-arch-edgelabel.related{fill:#bfdbfe}
+
+.book-arch-grid{
+  position:relative;
+  z-index:1;
+  display:grid;
+  gap:18px 16px;
+  align-items:stretch;
+  justify-items:stretch;
+}
+
+.book-arch-node{
+  position:relative;
+  display:grid;
+  gap:4px;
+  align-content:start;
+  padding:11px 12px;
+  border:1px solid #343449;
+  border-radius:12px;
+  background:var(--panel-2);
+  color:inherit;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+  transition:border-color .2s ease,background .2s ease,box-shadow .2s ease,transform .2s ease,opacity .2s ease;
+}
+.book-arch-node:hover{border-color:#4a4a66;transform:translateY(-1px)}
+.book-arch-node b{font-size:.84rem;line-height:1.35}
+.book-arch-node small{color:var(--muted);font-size:.69rem;line-height:1.45}
+.book-arch-node .book-arch-tag{
+  position:absolute;
+  top:-9px;
+  left:11px;
+  padding:1px 7px;
+  border-radius:999px;
+  font-size:.6rem;
+  font-weight:800;
+  letter-spacing:.4px;
+  background:#1c1d2a;
+  border:1px solid #343449;
+  color:var(--muted);
+}
+
+/* 依元件種類上色，讓「誰是儲存、誰是佇列」一眼分得出來 */
+.book-arch-node[data-kind="client"]{border-color:rgba(148,163,184,.5);background:rgba(148,163,184,.1)}
+.book-arch-node[data-kind="lb"]{border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.09)}
+.book-arch-node[data-kind="service"]{border-color:rgba(110,168,254,.45);background:rgba(110,168,254,.1)}
+.book-arch-node[data-kind="store"]{border-color:rgba(74,222,128,.42);background:rgba(74,222,128,.08)}
+.book-arch-node[data-kind="cache"]{border-color:rgba(244,114,182,.42);background:rgba(244,114,182,.09)}
+.book-arch-node[data-kind="queue"]{border-color:rgba(167,139,250,.45);background:rgba(167,139,250,.1)}
+.book-arch-node[data-kind="cdn"]{border-color:rgba(45,212,191,.45);background:rgba(45,212,191,.1)}
+
+.book-arch-node.dim{opacity:.34}
+.book-arch-node.related{border-color:#6ea8fe}
+.book-arch-node.active{
+  border-color:#60a5fa;
+  box-shadow:0 0 0 3px rgba(96,165,250,.18),0 0 22px rgba(96,165,250,.32);
+  transform:translateY(-2px);
+}
+.book-arch-node.done{border-color:rgba(74,222,128,.55)}
+.book-arch-node.picked{box-shadow:0 0 0 3px rgba(196,181,253,.28)}
+
+/* ---- 說明面板：點節點或播放資料流時，這裡講當下那一步 ---- */
+.book-arch-readout{
+  display:grid;
+  gap:5px;
+  margin:0;
+  padding:13px 15px;
+  border-top:1px solid var(--border);
+  background:rgba(7,8,14,.75);
+  min-height:74px;
+}
+.book-arch-readout .book-arch-readout-label{
+  color:var(--accent);
+  font-size:.68rem;
+  font-weight:900;
+  letter-spacing:1px;
+}
+.book-arch-readout p{margin:0!important;color:#d7d7e2!important;font-size:.85rem!important;line-height:1.7!important;text-align:left!important}
+
+.book-arch-steps[hidden]{display:none}
+.book-arch-steps{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:11px 15px;
+  border-top:1px solid var(--border);
+}
+.book-arch-steps button{
+  padding:6px 12px;
+  border-radius:9px;
+  border:1px solid #343449;
+  background:var(--panel-2);
+  color:#d7d7e2;
+  font-size:.74rem;
+  font-weight:700;
+  cursor:pointer;
+}
+.book-arch-steps button:hover:not(:disabled){border-color:#4a4a66}
+.book-arch-steps button:disabled{opacity:.4;cursor:default}
+.book-arch-steps .book-arch-progress{color:var(--muted);font-size:.74rem;margin-left:auto}
+
+.book-arch-caption{
+  margin:0!important;
+  padding:0 15px 14px;
+  color:var(--muted)!important;
+  font-size:.78rem!important;
+  line-height:1.6!important;
+  text-align:left!important;
+}
+
+/* ---- probe：每一頁都有的即時自我檢核 ---- */
+.book-probe{
+  margin:22px 0;
+  padding:16px 18px;
+  border:1px solid rgba(167,139,250,.32);
+  border-left:4px solid #a78bfa;
+  border-radius:12px;
+  background:rgba(167,139,250,.07);
+}
+.book-probe-label{
+  color:#c4b5fd;
+  font-size:.68rem;
+  font-weight:900;
+  letter-spacing:1px;
+}
+.book-probe h4{margin:6px 0 12px;font-size:.96rem;line-height:1.6}
+.book-probe-options{display:grid;gap:8px}
+.book-probe-options button{
+  display:block;
+  width:100%;
+  padding:10px 13px;
+  border:1px solid transparent;
+  border-radius:10px;
+  background:var(--panel-2);
+  color:#d7d7e2;
+  font:inherit;
+  font-size:.86rem;
+  line-height:1.6;
+  text-align:left;
+  cursor:pointer;
+  transition:border-color .18s ease,background .18s ease;
+}
+.book-probe-options button:hover:not(:disabled){border-color:#44445b}
+.book-probe-options button:disabled{cursor:default}
+.book-probe-options button.correct{border-color:rgba(74,222,128,.65);background:rgba(22,101,52,.2)}
+.book-probe-options button.wrong{border-color:rgba(251,113,133,.6);background:rgba(136,19,55,.18)}
+.book-probe-options button.muted-choice{opacity:.5}
+.book-probe-feedback{
+  margin-top:12px;
+  padding:12px 13px;
+  border-radius:10px;
+  background:rgba(255,255,255,.04);
+  font-size:.85rem;
+  line-height:1.7;
+}
+.book-probe-feedback b{display:block;margin-bottom:5px}
+.book-probe-feedback p{margin:0!important;color:#d7d7e2!important;font-size:.85rem!important;line-height:1.7!important}
+.book-probe-retry{
+  margin-top:10px;
+  padding:6px 12px;
+  border-radius:9px;
+  border:1px solid #343449;
+  background:var(--panel-2);
+  color:#d7d7e2;
+  font-size:.74rem;
+  font-weight:700;
+  cursor:pointer;
+}
+
+@media(max-width:620px){
+  .book-arch-head{flex-direction:column}
+  .book-arch-flows{width:100%}
+  .book-arch-flows button{flex:1 1 auto}
+  .book-arch-stage{padding:18px 12px}
+  .book-arch-steps .book-arch-progress{width:100%;margin-left:0;text-align:right}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .book-arch-node,.book-arch-line,.book-arch-edgelabel{transition:none}
+  .book-arch-node:hover,.book-arch-node.active{transform:none}
+}

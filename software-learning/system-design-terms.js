@@ -320,7 +320,7 @@
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const el = node.parentElement;
-        if (!el || el.closest(`script,style,pre,code${skipAnchors ? ',a' : ''}`) || (skipQuiz && el.closest('.book-section-quiz'))) return NodeFilter.FILTER_REJECT;
+        if (!el || el.closest(`script,style,pre,code,svg${skipAnchors ? ',a' : ''}`) || (skipQuiz && el.closest('.book-section-quiz'))) return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       }
     });

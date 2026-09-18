@@ -268,7 +268,334 @@
     });
   }
 
+  // ---- 互動架構圖（arch） ----------------------------------------------------
+  // 書上的高階設計圖是有分層、有分支的方塊圖，用一條直線的節點鏈畫不出來。
+  // 這裡用 grid 排節點、SVG 畫連線，並讓節點可點、資料流可逐步播放。
+  const archConfigs = [];
+
+  const archNodeMap = block => {
+    const map = new Map();
+    (block.nodes || []).forEach(node => map.set(node.id, node));
+    return map;
+  };
+
+  function archHtml(block) {
+    const index = archConfigs.push(block) - 1;
+    const nodes = block.nodes || [];
+    const cols = Math.max(1, ...nodes.map(n => (n.col || 1) + (n.span || 1) - 1));
+    const rows = Math.max(1, ...nodes.map(n => n.row || 1));
+    const flows = block.flows || [];
+
+    const nodesHtml = nodes.map(node => `<button type="button" class="book-arch-node" data-arch-node="${esc(node.id)}" data-kind="${esc(node.kind || 'service')}" style="grid-column:${Number(node.col) || 1} / span ${Number(node.span) || 1};grid-row:${Number(node.row) || 1}">${node.tag ? `<span class="book-arch-tag">${esc(node.tag)}</span>` : ''}<b>${esc(node.label)}</b>${node.hint ? `<small>${esc(node.hint)}</small>` : ''}</button>`).join('');
+
+    const flowsHtml = flows.length
+      ? `<div class="book-arch-flows">${flows.map((flow, i) => `<button type="button" data-arch-flow="${i}">▶ ${esc(flow.label)}</button>`).join('')}</div>`
+      : '';
+
+    const stepsHtml = flows.length
+      ? `<div class="book-arch-steps" hidden data-arch-steps>
+        <button type="button" data-arch-prev>← 上一步</button>
+        <button type="button" data-arch-next>下一步 →</button>
+        <button type="button" data-arch-reset>清除</button>
+        <span class="book-arch-progress" data-arch-progress></span>
+      </div>`
+      : '';
+
+    return `<div class="book-arch" data-book-arch="${index}">
+      <div class="book-arch-head">
+        <div><strong>${esc(block.title || '架構圖')}</strong><small>${esc(block.hint || '點任一個元件看它負責什麼；選一條資料流，逐步看請求怎麼走。')}</small></div>
+        ${flowsHtml}
+      </div>
+      <div class="book-arch-stage">
+        <div class="book-arch-canvas" data-arch-canvas>
+          <svg class="book-arch-lines" data-arch-lines aria-hidden="true"></svg>
+          <div class="book-arch-grid" style="grid-template-columns:repeat(${cols},minmax(0,1fr));grid-template-rows:repeat(${rows},auto)">${nodesHtml}</div>
+        </div>
+      </div>
+      <div class="book-arch-readout" data-arch-readout>
+        <span class="book-arch-readout-label">怎麼看這張圖</span>
+        <p>${esc(block.intro || '點下任一個元件，這裡會說明它在這個系統裡負責什麼。')}</p>
+      </div>
+      ${stepsHtml}
+      ${block.caption ? `<p class="book-arch-caption">${esc(block.caption)}</p>` : ''}
+    </div>`;
+  }
+
+  // 依兩個節點的相對位置，決定連線從哪一邊出、從哪一邊進，再畫一條貝茲曲線。
+  function archEdgeGeometry(a, b) {
+    const dx = (b.x + b.w / 2) - (a.x + a.w / 2);
+    const dy = (b.y + b.h / 2) - (a.y + a.h / 2);
+    const horizontal = Math.abs(dx) > Math.abs(dy) * 1.15;
+    let from, to, c1, c2;
+
+    if (horizontal) {
+      const rightward = dx > 0;
+      from = { x: rightward ? a.x + a.w : a.x, y: a.y + a.h / 2 };
+      to = { x: rightward ? b.x : b.x + b.w, y: b.y + b.h / 2 };
+      const bend = Math.max(26, Math.abs(to.x - from.x) * 0.42);
+      c1 = { x: from.x + (rightward ? bend : -bend), y: from.y };
+      c2 = { x: to.x + (rightward ? -bend : bend), y: to.y };
+    } else {
+      const downward = dy > 0;
+      from = { x: a.x + a.w / 2, y: downward ? a.y + a.h : a.y };
+      to = { x: b.x + b.w / 2, y: downward ? b.y : b.y + b.h };
+      const bend = Math.max(22, Math.abs(to.y - from.y) * 0.45);
+      c1 = { x: from.x, y: from.y + (downward ? bend : -bend) };
+      c2 = { x: to.x, y: to.y + (downward ? -bend : bend) };
+    }
+
+    return {
+      d: `M ${from.x} ${from.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${to.x} ${to.y}`,
+      // 貝茲曲線 t=0.5 的位置，用來擺連線上的文字
+      mid: {
+        x: (from.x + 3 * c1.x + 3 * c2.x + to.x) / 8,
+        y: (from.y + 3 * c1.y + 3 * c2.y + to.y) / 8
+      }
+    };
+  }
+
+  function wireBookArch(scope) {
+    scope.querySelectorAll('[data-book-arch]').forEach(root => {
+      const block = archConfigs[Number(root.dataset.bookArch)];
+      if (!block) return;
+
+      const canvas = root.querySelector('[data-arch-canvas]');
+      const svg = root.querySelector('[data-arch-lines]');
+      const readout = root.querySelector('[data-arch-readout]');
+      const stepsBar = root.querySelector('[data-arch-steps]');
+      const progressEl = root.querySelector('[data-arch-progress]');
+      const nodeMap = archNodeMap(block);
+      const nodeEls = new Map();
+      root.querySelectorAll('[data-arch-node]').forEach(el => nodeEls.set(el.dataset.archNode, el));
+
+      const edges = (block.edges || []).filter(e => nodeEls.has(e.from) && nodeEls.has(e.to));
+      const edgeEls = [];
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+
+      // 箭頭：每張圖各自一組 marker，避免 id 撞在一起
+      const uid = `arch-${Number(root.dataset.bookArch)}`;
+      svg.innerHTML = `<defs>
+        <marker id="${uid}-head" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#3a3b52"></path></marker>
+        <marker id="${uid}-head-on" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#60a5fa"></path></marker>
+      </defs>`;
+
+      edges.forEach(edge => {
+        const path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('class', 'book-arch-line');
+        path.setAttribute('marker-end', `url(#${uid}-head)`);
+        svg.appendChild(path);
+        let label = null;
+        if (edge.label) {
+          label = document.createElementNS(SVG_NS, 'text');
+          label.setAttribute('class', 'book-arch-edgelabel');
+          label.setAttribute('text-anchor', 'middle');
+          label.textContent = edge.label;
+          svg.appendChild(label);
+        }
+        edgeEls.push({ edge, path, label });
+      });
+
+      const draw = () => {
+        const base = canvas.getBoundingClientRect();
+        if (!base.width) return;
+        svg.setAttribute('viewBox', `0 0 ${base.width} ${base.height}`);
+        svg.setAttribute('width', base.width);
+        svg.setAttribute('height', base.height);
+        const box = el => {
+          const r = el.getBoundingClientRect();
+          return { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height };
+        };
+        edgeEls.forEach(({ edge, path, label }) => {
+          const geo = archEdgeGeometry(box(nodeEls.get(edge.from)), box(nodeEls.get(edge.to)));
+          path.setAttribute('d', geo.d);
+          if (label) {
+            label.setAttribute('x', geo.mid.x);
+            label.setAttribute('y', geo.mid.y - 4);
+          }
+        });
+      };
+
+      const clearMarks = () => {
+        nodeEls.forEach(el => el.classList.remove('dim', 'related', 'active', 'done', 'picked'));
+        edgeEls.forEach(({ path, label }) => {
+          path.classList.remove('dim', 'related', 'active', 'done');
+          path.setAttribute('marker-end', `url(#${uid}-head)`);
+          label?.classList.remove('dim', 'related', 'active');
+        });
+      };
+
+      const say = (label, text) => {
+        readout.innerHTML = `<span class="book-arch-readout-label">${esc(label)}</span><p>${esc(text)}</p>`;
+      };
+
+      const resetAll = () => {
+        clearMarks();
+        activeFlow = null;
+        stepIndex = -1;
+        stepsBar && (stepsBar.hidden = true);
+        root.querySelectorAll('[data-arch-flow]').forEach(b => b.classList.remove('active'));
+        say('怎麼看這張圖', block.intro || '點下任一個元件，這裡會說明它在這個系統裡負責什麼。');
+      };
+
+      // 點節點：只亮起這個節點與它直接相連的線，其餘淡出
+      nodeEls.forEach((el, id) => {
+        el.addEventListener('click', () => {
+          const node = nodeMap.get(id);
+          activeFlow = null;
+          stepIndex = -1;
+          stepsBar && (stepsBar.hidden = true);
+          root.querySelectorAll('[data-arch-flow]').forEach(b => b.classList.remove('active'));
+          clearMarks();
+
+          const neighbours = new Set([id]);
+          edgeEls.forEach(({ edge, path, label }) => {
+            if (edge.from === id || edge.to === id) {
+              path.classList.add('related');
+              label?.classList.add('related');
+              neighbours.add(edge.from);
+              neighbours.add(edge.to);
+            } else {
+              path.classList.add('dim');
+              label?.classList.add('dim');
+            }
+          });
+          nodeEls.forEach((other, otherId) => {
+            if (otherId === id) other.classList.add('active', 'picked');
+            else if (neighbours.has(otherId)) other.classList.add('related');
+            else other.classList.add('dim');
+          });
+          say(node?.label || '元件', node?.detail || node?.hint || '這個元件在書上的圖裡有出現，但這一頁還沒展開說明。');
+        });
+      });
+
+      // 資料流：一步一步走，每步亮一條線與它的兩端
+      let activeFlow = null;
+      let stepIndex = -1;
+
+      const findEdgeEl = step => edgeEls.find(({ edge }) => edge.from === step.from && edge.to === step.to);
+
+      const renderStep = () => {
+        if (!activeFlow) return;
+        clearMarks();
+        const steps = activeFlow.steps || [];
+        edgeEls.forEach(({ path, label }) => { path.classList.add('dim'); label?.classList.add('dim'); });
+        nodeEls.forEach(el => el.classList.add('dim'));
+
+        steps.slice(0, stepIndex + 1).forEach((step, i) => {
+          const current = i === stepIndex;
+          // 有些步驟不是「從 A 送到 B」，而是「此時 B 自己做了一件事」（例如狀態翻成
+          // ready）。那種步驟只給 node，不給 from/to。
+          if (step.node) {
+            const el = nodeEls.get(step.node);
+            if (el) {
+              el.classList.remove('dim');
+              el.classList.add(current ? 'active' : 'done');
+            }
+            return;
+          }
+          const found = findEdgeEl(step);
+          if (found) {
+            found.path.classList.remove('dim');
+            found.path.classList.add(current ? 'active' : 'done');
+            if (current) found.path.setAttribute('marker-end', `url(#${uid}-head-on)`);
+            found.label?.classList.remove('dim');
+            found.label?.classList.add(current ? 'active' : 'related');
+          }
+          [step.from, step.to].forEach(nodeId => {
+            const el = nodeEls.get(nodeId);
+            if (!el) return;
+            el.classList.remove('dim');
+            el.classList.add(current ? 'active' : 'done');
+          });
+        });
+
+        const step = steps[stepIndex];
+        if (step) say(`${activeFlow.label}　第 ${stepIndex + 1} 步`, step.text);
+        progressEl && (progressEl.textContent = `${stepIndex + 1} / ${steps.length}`);
+        root.querySelector('[data-arch-prev]').disabled = stepIndex <= 0;
+        root.querySelector('[data-arch-next]').disabled = stepIndex >= steps.length - 1;
+      };
+
+      root.querySelectorAll('[data-arch-flow]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const flow = (block.flows || [])[Number(btn.dataset.archFlow)];
+          if (!flow) return;
+          if (activeFlow === flow) { resetAll(); return; }
+          root.querySelectorAll('[data-arch-flow]').forEach(b => b.classList.toggle('active', b === btn));
+          activeFlow = flow;
+          stepIndex = 0;
+          stepsBar && (stepsBar.hidden = false);
+          renderStep();
+        });
+      });
+
+      root.querySelector('[data-arch-prev]')?.addEventListener('click', () => {
+        if (stepIndex > 0) { stepIndex--; renderStep(); }
+      });
+      root.querySelector('[data-arch-next]')?.addEventListener('click', () => {
+        if (activeFlow && stepIndex < (activeFlow.steps || []).length - 1) { stepIndex++; renderStep(); }
+      });
+      root.querySelector('[data-arch-reset]')?.addEventListener('click', resetAll);
+
+      draw();
+      requestAnimationFrame(draw);
+      if (typeof ResizeObserver === 'function') {
+        const observer = new ResizeObserver(draw);
+        observer.observe(canvas);
+      } else {
+        window.addEventListener('resize', draw);
+      }
+      if (document.fonts?.ready) document.fonts.ready.then(draw).catch(() => {});
+    });
+  }
+
+  // ---- probe：每一頁都放得下的即時自我檢核 ----------------------------------
+  const probeConfigs = [];
+
+  function probeHtml(block) {
+    const index = probeConfigs.push(block) - 1;
+    return `<div class="book-probe" data-book-probe="${index}">
+      <span class="book-probe-label">${esc(block.label || '讀到這裡，先自己答一次')}</span>
+      <h4>${esc(block.ask)}</h4>
+      <div class="book-probe-options">${(block.options || []).map((opt, i) => `<button type="button" data-probe-option="${i}">${esc(opt[0])}</button>`).join('')}</div>
+      <div class="book-probe-feedback" hidden></div>
+    </div>`;
+  }
+
+  function wireBookProbes(scope) {
+    scope.querySelectorAll('[data-book-probe]').forEach(root => {
+      const block = probeConfigs[Number(root.dataset.bookProbe)];
+      if (!block) return;
+      const buttons = [...root.querySelectorAll('[data-probe-option]')];
+      const feedback = root.querySelector('.book-probe-feedback');
+
+      const reset = () => {
+        buttons.forEach(b => { b.disabled = false; b.className = ''; });
+        feedback.hidden = true;
+        feedback.innerHTML = '';
+      };
+
+      buttons.forEach((btn, i) => {
+        btn.addEventListener('click', () => {
+          const [, correct, note] = block.options[i];
+          buttons.forEach((other, j) => {
+            other.disabled = true;
+            if (j === i) other.classList.add(correct ? 'correct' : 'wrong');
+            else if (block.options[j][1]) other.classList.add('correct', 'muted-choice');
+          });
+          feedback.hidden = false;
+          feedback.innerHTML = correct
+            ? `<b>✅ 答對了</b><p>${esc(note || block.reveal || '')}</p>`
+            : `<b>❌ 再想一下</b><p>${esc(note || '')}</p>${block.reveal ? `<p>${esc(block.reveal)}</p>` : ''}<button type="button" class="book-probe-retry">再試一次</button>`;
+          feedback.querySelector('.book-probe-retry')?.addEventListener('click', reset);
+        });
+      });
+    });
+  }
+
   function blockHtml(block) {
+    if (block.type === 'arch') return archHtml(block);
+    if (block.type === 'probe') return probeHtml(block);
     if (block.type === 'lead') return `<p class="book-lead">${esc(block.text)}</p>`;
     if (block.type === 'p') return `<p>${esc(block.text)}</p>`;
     if (block.type === 'bullets') return `<ul class="book-bullets">${block.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
@@ -427,7 +754,10 @@
     document.querySelector('#bookPageCounter').textContent = `${chapterTag(chapter)}教材第 ${pInfo.number} 頁 · 本小節 ${pageIdx + 1}/${section.pages.length}`;
     const takeaway = pageTakeaway(page);
     document.querySelector('#bookPageStage').innerHTML = `<article class="book-page ${params.get('review') ? 'review-highlight' : ''}" id="${esc(page.id)}"><h2>${esc(page.title)}</h2><div class="book-page-purpose"><strong>這頁只先回答一件事</strong><p>先找出這個做法要解決的問題，再看它怎麼運作，以及它會帶來什麼代價。</p></div>${page.blocks.map(blockHtml).join('')}${takeaway ? `<aside class="book-page-takeaway"><strong>這頁先記住</strong><p>${esc(takeaway)}</p></aside>` : ''}</article>`;
-    wireBookFlows(document.querySelector('#bookPageStage'));
+    const pageStage = document.querySelector('#bookPageStage');
+    wireBookFlows(pageStage);
+    wireBookArch(pageStage);
+    wireBookProbes(pageStage);
 
     const sectionIdx = chapter.sections.findIndex(s => s.id === section.id);
     const previousSection = sectionIdx > 0 ? chapter.sections[sectionIdx - 1] : null;

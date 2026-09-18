@@ -1,0 +1,69 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>互動區塊行為檢查</title>
+<!--
+  arch 與 probe 的行為檢查（點節點、播資料流、答 probe）。
+  用法：從 software-learning/ 起一個靜態伺服器，例如
+      python3 -m http.server 8777
+  再跑：
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+        --headless=new --disable-gpu --virtual-time-budget=9000 --dump-dom \
+        "http://localhost:8777/tests/arch-interaction-harness.html"
+  然後看 <pre id="out"> 裡的每一行是不是都符合預期。
+--></head><body>
+<iframe id="f" src="../system-design-chapter.html?chapter=sd-book-15&section=sd15-s06&page=sd15-s06-p01" style="width:1200px;height:2000px;border:0"></iframe>
+<pre id="out">pending</pre>
+<script>
+const log = [];
+const push = (k,v)=>log.push(k+': '+v);
+document.getElementById('f').addEventListener('load', () => {
+  setTimeout(() => {
+    try {
+      const d = document.getElementById('f').contentDocument;
+      const arch = d.querySelector('[data-book-arch]');
+      push('arch present', !!arch);
+      push('nodes', arch.querySelectorAll('[data-arch-node]').length);
+      push('paths', arch.querySelectorAll('path.book-arch-line').length);
+      const firstPath = arch.querySelector('path.book-arch-line');
+      push('path has d', (firstPath.getAttribute('d')||'').startsWith('M'));
+      push('steps hidden initially', arch.querySelector('[data-arch-steps]').hidden);
+
+      // 1) 點節點
+      const block = arch.querySelector('[data-arch-node="block"]');
+      block.click();
+      push('node click -> active', block.classList.contains('active'));
+      push('node click -> some dimmed', arch.querySelectorAll('.book-arch-node.dim').length > 0);
+      push('readout mentions 區塊', arch.querySelector('[data-arch-readout] p').textContent.includes('區塊'));
+
+      // 2) 播放資料流
+      const flowBtn = arch.querySelector('[data-arch-flow="0"]');
+      flowBtn.click();
+      push('flow -> steps visible', !arch.querySelector('[data-arch-steps]').hidden);
+      push('flow -> progress', arch.querySelector('[data-arch-progress]').textContent);
+      push('flow -> prev disabled', arch.querySelector('[data-arch-prev]').disabled);
+      push('flow -> active edge', arch.querySelectorAll('path.book-arch-line.active').length);
+      const next = arch.querySelector('[data-arch-next]');
+      next.click(); next.click();
+      push('after 2 next -> progress', arch.querySelector('[data-arch-progress]').textContent);
+      push('after 2 next -> done edges', arch.querySelectorAll('path.book-arch-line.done').length);
+      push('readout step text', arch.querySelector('[data-arch-readout] p').textContent.slice(0,24));
+      arch.querySelector('[data-arch-reset]').click();
+      push('reset -> steps hidden', arch.querySelector('[data-arch-steps]').hidden);
+      push('reset -> no active', arch.querySelectorAll('.book-arch-node.active').length);
+
+      // 3) probe
+      const probe = d.querySelector('[data-book-probe]');
+      push('probe present', !!probe);
+      const opts = probe.querySelectorAll('[data-probe-option]');
+      opts[1].click();
+      const fb = probe.querySelector('.book-probe-feedback');
+      push('probe wrong -> feedback shown', !fb.hidden);
+      push('probe wrong -> has retry', !!fb.querySelector('.book-probe-retry'));
+      push('probe -> correct marked', probe.querySelectorAll('button.correct').length);
+      fb.querySelector('.book-probe-retry').click();
+      push('probe retry -> reset', probe.querySelector('.book-probe-feedback').hidden && !opts[0].disabled);
+      opts[0].click();
+      push('probe correct -> class', opts[0].className);
+    } catch (e) { push('ERROR', e && e.message); }
+    document.getElementById('out').textContent = log.join('\n');
+  }, 1200);
+});
+</script></body></html>
