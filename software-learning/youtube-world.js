@@ -79,6 +79,28 @@
         return out;
     };
 
+    // Real time creates debt; bounded frames repay it without skipping any simulation tick.
+    class FrameStepper {
+        constructor(pending = 0) { this.pending = pending; }
+        addTime(seconds, speed) { this.pending += Math.max(0, seconds) * speed; }
+        advance(seconds, speed, step, now = () => performance.now()) {
+            this.addTime(seconds, speed);
+            const start = now();
+            let ticks = 0;
+            while (this.pending + 1e-9 >= 0.1 && ticks < 4) {
+                if (ticks && now() - start >= 6) break;
+                step(0.1);
+                this.pending = Math.max(0, this.pending - 0.1);
+                ticks++;
+            }
+            return ticks;
+        }
+        singleStep(step) {
+            step(0.1);
+            this.pending = Math.max(0, this.pending - 0.1);
+        }
+    }
+
     class World {
         constructor(seed = 14, population = 1, design = null) {
             this.seed = seed >>> 0 || 14;
@@ -507,11 +529,33 @@
             });
             this.tickVideos(); this.tickUsers(dt);
         }
+        capacityPressure() {
+            const groups = new Map();
+            this.machines.forEach(m => {
+                const key = `${m.kind}:${m.region}`;
+                if (!groups.has(key)) groups.set(key, { kind: m.kind, region: m.region, machineIds: [], waiting: 0, active: 0, slots: 0, healthy: 0 });
+                const group = groups.get(key);
+                group.machineIds.push(m.id);
+                // Each machine in a pool records the SAME waiting requests, not its own queue.
+                group.waiting = Math.max(group.waiting, m.queued);
+                if (m.up) { group.healthy++; group.active += m.active; group.slots += m.slots; }
+            });
+            this.activeRequests().forEach(r => {
+                if (r.status === 'running') return;
+                for (const group of groups.values()) {
+                    if (!group.healthy && r.reason === `${TYPES[group.kind]} 無健康機器` &&
+                        (['storage', 'db', 'worker', 'cache'].includes(group.kind) || r.region === group.region)) group.waiting++;
+                }
+            });
+            return [...groups.values()].filter(g => g.waiting > 0).sort((a, b) =>
+                b.waiting - a.waiting || (b.active / (b.slots || 1)) - (a.active / (a.slots || 1))
+            );
+        }
         summary() {
             return { time: this.time, users: this.users.length, buffering: this.users.filter(u => u.mode === 'watch' && u.buffer <= 0).length, queue: this.activeRequests().filter(r => r.status !== 'running').length, active: this.activeRequests().length, rebuffer: this.metrics.watchSeconds ? this.metrics.bufferSeconds / this.metrics.watchSeconds * 100 : 0, ...this.metrics };
         }
     }
-    const api = { World, NETWORKS, LADDER, TYPES, DESIGN_DEFAULTS, DESIGN_EFFECTS, normalizeDesign };
+    const api = { FrameStepper, World, NETWORKS, LADDER, TYPES, DESIGN_DEFAULTS, DESIGN_EFFECTS, normalizeDesign };
     if (typeof module !== 'undefined') module.exports = api;
     else host.YouTubeWorld = api;
 })(typeof window === 'undefined' ? globalThis : window);

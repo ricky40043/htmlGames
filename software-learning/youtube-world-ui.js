@@ -1,6 +1,6 @@
 (() => {
     'use strict';
-    const { World, NETWORKS, TYPES } = window.YouTubeWorld;
+    const { World, FrameStepper, NETWORKS, TYPES } = window.YouTubeWorld;
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
     const clock = s => `${Math.floor(s / 60).toString().padStart(2, '0')}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
     const kindName = k => ({ segment: '觀看片段', search: '搜尋', 'create-upload': '建立上傳', chunk: '上傳分塊', transcode: '轉碼任務', publish: '發布影片' })[k] || k;
@@ -12,7 +12,9 @@
         // 世界模型會退回自己的預設值，行為與以前相同。
         let design = window.YouTubeModes?.loadDesign() || null;
         let world = new World(14, 1, design), selectedUser = 1, selectedMachine = null, paused = false, speed = 1, requestPage = 0, requestFilter = 'all', selectedRequest = null;
-        let last = performance.now(), accumulator = 0, painted = 0, regionSignature = '', userSignature = '', machineSignature = '', videoSignature = '', inspectorSignature = '', requestPaint = 0;
+        let last = performance.now(), painted = 0, regionSignature = '', userSignature = '', machineSignature = '', videoSignature = '', inspectorSignature = '', requestPaint = 0;
+        let pacing = new FrameStepper(), rateElapsed = 0, rateTicks = 0, actualSpeed = 0;
+        let pressure = [];
         let dragging = null;
         const savedMode = window.YouTubeModes?.load();
         if (savedMode?.world?.users?.length && savedMode.world.cache instanceof Set) {
@@ -21,22 +23,24 @@
             selectedMachine = savedMode.selectedMachine || null;
             selectedRequest = savedMode.selectedRequest || null;
             speed = savedMode.speed || 1;
+            pacing = new FrameStepper(savedMode.pending || 0);
             paused = true;
             window.YouTubeModes.notice('已恢復實際運作進度，暫停中；按「繼續世界」接著觀察。');
         }
-        window.YouTubeModes?.register(() => ({ world, selectedUser, selectedMachine, selectedRequest, speed }));
+        window.YouTubeModes?.register(() => ({ world, selectedUser, selectedMachine, selectedRequest, speed, pending: pacing.pending }));
         const option = (id, label) => `<option value="${esc(id)}">${esc(label)}</option>`;
         root.innerHTML = `<section class="yw-app">
             <div class="yw-heading"><div><span class="yw-eyebrow">CHAPTER 14 / LIVE WORLD</span><h1>YouTube 系統設計遊樂園</h1><p>全場預設只有我的角色 1 人，每次可新增 1～10 人。點一個人追蹤體驗，點一台機器查看與處理故障。</p></div><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson">12 月課程關卡 ↗</a></div>
             <section class="yw-design" id="yw-design" aria-label="套用中的架構設計"></section>
-            <div class="yw-toolbar" aria-label="世界控制"><button data-action="pause">暫停世界</button><button data-action="step">單步 0.1 秒</button><label>速度 <select id="yw-speed">${[1,5,20].map(n=>option(n,n+'x')).join('')}</select></label><strong id="yw-clock">00:00</strong><span>1x = 真實時間</span><label>種子 <input id="yw-seed" type="number" value="14" min="1" max="4294967295"></label><button data-action="reset">同種子重新開始</button><span id="yw-notice" role="status"></span></div>
+            <div class="yw-toolbar" aria-label="世界控制"><button data-action="pause">暫停世界</button><button data-action="step">單步 0.1 秒</button><label>速度 <select id="yw-speed">${[1,5,20].map(n=>option(n,n+'x')).join('')}</select></label><strong id="yw-clock">00:00</strong><span id="yw-pacing">1x = 真實時間</span><label>種子 <input id="yw-seed" type="number" value="14" min="1" max="4294967295"></label><button data-action="reset">同種子重新開始</button><span id="yw-notice" role="status"></span></div>
             <div class="yw-metrics" id="yw-metrics"></div>
+            <section class="yw-capacity" aria-label="容量觀察"><strong id="yw-bottleneck"></strong><p id="yw-capacity-detail"></p><button data-action="inspect-bottleneck">查看瓶頸機器</button><p>500 人是操作上限，不是預設容量保證。只加前端可能讓更多請求擠向共用後端；加機後請觀察等待數與再緩衝是否改善。</p></section>
             <div class="yw-workspace"><div class="yw-main">
                 <div class="yw-build"><label>人群所在地 <select id="yw-group-region"></select></label><label>新增人數 <select id="yw-add-count">${Array.from({length:10},(_,i)=>`<option value="${i+1}">${i+1} 人</option>`).join('')}</select></label><button data-action="add-users">新增使用者</button><label>新據點名稱 <input id="yw-region-name" maxlength="24" placeholder="例如：新加坡"></label><button data-action="add-region">建立服務據點</button></div>
                 <div class="yw-options">${[['cdn','啟用 CDN 快取'],['arrivals','持續進出與使用'],['wander','觀眾隨機走動'],['autoFaults','定期隨機故障'],['autoRepair','25 秒後自動修復'],['resumable','保留已確認上傳塊'],['directUpload','预簽 URL 直接上傳']].map(([id,label])=>`<label><input type="checkbox" data-option="${id}" ${world.options[id]?'checked':''}>${label.replace('预','預')}</label>`).join('')}</div>
                 <div class="yw-legend"><span>● 播放</span><span>◌ 緩衝／等待</span><span>↑ 上傳／轉碼</span><span>斜線區：最後一哩嚴重弱網</span><span id="yw-sampling"></span></div>
                 <div class="yw-topology"><svg id="yw-links" class="yw-links" aria-hidden="true"></svg><div id="yw-regions" class="yw-regions"></div>
-                <section class="yw-backend"><h2>共用後端 · 美國</h2><p>上傳 → 原檔 → 檢查 → 各畫質／縮圖 → Metadata 發布。機器狀態作用於同一世界。</p><div id="yw-backend-machines" class="yw-machine-list"></div></section></div>
+                <section class="yw-backend"><h2>共用後端 · 美國</h2><p>上傳 → 原檔 → 檢查 → 各畫質／縮圖 → Metadata 發布。機器狀態作用於同一世界。物件儲存、Metadata DB、轉碼 Worker 與快取也能加機：點選下方機器，再按「同區加一台」。</p><div id="yw-backend-machines" class="yw-machine-list"></div></section></div>
                 <section class="yw-panel"><div class="yw-section-title"><h2>影片與上傳生命週期</h2><button data-action="upload">讓選中的人上傳 96 MB</button></div><p class="yw-muted">教材用 multipart 模型：裝置分成 6 塊、同時傳 2 塊；確認後才保留。傳輸分塊與播放片段是不同單位。</p><div id="yw-videos"></div></section>
             </div><aside class="yw-inspector" aria-label="選中物件檢視器">
                 <section class="yw-panel"><div class="yw-section-title"><h2>觀眾體驗</h2><button data-action="my-user">找我的角色</button></div>
@@ -120,9 +124,10 @@
             }
             world.machines.forEach(m=>{
                 const button = root.querySelector(`[data-machine="${m.id}"]`);
+                button.classList.toggle('is-bottleneck',pressure[0]?.machineIds.includes(m.id) || false);
                 button.classList.toggle('is-down',!m.up); button.classList.toggle('is-selected',selectedMachine===m.id);
                 button.setAttribute('aria-pressed',selectedMachine===m.id);
-                button.querySelector('small').textContent = !m.up ? '故障' : m.kind==='cdn' && !world.options.cdn ? '未啟用' : `${m.active}/${m.slots} 工作中 · 等待 ${m.queued}`;
+                button.querySelector('small').textContent = (pressure[0]?.machineIds.includes(m.id) ? '瓶頸 · ' : '') + (!m.up ? '故障' : m.kind==='cdn' && !world.options.cdn ? '未啟用' : `${m.active}/${m.slots} 工作中 · 等待 ${m.queued}`);
             });
             const m = world.machines.find(m=>m.id===selectedMachine);
             root.querySelector('.yw-inspector').classList.toggle('has-machine',!!m);
@@ -188,7 +193,22 @@
             const r=world.requests.find(r=>r.id===selectedRequest);
             el('request-detail').innerHTML=r?`<h3>${r.id} · ${kindName(r.kind)}</h3><p>使用者 #${r.userId??'後端'} · ${esc(r.videoId)} · ${esc(r.quality||r.jobId||'')} ${r.part!=null?'分塊 '+(r.part+1):''}</p><ol>${r.history.map(h=>`<li>${clock(h.at)} ${esc(h.text)}</li>`).join('')}</ol>`:selectedRequest?'<p>此請求已超過保留範圍。</p>':'';
         }
+        function drawCapacity() {
+            const top = pressure[0];
+            el('bottleneck').textContent = top ? `目前瓶頸：${TYPES[top.kind]} · ${world.regions.find(r => r.id === top.region).name}` : '目前沒有機器容量排隊';
+            el('capacity-detail').textContent = top
+                ? `依最近一個 tick 的同類同區佇列排序：等待 ${top.waiting} 筆，工作槽 ${top.active}/${top.slots}，健康機器 ${top.healthy} 台。${top.kind === 'storage' ? '未命中 CDN 的觀看回源與上傳分塊共用物件儲存；只加前端不會增加這裡的工作槽。' : ''}${top.healthy ? '可選取機器加一台，再比較變化。' : '先恢復故障機器，或加一台分流。'}${pressure[1] ? `其他排隊：${TYPES[pressure[1].kind]}（${world.regions.find(r => r.id === pressure[1].region).name}）${pressure[1].waiting} 筆。` : ''}`
+                : '這不代表所有觀眾都順暢：也可能在等重試、傳輸或最後一哩網路。點觀眾與 Request 查看原因。';
+            root.querySelector('[data-action="inspect-bottleneck"]').disabled = !top;
+            el('pacing').textContent = `${paused ? '暫停' : document.hidden ? '分頁隱藏' : `目標 ${speed}x · 近 1 秒實際 ${actualSpeed.toFixed(1)}x`} · 待跑 ${pacing.pending.toFixed(1)} 模擬秒（逐步補跑，不跳過）`;
+        }
+        function collectTime(now) {
+            if (!paused && !document.hidden) pacing.addTime((now - last) / 1000, speed);
+            last = now;
+        }
         function paint(force = false) {
+            pressure = world.capacityPressure();
+            drawCapacity();
             syncSelectors(); syncInspector(force); drawMachines(); drawUsers(); drawRoute();
             const s=world.summary(),u=selected();
             el('clock').textContent=clock(world.time)+'.'+Math.round((world.time%1)*10);
@@ -211,7 +231,7 @@
         root.addEventListener('change',e=>{
             const u=selected(),id=e.target.id;
             if (e.target.dataset.option) world.options[e.target.dataset.option]=e.target.checked;
-            if (id==='yw-speed') speed=Number(e.target.value);
+            if (id==='yw-speed') { collectTime(performance.now()); speed=Number(e.target.value); rateElapsed=rateTicks=actualSpeed=0; }
             if (id==='yw-user-select') selectedUser=Number(e.target.value);
             if (id==='yw-user-region') world.moveUser(u.id,e.target.value,u.x,u.y);
             if (id==='yw-user-route') u.route=e.target.value;
@@ -228,10 +248,10 @@
             if (b.dataset.retryUpload) world.retryUpload(b.dataset.retryUpload);
             const u=selected(),m=world.machines.find(m=>m.id===selectedMachine);
             switch(b.dataset.action) {
-                case 'pause': paused=!paused;accumulator=0;break;
-                case 'step': paused=true;world.step(0.1);accumulator=0;break;
-                case 'use-default-design': window.YouTubeModes?.clearDesign();design=null;world=new World(Number(el('seed').value),1,null);renderDesign();selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;accumulator=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});notice('已改用預設架構並重置世界，暫停中。');break;
-                case 'reset': design=window.YouTubeModes?.loadDesign()||null;world=new World(Number(el('seed').value),1,design);renderDesign();selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;accumulator=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});el('machine-detail').textContent='點選機器查看';notice('已用同種子重置世界，暫停中。');break;
+                case 'pause': collectTime(performance.now());paused=!paused;rateElapsed=rateTicks=actualSpeed=0;break;
+                case 'step': collectTime(performance.now());paused=true;pacing.singleStep(dt=>world.step(dt));rateElapsed=rateTicks=actualSpeed=0;break;
+                case 'use-default-design': window.YouTubeModes?.clearDesign();design=null;world=new World(Number(el('seed').value),1,null);renderDesign();selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;pacing=new FrameStepper();last=performance.now();rateElapsed=rateTicks=actualSpeed=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});notice('已改用預設架構並重置世界，暫停中。');break;
+                case 'reset': design=window.YouTubeModes?.loadDesign()||null;world=new World(Number(el('seed').value),1,design);renderDesign();selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;pacing=new FrameStepper();last=performance.now();rateElapsed=rateTicks=actualSpeed=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});el('machine-detail').textContent='點選機器查看';notice('已用同種子重置世界，暫停中。');break;
                 case 'my-user': selectedUser=1;selectedMachine=null;break;
                 case 'clear-machine': selectedMachine=null;break;
                 case 'weak': world.moveUser(u.id,u.region,.78,.75);break;
@@ -239,7 +259,8 @@
                 case 'search': world.search(u.id);break;
                 case 'watch': world.watch(u.id,el('watch-video').value);break;
                 case 'upload': notice(world.upload(u.id)?'已建立上傳；在影片生命週期查看每一塊與轉碼任務。':'此人正在上傳，或進行中影片已達上限。');break;
-                case 'add-users': world.addUsers(Math.max(1,Math.min(10,Number(el('add-count').value)||1)),el('group-region').value);notice(`世界共 ${world.users.length} 人（上限 500），包含我的角色。`);break;
+                case 'add-users': world.addUsers(Math.max(1,Math.min(10,Number(el('add-count').value)||1)),el('group-region').value);notice(`世界共 ${world.users.length} 人（上限 500），包含我的角色。請看容量觀察；上限不代表目前機器撐得住。`);break;
+                case 'inspect-bottleneck': if(pressure[0]){selectedMachine=pressure[0].machineIds[0];root.querySelector('.yw-inspector').classList.add('has-machine');el('machine-panel').scrollIntoView({block:'center'});}break;
                 case 'add-region': notice(world.addRegion(el('region-name').value)?'服務據點已建立；人口位置不變，可調整服務路由。':'請輸入不重複名稱，最多 6 個據點。');break;
                 case 'toggle-machine': if(m)world.setMachine(m.id,!m.up);break;
                 case 'add-machine': if(m)notice(world.addMachine(m.kind,m.region)?'已新增同區機器，共用佇列開始分流。':'同類機器每區最多 8 台。');break;
@@ -261,11 +282,20 @@
         });
         const endDrag=()=>{if(!dragging)return;selectedUser=dragging.id;dragging=null;paint(true);};
         root.addEventListener('pointerup',endDrag);root.addEventListener('pointercancel',endDrag);
-        document.addEventListener('visibilitychange',()=>{last=performance.now();accumulator=0;});
+        let wasHidden = document.hidden;
+        document.addEventListener('visibilitychange',()=>{
+            const now = performance.now();
+            if (!paused && !wasHidden) pacing.addTime((now-last)/1000,speed);
+            last=now;wasHidden=document.hidden;rateElapsed=rateTicks=actualSpeed=0;
+        });
         function frame(now) {
             if (!root.isConnected) return;
-            const dt=Math.min(.25,(now-last)/1000);last=now;
-            if(!paused&&!document.hidden){accumulator+=dt*speed;while(accumulator>=.1){world.step(.1);accumulator-=.1;}}
+            const dt=Math.max(0,(now-last)/1000);last=now;
+            if(!paused&&!document.hidden){
+                rateTicks+=pacing.advance(dt,speed,dt=>world.step(dt));
+                rateElapsed+=dt;
+                if(rateElapsed>=1){actualSpeed=rateTicks*.1/rateElapsed;rateElapsed=rateTicks=0;}
+            }
             if(now-painted>250){paint();painted=now;}requestAnimationFrame(frame);
         }
         el('speed').value = speed;
