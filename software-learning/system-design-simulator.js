@@ -644,8 +644,9 @@
     // 🗃 筆數原本放在節點右上角（top-7），跟同樣在上方的策略文字剛好同高而互相壓到，
     // 也會撞到地區框的標題。移到節點名稱底下——那裡本來就空著，而且「這個儲存有幾筆資料」
     // 跟節點名稱本來就該讀在一起。
+    // 看資料的入口從圓球移到這個徽章：圓球現在一律是「拔插這台機器」。
     const storeBadge = store
-      ? `<text class="sim-topo-data-count" x="${uiX}" y="${labelY + 16}">🗃 ${storedRows}</text>`
+      ? `<text class="sim-topo-data-count${interactive ? ' inspectable' : ''}" x="${uiX}" y="${labelY + 16}"${interactive ? ` data-store-badge="${esc(store.id)}" role="button" tabindex="0"` : ''}>${interactive ? '<title>點一下看這個儲存的 schema 與資料</title>' : ''}🗃 ${storedRows}</text>`
       : '';
     // ✓ protected · ⚠ running but with no redundancy · ✕ not built at all · ✕(red, dead) a
     // machine whose plug you pulled. The old two-state ✓/✕ was the source of "the server is X,
@@ -660,15 +661,28 @@
     const glyph = present ? (redundant ? '✓' : '⚠') : '✕';
     // Each machine is its own <g> so it can be clicked, killed, labelled "#2" and targeted by a
     // token independently of its siblings.
+    // 圓球＝一台機器。不管是伺服器群組裡的一台、還是 Load Balancer 這種單台節點，
+    // 點下去的意思都一樣：拔掉或插回。沒蓋出來的能力（例如還沒買的 CDN）點下去
+    // 則是把它打開——這樣「點球」在整張圖上永遠只有一種意思。
+    const pluggable = nodeIsPluggable(sim, state, n);
+    const buildable = interactive && isComponent && !present;
     const machines = positions.map((p, i) => {
-      const down = n.pool && instanceIsDown(state, n.id, i);
-      const cls = ['sim-topo-instance', n.pool ? 'machine' : '', down ? 'down' : '', interactive && n.pool ? 'killable draggable' : ''].filter(Boolean).join(' ');
-      const mark = isComponent ? `<text class="sim-topo-mark" x="${p.x}" y="${p.y + 5}">${down ? '✕' : glyph}</text>` : '';
+      const down = instanceIsDown(state, n.id, i);
+      const hit = interactive && (pluggable || buildable);
+      const cls = ['sim-topo-instance', n.pool ? 'machine' : '', down ? 'down' : '',
+        hit ? 'killable' : '', interactive && n.pool ? 'draggable' : ''].filter(Boolean).join(' ');
+      // 被拔掉就要看得出來，不管它是不是一個「能力」節點——Load Balancer 這種
+      // 固定節點原本只會變暗，沒有 ✕，掃一眼分不出它是壞掉還是只是顏色不同。
+      const mark = isComponent
+        ? `<text class="sim-topo-mark" x="${p.x}" y="${p.y + 5}">${down ? '✕' : glyph}</text>`
+        : (down ? `<text class="sim-topo-mark" x="${p.x}" y="${p.y + 5}">✕</text>` : '');
       const idx = n.pool ? `<text class="sim-topo-instance-id" x="${p.x}" y="${p.y - r - 3}">#${i + 1}</text>` : '';
-      const tip = n.pool
-        ? `<title>${esc(n.label)} #${i + 1}${down ? '（已當機）' : ''}${interactive ? ' — 拖曳可移動；點一下可拔掉／插回' : ''}</title>`
+      const who = n.pool ? `${n.label} #${i + 1}` : n.label;
+      const action = buildable ? ' — 點一下把它蓋出來'
+        : pluggable ? (n.pool ? ' — 拖曳可移動；點一下可拔掉／插回' : ' — 點一下可拔掉／插回')
         : '';
-      return `<g class="${cls}"${n.pool ? ` data-instance="${esc(instanceKey(n.id, i))}"${interactive ? ' role="button" tabindex="0"' : ''}` : ''}>${tip}<circle cx="${p.x}" cy="${p.y}" r="${r}"/>${mark}${idx}</g>`;
+      const tip = `<title>${esc(who)}${down ? '（已當機）' : ''}${interactive ? esc(action) : ''}</title>`;
+      return `<g class="${cls}"${hit ? ` data-instance="${esc(instanceKey(n.id, i))}" role="button" tabindex="0"` : ''}>${tip}<circle cx="${p.x}" cy="${p.y}" r="${r}"/>${mark}${idx}</g>`;
     }).join('');
     const load = nodeLoad(sim, state, n);
     const loadText = load
@@ -701,11 +715,18 @@
 
   // Is this node able to accept a request right now? A pool with every machine pulled cannot,
   // and neither can a component that was never built.
+  // 每一顆圓球都是一台可以拔插的機器，不只伺服器群組裡的那些。Load Balancer、
+  // 上傳分塊器、資料庫這些單台節點被拔掉時，同樣不能再服務請求——否則畫面上畫著
+  // ✕ 的節點卻照樣有流量經過，那是在說謊。
   function nodeCanServe(sim, state, node) {
     if (!node) return false;
     if (!nodeIsPresent(sim, state, node)) return false;
-    if (node.pool) return aliveInstanceIndexes(sim, state, node).length > 0;
-    return true;
+    return aliveInstanceIndexes(sim, state, node).length > 0;
+  }
+
+  // 觀眾不是機器，拔不掉；其餘只要「已經蓋出來」的節點都可以拔插。
+  function nodeIsPluggable(sim, state, node) {
+    return node.kind !== 'user' && nodeIsPresent(sim, state, node);
   }
 
   function nodesSvg(sim, state, interactive) {
@@ -933,7 +954,7 @@
       </div>
       <p class="sim-topo-scroll-hint">← 左右滑動可以看完整張架構圖 →</p>
       ${interactive
-        ? '<p class="sim-topo-hint"><b>點一般能力節點的圓球</b>就能直接切換成打勾／下一種策略。伺服器群組的圓球是單台機器：拖曳可移動，短按可拔掉／插回；群組策略請點上方有底線的文字。<b>點資料庫／儲存節點</b>可看 schema 與資料。伺服器群組名稱下方的 ＋／− 會真正新增／收掉一台機器。</p>'
+        ? '<p class="sim-topo-hint">整張圖只有三種點法：<b>點圓球＝拔掉或插回那一台機器</b>（還沒蓋出來的能力，點下去就是把它蓋起來）；<b>點節點上方有底線的文字＝換一種做法</b>；<b>點 🗃 徽章＝看那個儲存的 schema 與資料</b>。伺服器群組的圓球還可以拖曳移動，名稱下方的 ＋／− 會真正新增／收掉一台機器。</p>'
         : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法與當時開的機器數量決定。</p>'}
       ${showControls ? `<div class="sim-topo-controls">
         <button class="button secondary sim-add-users" type="button" data-add="100">${esc(sim.addUsersLabel || '＋100 使用者')}</button>
@@ -1693,6 +1714,13 @@
           return;
         }
         const [nodeId, idx] = g.dataset.instance.split('::');
+        // 還沒蓋出來的能力（例如沒買的 CDN），點球的意思是「把它打開」，
+        // 而不是拔掉一台不存在的機器。
+        const node = findNode(topoOf(sim, state), nodeId);
+        if (node && node.kind === 'component' && !nodeIsPresent(sim, state, node)) {
+          onCycle(node.componentId);
+          return;
+        }
         onInstanceKill(nodeId, Number(idx));
       };
       svgEl.addEventListener('click', handleKill, true);
@@ -1715,37 +1743,34 @@
       svgEl.addEventListener('click', handleStepper, true);
       svgEl.addEventListener('keydown', handleStepper, true);
     }
+    if (onInspectStore) {
+      const handleBadge = evt => {
+        const badge = evt.target.closest?.('[data-store-badge]');
+        if (!badge) return;
+        if (evt.type === 'keydown' && evt.key !== 'Enter' && evt.key !== ' ') return;
+        evt.stopPropagation();
+        evt.preventDefault();
+        onInspectStore(badge.dataset.storeBadge);
+      };
+      svgEl.addEventListener('click', handleBadge, true);
+      svgEl.addEventListener('keydown', handleBadge, true);
+    }
     root.querySelectorAll('[data-toggle]').forEach(g => {
       const activate = event => {
         if (state._suppressNodeClick === g.dataset.node) {
           state._suppressNodeClick = null;
           return;
         }
+        // 圓球與 🗃 徽章都在捕獲階段被攔掉了（拔插／看資料），所以走到這裡的
+        // 只剩策略文字。點節點的空白處不應該意外改掉策略。
         const strategyHit = event?.target?.closest?.('[data-strategy-hit]');
-        const circleHit = event?.target?.closest?.('circle');
-        if (g.dataset.storeId && !strategyHit) {
-          onInspectStore?.(g.dataset.storeId);
-          return;
-        }
-        // A normal capability circle is the primary switch. Pool circles are intercepted above
-        // because they represent concrete machines (kill/recover), while data-node circles keep
-        // opening the inspector. Empty space and labels do not accidentally change strategy.
-        if (event?.type === 'click' && !strategyHit && !circleHit) return;
+        if (event?.type === 'click' && !strategyHit) return;
         onCycle(g.dataset.toggle);
       };
       g.addEventListener('click', activate);
       g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); activate(ev); } });
     });
-    root.querySelectorAll('[data-store-id]:not([data-toggle])').forEach(g => {
-      g.addEventListener('click', event => {
-        if (state._suppressNodeClick === g.dataset.node) { state._suppressNodeClick = null; return; }
-        event.stopPropagation();
-        onInspectStore?.(g.dataset.storeId);
-      });
-      g.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onInspectStore?.(g.dataset.storeId); }
-      });
-    });
+    // 純儲存節點的圓球現在跟其他球一樣是拔插；看資料請點它的 🗃 徽章。
     root.querySelector('[data-request-ledger]')?.addEventListener('click', () => onInspectStore?.('__requests'));
     root.querySelector('[data-toggle-connections]')?.addEventListener('click', event => {
       state.showConnections = state.showConnections === false;
@@ -3476,12 +3501,16 @@
       setInstanceDown(state, nodeId, idx, nowDown);
       repaintNodes(root, sim, state);
       refreshLoadSummary(root, sim, state);
+      // 單台節點沒有 #1、#2 的編號，寫出來只會讓人以為它還有第二台。
+      const who = node.pool ? `「${node.label}」#${idx + 1}` : `「${node.label}」`;
       if (nowDown) {
         traceLine(root, aliveAfter > 0
-          ? `💀 拔掉「${node.label}」#${idx + 1}。負載平衡器立刻把流量改導到剩下的 ${aliveAfter} 台，正在傳給這台的請求則直接中斷。`
-          : `💀 拔掉「${node.label}」#${idx + 1}——這是最後一台，這一層現在完全沒有機器可以服務請求了。`, 'bad');
+          ? `💀 拔掉${who}。負載平衡器立刻把流量改導到剩下的 ${aliveAfter} 台，正在傳給這台的請求則直接中斷。`
+          : `💀 拔掉${who}——沒有其他機器可以接手，經過這裡的請求現在全部中斷。`, 'bad');
       } else {
-        traceLine(root, `🔌 把「${node.label}」#${idx + 1} 插回去，它重新開始接收流量（共 ${aliveAfter} 台運作中）。`, 'ok');
+        traceLine(root, node.pool
+          ? `🔌 把${who}插回去，它重新開始接收流量（共 ${aliveAfter} 台運作中）。`
+          : `🔌 把${who}插回去，它重新開始接收流量。`, 'ok');
       }
     }, () => {
       // A structural change (new region / new user group) changes the node and edge lists

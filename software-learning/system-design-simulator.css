@@ -475,3 +475,12 @@ svg.sim-sandbox-svg{width:100%;height:auto;display:block;background:#0a0a10;bord
    顏色必須跟畫布底色一致；stroke-width 要比線本身寬一些。 */
 .sim-topo-edge-casing{stroke:#0d0d14;stroke-width:7;stroke-linecap:round;pointer-events:none}
 .sim-topo-wrap.edge-focus .sim-topo-edge-casing{opacity:.25}
+
+/* 每一顆球都是可以點的：游標與 hover 要說得出這件事。 */
+.sim-topo-instance.killable{cursor:pointer}
+.sim-topo-instance.killable circle{transition:stroke-width .15s ease,filter .15s ease}
+.sim-topo-instance.killable:hover circle{stroke-width:4;filter:drop-shadow(0 0 8px rgba(110,168,254,.55))}
+.sim-topo-instance.killable:focus-visible circle{stroke-width:4;outline:none;filter:drop-shadow(0 0 8px rgba(110,168,254,.8))}
+.sim-topo-data-count.inspectable{cursor:pointer}
+.sim-topo-data-count.inspectable:hover{fill:var(--accent)}
+@media(prefers-reduced-motion:reduce){.sim-topo-instance.killable circle{transition:none}}
