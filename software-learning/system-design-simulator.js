@@ -678,9 +678,13 @@
         : (down ? `<text class="sim-topo-mark" x="${p.x}" y="${p.y + 5}">✕</text>` : '');
       const idx = n.pool ? `<text class="sim-topo-instance-id" x="${p.x}" y="${p.y - r - 3}">#${i + 1}</text>` : '';
       const who = n.pool ? `${n.label} #${i + 1}` : n.label;
-      const action = buildable ? ' — 點一下把它蓋出來'
-        : pluggable ? (n.pool ? ' — 拖曳可移動；點一下可拔掉／插回' : ' — 點一下可拔掉／插回')
-        : '';
+      // 提示直接寫出「再點一下會變成什麼」，因為這顆球是個單鍵遙控器，
+      // 使用者最需要知道的就是下一段是什麼。
+      const nextOpt = isComponent ? findComponent(sim, n.componentId)?.options
+        .find(o => o.id === nextOptionId(sim, n.componentId, state)) : null;
+      const action = isComponent && nextOpt
+        ? ` — 點一下切換成「${shortStrategyLabel(nextOpt.label)}」${n.pool ? `（${Math.max(1, nextOpt.instances || 1)} 台）` : ''}${n.pool ? '；Shift＋點只拔掉這一台；拖曳可移動' : ''}`
+        : pluggable ? ` — 點一下${down ? '插回' : '拔掉'}` : '';
       const tip = `<title>${esc(who)}${down ? '（已當機）' : ''}${interactive ? esc(action) : ''}</title>`;
       return `<g class="${cls}"${hit ? ` data-instance="${esc(instanceKey(n.id, i))}" role="button" tabindex="0"` : ''}>${tip}<circle cx="${p.x}" cy="${p.y}" r="${r}"/>${mark}${idx}</g>`;
     }).join('');
@@ -954,7 +958,7 @@
       </div>
       <p class="sim-topo-scroll-hint">← 左右滑動可以看完整張架構圖 →</p>
       ${interactive
-        ? '<p class="sim-topo-hint">整張圖只有三種點法：<b>點圓球＝拔掉或插回那一台機器</b>（還沒蓋出來的能力，點下去就是把它蓋起來）；<b>點節點上方有底線的文字＝換一種做法</b>；<b>點 🗃 徽章＝看那個儲存的 schema 與資料</b>。伺服器群組的圓球還可以拖曳移動，名稱下方的 ＋／− 會真正新增／收掉一台機器。</p>'
+        ? '<p class="sim-topo-hint"><b>每一顆球都是一個只有一個按鈕的遙控器：點一下就往下一個狀態走。</b>伺服器群組是 1 台 → 2 台 → 3 台 → 回到 1 台；CDN 是不建 → 全部進 → 只有熱門 → 回到不建；Load Balancer、儲存這種沒有策略的節點則是運作中 ↔ 已拔掉。<br>另外兩種點法：<b>Shift＋點群組裡的某一顆球</b>＝只拔掉那一台，用來看流量怎麼改導；<b>點 🗃 徽章</b>＝看那個儲存的 schema 與資料。球還可以拖曳移動，名稱下方的 ＋／− 會在目前策略之上再加／收一台。</p>'
         : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法與當時開的機器數量決定。</p>'}
       ${showControls ? `<div class="sim-topo-controls">
         <button class="button secondary sim-add-users" type="button" data-add="100">${esc(sim.addUsersLabel || '＋100 使用者')}</button>
@@ -1714,10 +1718,19 @@
           return;
         }
         const [nodeId, idx] = g.dataset.instance.split('::');
-        // 還沒蓋出來的能力（例如沒買的 CDN），點球的意思是「把它打開」，
-        // 而不是拔掉一台不存在的機器。
         const node = findNode(topoOf(sim, state), nodeId);
-        if (node && node.kind === 'component' && !nodeIsPresent(sim, state, node)) {
+        // 每一顆球都是一個只有一個按鈕的遙控器：點一下就往下一個狀態走。
+        //
+        //   有策略的節點（14 個）→ 走它自己的策略循環。伺服器群組的三個選項
+        //                          剛好就是 1 台 → 2 台 → 3 台，所以「按一下多一台」
+        //                          這件事直接變成點球的行為。
+        //   沒策略的節點（Load Balancer、上傳分塊器、儲存…）→ 只有兩個狀態，
+        //                          運作中 ↔ 已拔掉。
+        //
+        // 單獨拔掉群組裡的某一台（用來看 failover）改成 Shift＋點，才不會跟
+        // 主要的狀態循環搶同一個手勢。
+        const wantsSingleMachine = evt.shiftKey && node?.pool;
+        if (!wantsSingleMachine && node?.kind === 'component') {
           onCycle(node.componentId);
           return;
         }
@@ -3451,6 +3464,11 @@
       const before = currentOptionId(sim, componentId, state);
       const next = nextOptionId(sim, componentId, state);
       state.choice[componentId] = next;
+      // 換了策略等於重新配置這一層，先前 Shift＋點單獨拔掉的機器要一併復原，
+      // 否則會出現「策略說 3 台、畫面只有 2 台活著」這種對不起來的狀態。
+      (topoOf(sim, state)?.nodes || [])
+        .filter(n => n.componentId === componentId && n.pool)
+        .forEach(n => { for (let i = 0; i < MAX_INSTANCES; i++) setInstanceDown(state, n.id, i, false); });
       // 架構決策一改就立刻寫進共用儲存，這樣「實際運作」讀到的一定是最新的一份，
       // 不必等到使用者按下切換連結才存。
       if (sim.chapterId === 'sd-book-14') window.YouTubeModes?.saveDesign(designOf(sim, state));
