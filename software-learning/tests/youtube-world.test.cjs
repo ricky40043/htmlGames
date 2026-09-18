@@ -152,3 +152,84 @@ test('只有熱門影片進 CDN 時，長尾影片不會被快取', () => {
   assert.ok(popular <= 3, `只有熱門進 CDN 時最多三支，實際 ${popular}`);
   assert.ok(popular < all);
 });
+
+const { FrameStepper } = require('../youtube-world.js');
+test('slow frames retain all debt and advance at most four fixed ticks', () => {
+    const pacing = new FrameStepper();
+    const steps = [];
+    assert.equal(pacing.advance(.25, 20, dt => steps.push(dt), () => 0), 4);
+    assert.ok(Math.abs(pacing.pending - 4.6) < 1e-9);
+    assert.deepEqual(steps, [.1, .1, .1, .1]);
+    assert.equal(pacing.advance(10, 20, () => {}, () => 0), 4);
+    assert.ok(Math.abs(pacing.pending - 204.2) < 1e-9, 'long frames must not clamp or erase elapsed time');
+});
+test('expensive ticks yield after budget, even with a large backlog', () => {
+    const pacing = new FrameStepper();
+    let now = 0;
+    assert.equal(pacing.advance(1, 20, () => { now += 4; }, () => now), 2);
+    assert.ok(Math.abs(pacing.pending - 19.8) < 1e-9);
+    now = 0;
+    assert.equal(pacing.advance(0, 20, () => { now += 20; }, () => now), 1);
+});
+test('bounded frame batching and speed changes replay exactly the same world', () => {
+    const a = quiet(30), b = quiet(30), pacing = new FrameStepper();
+    a.options.autoFaults = b.options.autoFaults = true;
+    for (let i = 0; i < 60; i++) {
+        let cost = 0;
+        pacing.advance(i % 2 ? .25 : .75, i % 2 ? 20 : 1, dt => { b.step(dt); cost += 4; }, () => cost);
+    }
+    const saved = new FrameStepper(pacing.pending);
+    while (saved.pending + 1e-9 >= .1) saved.advance(0, 1, dt => b.step(dt), () => 0);
+    a.step(172.5);
+    assert.ok(Math.abs(a.remainder - b.remainder) < 1e-9);
+    assert.deepEqual({ ...a, remainder: 0 }, { ...b, remainder: 0 });
+});
+test('manual steps consume retained debt without discarding the remainder', () => {
+    const pacing = new FrameStepper(3.25), w = quiet();
+    pacing.singleStep(dt => w.step(dt));
+    assert.equal(w.time, .1);
+    assert.equal(pacing.pending, 3.15);
+});
+test('300 viewers identify shared storage; diagnostics do not mutate the simulation', () => {
+    const w = new World(14, 300);
+    w.options.autoFaults = false;
+    w.step(120);
+    const before = JSON.stringify(w);
+    const pressure = w.capacityPressure();
+    assert.equal(pressure[0].kind, 'storage');
+    assert.equal(pressure[0].region, 'us');
+    assert.equal(pressure[0].waiting, 118);
+    assert.equal(pressure[0].slots, 16);
+    assert.equal(JSON.stringify(w), before);
+});
+test('shared queues are not multiplied by replica count; idle pools are not bottlenecks', () => {
+    const w = quiet();
+    assert.deepEqual(w.capacityPressure(), []);
+    w.machines.filter(m => m.kind === 'worker').forEach(m => { m.queued = 5; m.active = 1; });
+    const storage = w.machines.find(m => m.kind === 'storage');
+    storage.queued = 8;
+    assert.equal(w.capacityPressure()[0].kind, 'storage');
+    assert.equal(w.capacityPressure()[1].waiting, 5);
+    assert.equal(w.capacityPressure()[1].slots, 2);
+});
+test('capacity pressure follows the bottleneck after adding frontend and storage machines', () => {
+    const w = new World(14, 300);
+    w.options.autoFaults = false;
+    w.regions.forEach(r => {
+        for (let i = 0; i < 7; i++) ['stream', 'api', 'cdn'].forEach(k => w.addMachine(k, r.id));
+    });
+    for (let i = 0; i < 3; i++) w.addMachine('storage', 'us');
+    w.step(120);
+    assert.equal(w.capacityPressure()[0].kind, 'worker');
+    assert.equal(w.capacityPressure()[0].waiting, 5);
+    assert.ok(w.summary().rebuffer < 2);
+});
+test('unavailable backend is diagnosed with zero healthy slots', () => {
+    const w = quiet(10);
+    w.setMachine(w.machines.find(m => m.kind === 'storage').id, false);
+    w.step(10);
+    const storage = w.capacityPressure().find(p => p.kind === 'storage');
+    assert.ok(storage.waiting > 0);
+    assert.equal(storage.healthy, 0);
+    assert.equal(storage.slots, 0);
+});
