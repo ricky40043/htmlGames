@@ -470,3 +470,8 @@ svg.sim-sandbox-svg{width:100%;height:auto;display:block;background:#0a0a10;bord
 /* 策略文字縮短之後才放得下，讓它在視覺上明確是「可以點的」 */
 .sim-topo-cost.strategy{cursor:pointer}
 @media(prefers-reduced-motion:reduce){.sim-topo-edge,.sim-topo-node{transition:none}}
+
+/* 連線襯線：交叉處讓上面那條在下面那條上壓出缺口，眼睛才追得下去。
+   顏色必須跟畫布底色一致；stroke-width 要比線本身寬一些。 */
+.sim-topo-edge-casing{stroke:#0d0d14;stroke-width:7;stroke-linecap:round;pointer-events:none}
+.sim-topo-wrap.edge-focus .sim-topo-edge-casing{opacity:.25}

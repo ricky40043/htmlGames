@@ -506,7 +506,20 @@
   }
 
   function edgesSvg(sim, state) {
-    return expandedEdges(sim, state).map(({ edge: e, from, to }) => {
+    // 44 條線交叉 35 處，而交叉本身是結構性的：三個地區都要扇入同一組共用後端，
+    // 怎麼擺都會交叉（實測過重排節點，語意不壞掉的前提下最多只能少 14%）。
+    // 所以不動佈局，改讓交叉「看得出上下層」：每條線先畫一條與底色同色、比較粗的
+    // 襯線，再畫線本身。兩條線交叉時，上面那條會在下面那條上壓出一道缺口，
+    // 眼睛就追得下去——這是接線圖的標準做法。
+    //
+    // 襯線不帶任何 data 屬性、也不用 .sim-topo-edge 這個 class，才不會被動畫、
+    // 路徑查詢與節點聚焦那幾個選擇器撈到。所有襯線必須先畫完，再畫所有線本身，
+    // 否則後面那條的襯線會蓋掉前面那條的線。
+    const lines = expandedEdges(sim, state);
+    const casings = lines.map(({ from, to }) =>
+      `<line class="sim-topo-edge-casing" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}"/>`
+    ).join('');
+    return casings + lines.map(({ edge: e, from, to }) => {
       // An edge is only "inactive" when it explicitly requires a capability that's off (e.g. a
       // direct-upload bypass that only exists once you've turned it on). It must NOT go dashed
       // just because the node at one end is a resilience/cost capability that's currently off —
