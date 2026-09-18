@@ -517,7 +517,7 @@
       const cls = ['sim-topo-edge', e.kind === 'stub' ? 'stub' : '', isActive ? 'active' : 'inactive'].filter(Boolean).join(' ');
       const fromKey = from.idx == null ? e.from : instanceKey(e.from, from.idx);
       const toKey = to.idx == null ? e.to : instanceKey(e.to, to.idx);
-      return `<line class="${cls}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" data-edge="${esc(e.from)}-${esc(e.to)}" data-edge-route="${esc(fromKey)}--${esc(toKey)}"/>`;
+      return `<line class="${cls}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" data-edge="${esc(e.from)}-${esc(e.to)}" data-edge-from="${esc(e.from)}" data-edge-to="${esc(e.to)}" data-edge-route="${esc(fromKey)}--${esc(toKey)}"/>`;
     }).join('');
   }
 
@@ -576,6 +576,12 @@
     return btn(-dx, -1, '−', atMin, `${n.label}：減少一台機器`) + btn(dx, 1, '+', atMax, `${n.label}：增加一台機器`);
   }
 
+  // 「無備援（壞掉沒有人接手）」→「無備援」。括號裡的補充留給圖例與滑鼠提示，
+  // 圖上只放掃視時要比較的那幾個字。沒有括號的標籤原樣返回。
+  function shortStrategyLabel(label) {
+    return String(label ?? '').replace(/（[^（）]*）/g, '').trim() || String(label ?? '');
+  }
+
   function nodeInnerSvg(sim, state, n, interactive) {
     const isComponent = n.kind === 'component';
     const on = nodeIsOn(sim, state, n);
@@ -586,7 +592,9 @@
     const layout = n.pool ? poolLayout(positions, r) : { x: n.x, top: n.y - r, bottom: n.y + r };
     const uiX = layout.x;
     const labelY = n.pool ? layout.bottom + 17 : n.y + labelOffset + 14;
-    const costY = n.pool ? layout.top - 10 : n.y - labelOffset - 6;
+    // 伺服器群組的每一台上方都印著 #1／#2 的編號（在 top-3），策略文字如果只放在 top-10，
+    // 兩行只差 7 個單位、字高卻有 12，必定互相壓到。拉開到 top-26 才真的分得開。
+    const costY = n.pool ? layout.top - 26 : n.y - labelOffset - 6;
     const opt = isComponent ? currentOption(sim, n.componentId, state) : null;
     const aliveCount = n.pool ? aliveInstanceIndexes(sim, state, n).length : 1;
     const countNote = n.pool ? `（${aliveCount}/${positions.length} 台運作中）` : '';
@@ -600,8 +608,17 @@
     const extraHere = n.pool ? Math.max(0, state.extraInstances?.[n.id] || 0) : 0;
     const nodeCost = (opt?.cost || 0) + extraHere * (n.extraInstanceCost ?? 1);
     const extraNote = extraHere ? `＋自行加開 ${extraHere} 台` : '';
-    const costText = opt
+    // 圖上的策略文字原本是「0/月 · 無備援（壞掉沒有人接手）（1/1 台運作中）」——228 個
+    // viewBox 單位寬，而整張圖才 1450 寬、節點間距約 200，所以 14 個這種標籤必然互相疊到。
+    //
+    // 括號裡那句「off 到底是什麼意思」很重要，不能刪掉，但它不必印在圖上：圖下方的圖例
+    // 本來就完整列出每個能力目前選的做法，這裡再補一個 <title> 當滑鼠提示。圖上只留
+    // 「多少錢 · 哪一種做法 · 幾台活著」這三件在掃視時真正要比較的事。
+    const costTextFull = opt
       ? `${nodeCost > 0 ? '+' : ''}${nodeCost}/月 · ${opt.label}${extraNote}${countNote}`
+      : '';
+    const costText = opt
+      ? `${nodeCost > 0 ? '+' : ''}${nodeCost}/月 · ${shortStrategyLabel(opt.label)}${extraHere ? ` · +${extraHere} 台` : ''}${n.pool ? ` · ${aliveCount}/${positions.length} 台` : ''}`
       : '';
     // One line BELOW the node label, not two pixels under it — at +16 against the label's +14
     // the two strings printed on top of each other and rendered the users node unreadable.
@@ -611,8 +628,11 @@
     const badge = headText ? `<text class="sim-topo-badge" x="${uiX}" y="${n.y + labelOffset + 30}">${esc(headText)}</text>` : '';
     const store = storeForNode(sim, n.id);
     const storedRows = store && Runtime ? Runtime.tableRowCount(state.runtime, store.id) : 0;
+    // 🗃 筆數原本放在節點右上角（top-7），跟同樣在上方的策略文字剛好同高而互相壓到，
+    // 也會撞到地區框的標題。移到節點名稱底下——那裡本來就空著，而且「這個儲存有幾筆資料」
+    // 跟節點名稱本來就該讀在一起。
     const storeBadge = store
-      ? `<text class="sim-topo-data-count" x="${uiX + 25}" y="${layout.top - 7}">🗃 ${storedRows}</text>`
+      ? `<text class="sim-topo-data-count" x="${uiX}" y="${labelY + 16}">🗃 ${storedRows}</text>`
       : '';
     // ✓ protected · ⚠ running but with no redundancy · ✕ not built at all · ✕(red, dead) a
     // machine whose plug you pulled. The old two-state ✓/✕ was the source of "the server is X,
@@ -645,7 +665,7 @@
       ? `<text class="sim-topo-absent" x="${uiX}" y="${n.pool ? layout.bottom + 54 : n.y + labelOffset + 28}">（未建置，流量不會經過這裡）</text>` : '';
     return `${machines}${storeBadge}
         <text class="sim-topo-label" x="${uiX}" y="${labelY}">${esc(n.label)}</text>
-        ${costText ? `<text class="sim-topo-cost${interactive ? ' strategy' : ''}" x="${uiX}" y="${costY}"${interactive ? ' data-strategy-hit="1" role="button" tabindex="0"' : ''}>${esc(costText)}</text>` : ''}
+        ${costText ? `<text class="sim-topo-cost${interactive ? ' strategy' : ''}" x="${uiX}" y="${costY}"${interactive ? ' data-strategy-hit="1" role="button" tabindex="0"' : ''}><title>${esc(costTextFull)}</title>${esc(costText)}</text>` : ''}
         ${loadText}${absentNote}${badge}
         ${interactive && n.pool ? instanceStepperSvg(sim, state, n, positions.length, layout) : ''}`;
   }
@@ -1607,9 +1627,44 @@
     });
   }
 
+  // 這張圖有 44 條連線、兩兩交叉 35 處，靜態看沒有辦法追出「這個節點到底接到誰」。
+  // 滑過或鍵盤聚焦一個節點時，把它自己的連線亮起來、其餘淡出——不改變任何佈局，
+  // 只是把「現在要看的那幾條」從背景裡拉出來。碰到節點以外的地方就恢復原狀。
+  function wireEdgeFocus(root, svgEl) {
+    const wrap = root.querySelector('.sim-topo-wrap');
+    if (!wrap) return;
+    const clear = () => {
+      wrap.classList.remove('edge-focus');
+      svgEl.querySelectorAll('.sim-topo-edge.related').forEach(l => l.classList.remove('related'));
+      svgEl.querySelectorAll('[data-node].edge-focus-source').forEach(g => g.classList.remove('edge-focus-source'));
+    };
+    const focusNode = nodeEl => {
+      const id = nodeEl?.dataset.node;
+      if (!id) { clear(); return; }
+      clear();
+      wrap.classList.add('edge-focus');
+      nodeEl.classList.add('edge-focus-source');
+      svgEl.querySelectorAll('.sim-topo-edge').forEach(line => {
+        if (line.dataset.edgeFrom === id || line.dataset.edgeTo === id) line.classList.add('related');
+      });
+    };
+    svgEl.addEventListener('pointerover', evt => {
+      // 拖曳機器的時候不要搶戲。
+      if (evt.buttons) return;
+      focusNode(evt.target.closest?.('[data-node]'));
+    });
+    svgEl.addEventListener('pointerleave', clear);
+    svgEl.addEventListener('focusin', evt => focusNode(evt.target.closest?.('[data-node]')));
+    svgEl.addEventListener('focusout', clear);
+    // 連線會被 repaintEdges 整組重建，重建後舊的 .related 就不存在了；
+    // 這裡直接清掉狀態，滑鼠再動一下就會重新亮起來。
+    return clear;
+  }
+
   function wireTopologyControls(root, sim, state, onCycle, onInstanceDelta, onInstanceKill, onStructureChange, onLoadChange, onInspectStore) {
     const svgEl = root.querySelector('svg.sim-topo');
     if (!svgEl) return;
+    wireEdgeFocus(root, svgEl);
     // Clicking an individual MACHINE pulls its plug (or plugs it back in). Same capture-phase
     // trick as the steppers: it must not also bubble into the node's "cycle the strategy"
     // handler. The strategy label above the node is the hit target for that instead.

@@ -1,0 +1,71 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>拓樸圖版面量測</title>
+<!--
+  架構設計模式那張拓樸圖的版面量測：文字寬度、文字互相重疊、文字壓到節點、連線交叉。
+  這張圖有 27 個節點、44 條連線，改任何一個標籤位置都可能在別處壓到東西，
+  所以用量的、不要用看的。
+
+  用法：從 software-learning/ 起一個靜態伺服器
+      python3 -m http.server 8777
+  再跑：
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+        --headless=new --disable-gpu --window-size=1400,1400 \
+        --virtual-time-budget=12000 --dump-dom \
+        "http://localhost:8777/tests/topology-layout-harness.html"
+  然後讀 <pre id="out">。
+
+  2026-09-18 改善後的基準（超過這些數字代表版面又退步了）：
+      最寬的文字        ≤ 152 單位（viewBox 寬 1450）
+      文字互相重疊      2 組（兩組都是使用者可拖曳的元素，本來就會移動）
+      連線交叉          35 處（尚未處理，靠 hover 聚焦補救）
+  改善前：最寬 228、重疊 14 組。
+--><body>
+<iframe id="f" src="../system-design-simulator.html?chapter=sd-book-14" style="width:1380px;height:1200px;border:0"></iframe>
+<pre id="out">pending</pre>
+<script>
+const log=[],p=v=>log.push(v);
+document.getElementById('f').addEventListener('load',()=>setTimeout(()=>{
+ try{
+  const d=document.getElementById('f').contentDocument;
+  const start=[...d.querySelectorAll('button')].find(b=>/開始這一年/.test(b.textContent));
+  if(start) start.click();
+  setTimeout(()=>{
+   const svg=d.querySelector('svg.sim-topo');
+   p('viewBox: '+svg.getAttribute('viewBox'));
+   const texts=[...svg.querySelectorAll('text')];
+   p('文字元素總數: '+texts.length);
+   const vis=t=>[...t.childNodes].filter(n=>n.nodeType===3||n.nodeName!=='title').map(n=>n.textContent).join('').trim();
+   const boxes=texts.map(t=>{const b=t.getBBox();return{cls:t.getAttribute('class')||'',s:vis(t),x:b.x,y:b.y,w:b.width,h:b.height};}).filter(b=>b.w>0);
+   // 依 class 統計
+   const byCls={};boxes.forEach(b=>{byCls[b.cls]=(byCls[b.cls]||0)+1;});
+   p('依類別: '+Object.entries(byCls).map(([k,v])=>k+'×'+v).join(', '));
+   // 最長的文字
+   const longest=[...boxes].sort((a,b)=>b.w-a.w).slice(0,6);
+   p('');p('最寬的 6 個文字（viewBox 單位）:');
+   longest.forEach(b=>p('  w='+b.w.toFixed(0)+'  ['+b.cls+']  '+b.s.slice(0,44)));
+   // 文字互相重疊
+   let ov=0;const pairs=[];
+   for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){
+     const a=boxes[i],b=boxes[j];
+     if(a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h){ov++;if(pairs.length<8)pairs.push(a.s.slice(0,22)+'  ✖  '+b.s.slice(0,22));}
+   }
+   p('');p('文字互相重疊的配對數: '+ov);
+   pairs.forEach(x=>p('   '+x));
+   // 文字壓到節點圓圈
+   const circles=[...svg.querySelectorAll('circle')].map(c=>({cx:+c.getAttribute('cx'),cy:+c.getAttribute('cy'),r:+c.getAttribute('r')})).filter(c=>c.r>5);
+   let hitNode=0;
+   boxes.filter(b=>!/sim-topo-mark|sim-drag-viewer-emoji/.test(b.cls)).forEach(b=>{circles.forEach(c=>{const nx=Math.max(b.x,Math.min(c.cx,b.x+b.w)),ny=Math.max(b.y,Math.min(c.cy,b.y+b.h));if(Math.hypot(c.cx-nx,c.cy-ny)<c.r)hitNode++;});});
+   p('');p('文字壓到節點圓圈的次數: '+hitNode+'（圓圈數 '+circles.length+'）');
+   // 連線交叉
+   const lines=[...svg.querySelectorAll('.sim-topo-edges line')].map(l=>({x1:+l.getAttribute('x1'),y1:+l.getAttribute('y1'),x2:+l.getAttribute('x2'),y2:+l.getAttribute('y2')}));
+   const cross=(a,b)=>{const d=(p1,p2,p3)=>(p2.x-p1.x)*(p3.y-p1.y)-(p2.y-p1.y)*(p3.x-p1.x);
+     const A={x:a.x1,y:a.y1},B={x:a.x2,y:a.y2},C={x:b.x1,y:b.y1},D={x:b.x2,y:b.y2};
+     if((A.x===C.x&&A.y===C.y)||(A.x===D.x&&A.y===D.y)||(B.x===C.x&&B.y===C.y)||(B.x===D.x&&B.y===D.y))return false;
+     const d1=d(A,B,C),d2=d(A,B,D),d3=d(C,D,A),d4=d(C,D,B);
+     return ((d1>0)!==(d2>0))&&((d3>0)!==(d4>0));};
+   let cc=0;for(let i=0;i<lines.length;i++)for(let j=i+1;j<lines.length;j++)if(cross(lines[i],lines[j]))cc++;
+   p('');p('連線數: '+lines.length+'，兩兩交叉: '+cc+' 處');
+   document.getElementById('out').textContent=log.join('\n');
+  },1400);
+ }catch(e){document.getElementById('out').textContent='ERROR '+e.message;}
+},1000));
+</script></body></html>

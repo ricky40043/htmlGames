@@ -457,3 +457,16 @@ svg.sim-sandbox-svg{width:100%;height:auto;display:block;background:#0a0a10;bord
   .sim-ul-filerow .button,.sim-ul-file{width:100%}
   .sim-ul-cell{width:12px;height:12px}
 }
+
+/* 節點聚焦：滑過或鍵盤聚焦一個節點時，只亮它自己的連線。
+   44 條線交叉 35 處，靜態圖追不出誰接誰，這是最省力的補救。 */
+.sim-topo-wrap.edge-focus .sim-topo-edge{opacity:.12}
+.sim-topo-wrap.edge-focus .sim-topo-edge.related{opacity:1;stroke-width:3.2;filter:drop-shadow(0 0 5px rgba(110,168,254,.7))}
+.sim-topo-wrap.edge-focus .sim-topo-node:not(.edge-focus-source){opacity:.5}
+.sim-topo-wrap.edge-focus .sim-topo-node.edge-focus-source{opacity:1}
+.sim-topo-wrap.edge-focus .sim-topo-node.edge-focus-source circle{stroke-width:3}
+.sim-topo-edge{transition:opacity .15s ease,stroke-width .15s ease}
+.sim-topo-node{transition:opacity .15s ease}
+/* 策略文字縮短之後才放得下，讓它在視覺上明確是「可以點的」 */
+.sim-topo-cost.strategy{cursor:pointer}
+@media(prefers-reduced-motion:reduce){.sim-topo-edge,.sim-topo-node{transition:none}}
