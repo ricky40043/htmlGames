@@ -215,6 +215,8 @@
 
   function setInstanceDown(state, nodeId, idx, down) {
     state.instanceDown = state.instanceDown || {};
+    state.instanceEpoch = state.instanceEpoch || {};
+    if (down && !instanceIsDown(state, nodeId, idx)) state.instanceEpoch[instanceKey(nodeId, idx)] = (state.instanceEpoch[instanceKey(nodeId, idx)] || 0) + 1;
     if (down) state.instanceDown[instanceKey(nodeId, idx)] = true;
     else delete state.instanceDown[instanceKey(nodeId, idx)];
   }
@@ -506,6 +508,7 @@
   }
 
   function edgesSvg(sim, state) {
+    const topo = topoOf(sim, state);
     // 44 條線交叉 35 處，而交叉本身是結構性的：三個地區都要扇入同一組共用後端，
     // 怎麼擺都會交叉（實測過重排節點，語意不壞掉的前提下最多只能少 14%）。
     // 所以不動佈局，改讓交叉「看得出上下層」：每條線先畫一條與底色同色、比較粗的
@@ -526,7 +529,9 @@
       // that node is still structurally there (e.g. CDN with popularity-tiering off is still a
       // CDN, just not cost-optimized); dimming its wires falsely implies the path is broken.
       // The node's own ✓/✕ colour is what shows whether that capability is currently on.
-      const isActive = !e.requiresComponent || currentOptionId(sim, e.requiresComponent, state) !== 'off';
+      const isActive = (!e.requiresComponent || currentOptionId(sim, e.requiresComponent, state) !== 'off')
+        && nodeCanServe(sim, state, findNode(topo, e.from)) && nodeCanServe(sim, state, findNode(topo, e.to))
+        && !instanceIsDown(state, e.from, from.idx ?? 0) && !instanceIsDown(state, e.to, to.idx ?? 0);
       const cls = ['sim-topo-edge', e.kind === 'stub' ? 'stub' : '', isActive ? 'active' : 'inactive'].filter(Boolean).join(' ');
       const fromKey = from.idx == null ? e.from : instanceKey(e.from, from.idx);
       const toKey = to.idx == null ? e.to : instanceKey(e.to, to.idx);
@@ -678,13 +683,8 @@
         : (down ? `<text class="sim-topo-mark" x="${p.x}" y="${p.y + 5}">✕</text>` : '');
       const idx = n.pool ? `<text class="sim-topo-instance-id" x="${p.x}" y="${p.y - r - 3}">#${i + 1}</text>` : '';
       const who = n.pool ? `${n.label} #${i + 1}` : n.label;
-      // 提示直接寫出「再點一下會變成什麼」，因為這顆球是個單鍵遙控器，
-      // 使用者最需要知道的就是下一段是什麼。
-      const nextOpt = isComponent ? findComponent(sim, n.componentId)?.options
-        .find(o => o.id === nextOptionId(sim, n.componentId, state)) : null;
-      const action = isComponent && nextOpt
-        ? ` — 點一下切換成「${shortStrategyLabel(nextOpt.label)}」${n.pool ? `（${Math.max(1, nextOpt.instances || 1)} 台）` : ''}${n.pool ? '；Shift＋點只拔掉這一台；拖曳可移動' : ''}`
-        : pluggable ? ` — 點一下${down ? '插回' : '拔掉'}` : '';
+      const action = buildable ? ' — 點一下建置；策略文字可切換方案'
+        : pluggable ? ` — 點一下${down ? '恢復連線' : '關閉這台機器'}${n.pool ? '；拖曳可移動' : ''}；策略請點上方文字` : '';
       const tip = `<title>${esc(who)}${down ? '（已當機）' : ''}${interactive ? esc(action) : ''}</title>`;
       return `<g class="${cls}"${hit ? ` data-instance="${esc(instanceKey(n.id, i))}" role="button" tabindex="0"` : ''}>${tip}<circle cx="${p.x}" cy="${p.y}" r="${r}"/>${mark}${idx}</g>`;
     }).join('');
@@ -958,7 +958,7 @@
       </div>
       <p class="sim-topo-scroll-hint">← 左右滑動可以看完整張架構圖 →</p>
       ${interactive
-        ? '<p class="sim-topo-hint"><b>每一顆球都是一個只有一個按鈕的遙控器：點一下就往下一個狀態走。</b>伺服器群組是 1 台 → 2 台 → 3 台 → 回到 1 台；CDN 是不建 → 全部進 → 只有熱門 → 回到不建；Load Balancer、儲存這種沒有策略的節點則是運作中 ↔ 已拔掉。<br>另外兩種點法：<b>Shift＋點群組裡的某一顆球</b>＝只拔掉那一台，用來看流量怎麼改導；<b>點 🗃 徽章</b>＝看那個儲存的 schema 與資料。球還可以拖曳移動，名稱下方的 ＋／− 會在目前策略之上再加／收一台。</p>'
+        ? '<p class="sim-topo-hint"><b>點機器球＝關閉／恢復這一台；點上方策略文字＝切換方案。</b>未建置的 CDN 點一下可建置。關機後，傳到一半的球會在原地標紅並留下斷線紀錄；播放器保留進度與緩衝，重試同一片段。同區沒有健康服務時會嘗試跨區接手。<br><b>點 🗃 徽章</b>看資料與 Request。球可拖曳移動，＋／− 用來加／收機器；「無備援」代表仍有一台運作，不是關機。</p>'
         : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法與當時開的機器數量決定。</p>'}
       ${showControls ? `<div class="sim-topo-controls">
         <button class="button secondary sim-add-users" type="button" data-add="100">${esc(sim.addUsersLabel || '＋100 使用者')}</button>
@@ -1149,7 +1149,7 @@
   // `guard` is checked every frame: the moment it returns false the packet is considered lost in
   // transit — it stops where it is, turns red, and `onLost` fires instead of `onDone`. That is
   // what "pull a machine out and watch the half-delivered requests die" actually looks like.
-  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, weights, radius = 7, onDone, onHop, guard, onLost } = {}) {
+  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, weights, radius = 7, onDone, onHop, guard, onLost, advance } = {}) {
     if (!svgEl || !waypoints.length) { onDone?.(null); return null; }
     if (waypoints.length === 1) {
       onHop?.(0);
@@ -1166,6 +1166,7 @@
     // silently omitted the client that originated every operation.
     onHop?.(0);
     const start = Date.now();
+    let last = start, settled = false;
     const segCount = waypoints.length - 1;
     const bounds = weightBoundaries(segCount, weights);
     let nextHop = 1;
@@ -1175,16 +1176,22 @@
         nextHop++;
       }
     };
+    const lose = reason => {
+      if (settled) return;
+      settled = true;
+      clearInterval(timer);
+      circle.classList.add('lost');
+      setTimeout(() => circle.remove(), 1200);
+      onLost?.(circle, reason);
+    };
     const timer = setInterval(() => {
-      if (guard && !guard()) {
-        clearInterval(timer);
-        circle.setAttribute('class', `${tokenClass} ${className} lost`.trim());
-        setTimeout(() => circle.remove(), 900);
-        onLost?.(circle);
-        return;
-      }
-      const t = (Date.now() - start) / durationMs;
+      if (settled) return;
+      if (guard && !guard()) { lose(); return; }
+      const now = Date.now();
+      const t = advance ? advance(now - last) : (now - start) / durationMs;
+      last = now;
       if (t >= 1) {
+        settled = true;
         clearInterval(timer);
         fireHopsUpTo(1);
         const end = waypoints[waypoints.length - 1];
@@ -1198,7 +1205,54 @@
       circle.setAttribute('cx', p.x);
       circle.setAttribute('cy', p.y);
     }, 40);
-    return { circle, stop: () => clearInterval(timer) };
+    return { circle, abort: lose, stop: () => { settled = true; clearInterval(timer); } };
+  }
+
+  // Keep the client in place. Only regional service hops move during a retry.
+  function resolveServicePath(sim, state, nodeIds) {
+    if (sim.chapterId !== 'sd-book-14') return nodeIds;
+    const topo = topoOf(sim, state);
+    const service = /^(cdn|loadBalancer|streamServer|apiServer)_(.+)$/;
+    const origin = nodeIds.map(id => id.match(service)).find(Boolean)?.[2];
+    if (!origin) return nodeIds;
+    const healthy = ids => ids.every(id => nodeCanServe(sim, state, findNode(topo, id)));
+    if (healthy(nodeIds)) return nodeIds;
+    const withoutCdn = nodeIds.some(id => id.startsWith('cdn_'))
+      ? nodeIds.some(id => id.startsWith('streamServer_'))
+        ? nodeIds.filter(id => !id.startsWith('cdn_'))
+        : [nodeIds[0], `loadBalancer_${origin}`, `streamServer_${origin}`, 'transcodedStorage', `streamServer_${origin}`, `loadBalancer_${origin}`, nodeIds[nodeIds.length - 1]]
+      : nodeIds;
+    const regions = [...new Set([origin, 'us', ...(topo.regionIds || [])])];
+    for (const region of regions) {
+      for (const template of [nodeIds, withoutCdn]) {
+        const candidate = template.map(id => {
+          const match = id.match(service);
+          return match ? `${match[1]}_${region}` : id;
+        });
+        if (healthy(candidate)) return candidate;
+      }
+    }
+    return nodeIds;
+  }
+
+  function playbackProfile(sim, state, mode, region) {
+    const cs = sim.abrSim || {};
+    const viewerRegion = state.dragViewer?.regionId || 'tw';
+    const servingRegion = region || viewerRegion;
+    const name = topoOf(sim, state).regionLabel?.[servingRegion] || servingRegion;
+    const source = mode === 'cdn'
+      ? { throughput: 18, latency: .08, ...cs.sources?.cdn }
+      : { throughput: 2.8, latency: 1.6, ...cs.sources?.origin };
+    const weak = !!state.dragViewer?.inZone;
+    const lastMile = weak ? (cs.poorMbpsRange?.[0] || .4) : (cs.lastMileGoodMbps || 18);
+    const crossRegion = viewerRegion !== servingRegion;
+    return {
+      label: mode === 'cdn' ? `${name} CDN 命中` : `${name}串流 → 美國影片儲存`,
+      short: mode === 'cdn' ? `${name} CDN` : `${name}串流`,
+      throughput: Math.min(source.throughput, lastMile),
+      latency: source.latency + (crossRegion ? .8 : 0),
+      weak, lastMile, crossRegion
+    };
   }
 
   // Picks ONE machine per pool node the flow passes through — and only ever a machine that is
@@ -1217,9 +1271,11 @@
     // A request that revisits the same pool node on the way back out (…→ server → storage →
     // server → …) has to come back to the SAME machine, not teleport to a sibling.
     const sticky = {};
-    for (const id of nodeIds) {
+    const resolved = resolveServicePath(sim, state, nodeIds);
+    for (const id of resolved) {
       const n = findNode(topo, id);
-      if (!n) continue;
+      if (!n) { blockedAt = { id, label: id }; break; }
+      if (!nodeCanServe(sim, state, n)) { blockedAt = n; break; }
       if (n.pool) {
         const alive = aliveInstanceIndexes(sim, state, n);
         if (!alive.length) { blockedAt = n; break; }
@@ -1233,13 +1289,14 @@
         const positions = clusterPositions(sim, state, n);
         chosenAt[points.length] = { nodeId: n.id, idx };
         points.push(positions[idx]);
-        if (!chosen.some(c => c.nodeId === n.id && c.idx === idx)) chosen.push({ nodeId: n.id, idx });
+        if (!chosen.some(c => c.nodeId === n.id && c.idx === idx)) chosen.push({ nodeId: n.id, idx, epoch: state.instanceEpoch?.[instanceKey(n.id, idx)] || 0 });
       } else {
         points.push({ x: n.x, y: n.y });
+        if (n.kind !== 'user' && !chosen.some(c => c.nodeId === n.id)) chosen.push({ nodeId: n.id, idx: 0, epoch: state.instanceEpoch?.[instanceKey(n.id, 0)] || 0 });
       }
       visited.push(id);
     }
-    return { points, chosen, chosenAt, blockedAt, visited };
+    return { points, chosen, chosenAt, blockedAt, visited, rerouted: resolved.join() !== nodeIds.join() };
   }
 
   // Backwards-compatible thin wrapper (still exposed to the test harness).
@@ -1249,8 +1306,13 @@
 
   // "Are all the machines this request was routed to still up?" — evaluated every animation
   // frame, so pulling a machine's plug kills the requests already in flight toward it.
-  function routeStillAlive(state, chosen) {
-    return chosen.every(c => !instanceIsDown(state, c.nodeId, c.idx));
+  function routeStillAlive(sim, state, chosen) {
+    return chosen.every(c => {
+      const node = findNode(topoOf(sim, state), c.nodeId);
+      return nodeCanServe(sim, state, node) && c.idx < instanceCount(sim, state, node)
+        && !instanceIsDown(state, c.nodeId, c.idx)
+        && (c.epoch || 0) === (state.instanceEpoch?.[instanceKey(c.nodeId, c.idx)] || 0);
+    });
   }
 
   // A hop between two nodes tagged with a different `.region` physically crosses an ocean —
@@ -1312,16 +1374,6 @@
     // A strategy may change a pool's baseline instance count, which changes the number of
     // concrete wires just as surely as pressing the ＋ button does.
     repaintEdges(root, sim, state);
-    // Only edges that explicitly require this component ever change state when it's toggled —
-    // every other edge is a static structural connection (see the note in edgesSvg above).
-    topo.edges.forEach(e => {
-      if (e.requiresComponent !== componentId) return;
-      const isActive = currentOptionId(sim, componentId, state) !== 'off';
-      root.querySelectorAll(`[data-edge="${e.from}-${e.to}"]`).forEach(line => {
-        line.classList.toggle('active', isActive);
-        line.classList.toggle('inactive', !isActive);
-      });
-    });
     const legendEl = root.querySelector(`[data-legend="${componentId}"]`);
     if (legendEl) {
       legendEl.querySelector('.sim-legend-mark').textContent = on ? '✅' : '⬜️';
@@ -1353,16 +1405,13 @@
   // dead, and die in transit if the machine you were routed to is pulled mid-flight.
   function spawnRequest(root, sim, state, svgEl, flowIds, opts = {}) {
     const topo = topoOf(sim, state);
-    const { points, chosen, blockedAt, visited, chosenAt } = routeFor(sim, state, flowIds);
+    const route = routeFor(sim, state, flowIds);
+    const { points, chosen, blockedAt, visited, chosenAt } = route;
     if (blockedAt) {
       if (opts.trace !== false) {
         traceLine(root, `⛔ 請求無法送出：「${blockedAt.label}」這一組機器全部當機了，負載平衡器找不到任何一台可以接手。`, 'bad');
       }
-      // Still show the doomed request travelling as far as it can get, so the break point is
-      // visible on the diagram rather than the request silently never appearing.
-      if (points.length >= 2) {
-        spawnToken(svgEl, points, { ...opts.token, className: `${opts.token?.className || ''} lost`.trim(), onDone: c => { c?.setAttribute('class', `${opts.token?.tokenClass || 'sim-token'} lost`); setTimeout(() => c?.remove(), 900); } });
-      }
+      // No route means no packet was sent. Do not draw a new doomed packet each retry.
       opts.onBlocked?.(blockedAt);
       return null;
     }
@@ -1374,18 +1423,18 @@
     // standing right next to their CDN edge really does get a shorter, quicker hop than one
     // standing across the map.
     const weights = distanceWeights(topo, visited, finalPoints);
+    opts.onRoute?.({ ...route, points: finalPoints });
     return spawnToken(svgEl, finalPoints, {
       weights,
       durationMs: pathDurationMs(weights, state.speed, opts.durationScale ?? 1),
       ...opts.token,
-      guard: () => routeStillAlive(state, chosen),
-      onLost: () => {
-        if (opts.trace !== false) {
-          const dead = chosen.find(c => instanceIsDown(state, c.nodeId, c.idx));
-          const n = dead && findNode(topo, dead.nodeId);
-          traceLine(root, `💥 傳到一半的請求中斷了：它被導到「${n?.label || dead?.nodeId}」#${(dead?.idx ?? 0) + 1}，那一台在傳輸途中被拔掉了。`, 'bad');
-        }
-        opts.onLost?.();
+      guard: () => routeStillAlive(sim, state, chosen),
+      onLost: (circle, reason) => {
+        const dead = chosen.find(c => !routeStillAlive(sim, state, [c]));
+        const n = dead && findNode(topoOf(sim, state), dead.nodeId);
+        const detail = reason || `「${n?.label || dead?.nodeId || '路徑節點'}」${n?.pool ? ` #${dead.idx + 1}` : ''}已斷線或移除`;
+        if (opts.trace !== false) traceLine(root, `💥 傳到一半的請求在原地中斷：${detail}。`, 'bad');
+        opts.onLost?.(detail);
       },
       onHop: opts.token?.onHop ? idx => opts.token.onHop(idx, chosenAt[idx], visited[idx]) : undefined,
       onDone: opts.token?.onDone
@@ -1719,21 +1768,12 @@
         }
         const [nodeId, idx] = g.dataset.instance.split('::');
         const node = findNode(topoOf(sim, state), nodeId);
-        // 每一顆球都是一個只有一個按鈕的遙控器：點一下就往下一個狀態走。
-        //
-        //   有策略的節點（14 個）→ 走它自己的策略循環。伺服器群組的三個選項
-        //                          剛好就是 1 台 → 2 台 → 3 台，所以「按一下多一台」
-        //                          這件事直接變成點球的行為。
-        //   沒策略的節點（Load Balancer、上傳分塊器、儲存…）→ 只有兩個狀態，
-        //                          運作中 ↔ 已拔掉。
-        //
-        // 單獨拔掉群組裡的某一台（用來看 failover）改成 Shift＋點，才不會跟
-        // 主要的狀態循環搶同一個手勢。
-        const wantsSingleMachine = evt.shiftKey && node?.pool;
-        if (!wantsSingleMachine && node?.kind === 'component') {
+        if (!node) return;
+        if (!nodeIsPresent(sim, state, node) && node.kind === 'component') {
           onCycle(node.componentId);
           return;
         }
+        if (!nodeIsPluggable(sim, state, node)) return;
         onInstanceKill(nodeId, Number(idx));
       };
       svgEl.addEventListener('click', handleKill, true);
@@ -1994,7 +2034,7 @@
               className: `concurrent payload-${sim.chapterId === 'sd-book-14' ? 'video' : 'file'}`, tokenClass: 'sim-token-ambient',
               durationMs: pathDurationMs(weights, state.speed, 0.95 + Math.random() * 0.2),
               weights,
-              guard: () => routeStillAlive(state, route.chosen),
+              guard: () => routeStillAlive(sim, state, route.chosen),
               onDone: circle => setTimeout(() => circle?.remove(), 250 / (state.speed || 1))
             });
           }, i * 60 + Math.random() * 40);
@@ -2673,6 +2713,10 @@
       state.abrFetchHandle.stop?.();
       state.abrFetchHandle.circle?.remove();
       state.abrFetchHandle = null;
+      if (state.abr?.activeRequest?.status === 'running') {
+        Runtime.finishRequest(state.runtime, state.abr.activeRequest, 'failed', '拓樸重建，原連線中斷；將重試同一片段');
+        traceLine(root, '拓樸已重建：原連線中斷並記錄失敗，保留播放進度與緩衝後重試同一片段。', 'bad');
+      }
       if (state.abr) state.abr.fetching = false;
     }
 
@@ -2702,16 +2746,6 @@
     const totalDuration = totalSegments * segmentSec;
     const maxBuffer = cs.maxBufferSec || 20;
     const simSecondMs = cs.simSecondMs || 250;
-    const sources = {
-      cdn: {
-        label: '台灣 CDN 命中', short: 'CDN', throughput: 18, latency: 0.08,
-        ...(cs.sources?.cdn || {})
-      },
-      origin: {
-        label: '美國來源站（跨海回源）', short: '美國回源', throughput: 2.8, latency: 1.6,
-        ...(cs.sources?.origin || {})
-      }
-    };
     const fmtTime = seconds => {
       const value = Math.max(0, Math.floor(seconds || 0));
       if (totalDuration >= 3600) {
@@ -2728,7 +2762,7 @@
       const activeIndex = activeSegmentIndex(st);
       const activeSeg = segmentByIndex(st, activeIndex) || st.segments[st.segments.length - 1];
       const currentQuality = ladder.find(q => q.id === activeSeg?.qualityId) || ladder[ladder.length - 1];
-      const profile = sources[st.mode];
+      const profile = playbackProfile(sim, state, st.deliveryMode || st.mode, st.servingRegion);
       const stalled = st.playing && st.buffer <= 0;
       const viewer = root.querySelector('[data-drag-viewer]');
       const viewerPlayback = root.querySelector('[data-viewer-playback]');
@@ -2748,24 +2782,27 @@
       progressFill.style.width = `${clamp((st.playhead / totalDuration) * 100)}%`;
       timeText.textContent = `${fmtTime(st.playhead)} / ${fmtTime(totalDuration)}`;
       if (frameText) frameText.textContent = `畫面格 ${String(Math.floor(st.playhead * 24)).padStart(4, '0')}`;
-      sourceStat.textContent = `${profile.short} · ${profile.throughput.toFixed(1)} Mbps`;
+      sourceStat.textContent = `${profile.short} · ${profile.throughput.toFixed(1)} Mbps${profile.weak ? '（最後一哩弱網）' : ''}`;
       bufferStat.textContent = `${st.buffer.toFixed(1)} 秒${stalled ? '（已耗盡）' : ''}`;
       segmentStat.textContent = `${activeIndex}/${st.total} · ${currentQuality.label}`;
       downloadStat.textContent = st.fetching
         ? `第 ${st.fetching.idx} 段預估 ${st.fetching.downloadSec.toFixed(1)} 秒`
         : st.lastDownloadSec ? `上一段 ${st.lastDownloadSec.toFixed(1)} 秒` : '--';
+      const connection = st.failure ? `斷線：${st.failure}，等待重試同一片段` : profile.weak ? `最後一哩只有 ${profile.lastMile.toFixed(1)} Mbps，CDN 也無法繞過` : '連線正常';
       status.textContent = st.finished
         ? `✅ 播放完成 · 轉圈圈 ${st.stalls} 次 · 最終畫質 ${currentQuality.label}`
-        : `${stalled ? '⏳ 轉圈圈' : '▶ 正常播放'} · 播放 ${fmtTime(st.playhead)} · 緩衝 ${st.buffer.toFixed(1)} 秒 · 已收到 ${st.received}/${st.total} 個 5 秒片段`;
-      cdnBtn.classList.toggle('active', st.mode === 'cdn' && st.playing);
-      originBtn.classList.toggle('active', st.mode === 'origin' && st.playing);
+        : `${stalled ? '⏳ 轉圈圈' : '▶ 正常播放'} · 播放 ${fmtTime(st.playhead)} · 緩衝 ${st.buffer.toFixed(1)} 秒 · 已收到 ${st.received}/${st.total} 個 5 秒片段 · ${connection}`;
+      cdnBtn.classList.toggle('active', (st.deliveryMode || st.mode) === 'cdn' && st.playing);
+      originBtn.classList.toggle('active', (st.deliveryMode || st.mode) === 'origin' && st.playing);
       stopBtn.disabled = !st.playing;
       viewer?.classList.toggle('watching', st.playing);
       viewer?.classList.toggle('buffering', stalled);
       viewerPlayback?.classList.toggle('active', st.playing);
       viewerPlayback?.classList.toggle('buffering', stalled);
       if (viewerTitle) viewerTitle.textContent = st.finished ? '✓ 播放完成' : stalled ? '⏳ 轉圈圈' : st.playing ? `▶ ${fmtTime(st.playhead)}` : '已停止播放';
-      if (viewerMeta) viewerMeta.textContent = `${profile.short} · 緩衝 ${st.buffer.toFixed(1)} 秒`;
+      if (viewerMeta) viewerMeta.textContent = `${st.failure ? '斷線待重試' : profile.weak ? `弱網 ${profile.lastMile.toFixed(1)}M` : profile.short} · 緩衝 ${st.buffer.toFixed(1)} 秒`;
+      const regionText = root.querySelector('.sim-drag-viewer-region');
+      if (regionText) regionText.textContent = st.failure ? '斷線待重試' : `由${topoOf(sim, state).regionLabel?.[st.servingRegion || state.dragViewer?.regionId] || '台灣'}服務`;
       viewerProgress?.setAttribute('width', String(clamp((st.playhead / totalDuration) * 92)));
       if (viewerQuality) {
         viewerQuality.textContent = currentQuality.label;
@@ -2809,14 +2846,19 @@
       }
       const st = state.abr;
       if (!st) return;
+      if (st.activeRequest?.status === 'running') {
+        Runtime.finishRequest(state.runtime, st.activeRequest, 'cancelled', '使用者停止播放');
+        refreshRuntimeSummary(root, sim, state);
+      }
       st.playing = false;
       st.fetching = false;
       st.finished = finished;
       state.abrGeneration += 1;
       paint();
+      svgEl.querySelector('[data-playback-route]')?.remove();
       if (announce) traceLine(root, finished
-        ? `— 影片播放完成：${sources[st.mode].label}，共轉圈圈 ${st.stalls} 次，最後播放畫質 ${st.lastQualityLabel} —`
-        : `⏹ 已停止播放比較（${sources[st.mode].label}）。`, finished ? 'done' : '');
+        ? `— 影片播放完成：${playbackProfile(sim, state, st.deliveryMode || st.mode, st.servingRegion).label}，共轉圈圈 ${st.stalls} 次，最後播放畫質 ${st.lastQualityLabel} —`
+        : `⏹ 已停止播放比較（${playbackProfile(sim, state, st.deliveryMode || st.mode, st.servingRegion).label}）。`, finished ? 'done' : '');
     };
 
     const chooseNextQuality = (st, profile, downloadSec) => {
@@ -2834,89 +2876,121 @@
 
     const fetchNext = generation => {
       const st = state.abr;
-      // Reserve room for the entire next segment before requesting it. Previously a request
-      // could start with 14 seconds buffered, then Math.min(15, 14 + 5) silently discarded four
-      // playable seconds while still counting the segment as received. A one-hour video made
-      // that accounting bug especially visible because playback ran out long before its end.
-      if (!st?.playing || generation !== state.abrGeneration || st.fetching || st.received >= st.total || st.buffer > maxBuffer - segmentSec) return;
-      const profile = sources[st.mode];
+      if (!st?.playing || generation !== state.abrGeneration || st.fetching || Date.now() < (st.retryAt || 0)
+        || st.received >= st.total || st.buffer > maxBuffer - segmentSec) return;
       const quality = ladder.find(q => q.id === st.fetchQualityId) || ladder[ladder.length - 1];
       const index = st.received + 1;
-      const sizeMbit = quality.mbps * segmentSec;
-      const sizeMB = sizeMbit / 8;
-      const downloadSec = profile.latency + sizeMbit / profile.throughput;
-      st.fetching = { idx: index, qualityId: quality.id, downloadSec, sizeMB };
-      paint();
-
+      const sizeMbit = quality.mbps * segmentSec, sizeMB = sizeMbit / 8;
       const r = state.dragViewer?.regionId || 'tw';
       const flowIds = st.mode === 'cdn'
         ? [`users_${r}`, `cdn_${r}`, `users_${r}`]
         : [`users_${r}`, `loadBalancer_${r}`, `streamServer_${r}`, 'transcodedStorage', `streamServer_${r}`, `loadBalancer_${r}`, `users_${r}`];
+      const transfer = { idx: index, qualityId: quality.id, sizeMB, sentMbit: 0, elapsedSec: 0, downloadSec: 0, latencyLeft: 0 };
+      st.fetching = transfer;
+      st.attempt = (st.attempt || 0) + 1;
+      const request = Runtime.beginRequest(state.runtime, {
+        kind: 'watch', label: `播放片段 ${index} · 第 ${st.attempt} 次嘗試`,
+        region: topoOf(sim, state).regionLabel?.[r] || r,
+        payload: { segment: index, quality: quality.id, attempt: st.attempt, sizeMB }
+      });
+      st.activeRequest = request;
+      refreshRuntimeSummary(root, sim, state);
       const wasStalled = st.buffer <= 0;
-      traceLine(root, `🎞️ 請求第 ${index}/${st.total} 段 ${quality.label}：${sizeMB.toFixed(2)} MB，從${profile.label}預估要 ${downloadSec.toFixed(1)} 秒。`, st.mode === 'origin' && downloadSec > segmentSec ? 'bad' : '');
-      let previousId = '';
-      let previousMachine = null;
+      let previousId = '', previousMachine = null, deliveryMode = st.mode, servingRegion = r;
+      const retry = detail => {
+        if (generation !== state.abrGeneration || !st.playing) return;
+        st.fetching = false;
+        state.abrFetchHandle = null;
+        st.failure = detail;
+        // Keep the failed packet visible before retrying. Buffer consumption continues.
+        st.retryAt = Date.now() + 1200;
+        Runtime.finishRequest(state.runtime, request, 'failed', `斷線：${detail}；同一片段 ${index} 待重試`);
+        refreshRuntimeSummary(root, sim, state);
+        root.querySelector('[data-playback-route]')?.classList.add('broken');
+        traceLine(root, `💥 ${request.id} 第 ${index} 段斷線：${detail}。已傳 ${transfer.sentMbit.toFixed(2)}/${sizeMbit.toFixed(2)} Mb 未完成，不算收到；保留播放位置與 ${st.buffer.toFixed(1)} 秒緩衝，1.2 秒後重試。`, 'bad');
+        paint();
+      };
       const handle = spawnRequest(root, sim, state, svgEl, flowIds, {
         trace: false,
         mapPoint: (nodeId, point) => nodeId === `users_${r}` && state.dragViewer
-          ? { x: state.dragViewer.x, y: state.dragViewer.y }
-          : point,
+          ? { x: state.dragViewer.x, y: state.dragViewer.y } : point,
+        onRoute: route => {
+          deliveryMode = route.visited.some(id => id.startsWith('streamServer_')) ? 'origin' : 'cdn';
+          servingRegion = route.visited.find(id => /^(cdn|streamServer)_/.test(id))?.split('_').slice(1).join('_') || r;
+          st.deliveryMode = deliveryMode;
+          st.servingRegion = servingRegion;
+          st.failure = '';
+          const profile = playbackProfile(sim, state, deliveryMode, servingRegion);
+          transfer.latencyLeft = profile.latency;
+          transfer.downloadSec = profile.latency + sizeMbit / profile.throughput;
+          request.payload.route = route.visited.join(' → ');
+          const previousRoute = st.lastRoute;
+          st.lastRoute = route.visited.join(' → ');
+          if (route.rerouted && previousRoute !== st.lastRoute) {
+            traceLine(root, `🔀 ${request.id} 重選健康路徑：${topoOf(sim, state).regionLabel?.[r]}原路徑不可用，${profile.label}接手；觀眾位置、播放進度與片段編號不變。`, 'ok');
+          }
+          traceLine(root, `🎞️ ${request.id} 請求第 ${index}/${st.total} 段 ${quality.label}，從${profile.label}取得，頻寬 ${profile.throughput.toFixed(1)} Mbps${profile.weak ? '（最後一哩弱網）' : ''}，預估 ${transfer.downloadSec.toFixed(1)} 秒。`);
+          svgEl.querySelector('[data-playback-route]')?.remove();
+          const line = document.createElementNS(SVG_NS, 'polyline');
+          line.setAttribute('data-playback-route', '');
+          line.setAttribute('data-serving-region', servingRegion);
+          line.setAttribute('class', 'sim-playback-route');
+          line.setAttribute('points', route.points.map(p => `${p.x},${p.y}`).join(' '));
+          svgEl.insertBefore(line, svgEl.querySelector('[data-node]'));
+          paint();
+        },
         token: {
-          tokenClass: 'sim-token-segment',
-          className: `q-${quality.id}`,
+          tokenClass: 'sim-token-segment', className: `q-${quality.id}`,
           radius: 5 + Math.max(0, ladder.findIndex(q => q.id === quality.id)) * 4,
-          durationMs: Math.max(60, 180 / (state.speed || 1), downloadSec * simSecondMs / (state.speed || 1)),
+          advance: elapsedMs => {
+            // Read last-mile conditions every frame: moving the weak zone slows THIS packet.
+            const profile = playbackProfile(sim, state, deliveryMode, servingRegion);
+            let seconds = elapsedMs * (state.speed || 1) / simSecondMs;
+            const latency = Math.min(seconds, transfer.latencyLeft);
+            transfer.latencyLeft -= latency;
+            transfer.elapsedSec += latency;
+            seconds -= latency;
+            const used = Math.min(seconds, (sizeMbit - transfer.sentMbit) / profile.throughput);
+            transfer.sentMbit = Math.min(sizeMbit, transfer.sentMbit + used * profile.throughput);
+            transfer.elapsedSec += used;
+            transfer.downloadSec = transfer.elapsedSec + transfer.latencyLeft + (sizeMbit - transfer.sentMbit) / profile.throughput;
+            return transfer.sentMbit / sizeMbit;
+          },
           onHop: (hopIndex, machine, nodeId) => {
+            Runtime.visitNode(state.runtime, request, nodeId, machine ? `機器 #${machine.idx + 1}` : '播放片段傳輸');
             flashTopologyHop(root, previousId, nodeId, previousMachine, machine);
-            previousId = nodeId;
-            previousMachine = machine;
+            previousId = nodeId; previousMachine = machine;
           },
           onDone: circle => {
             circle?.remove();
-            if (generation !== state.abrGeneration || !state.abr?.playing) return;
+            if (generation !== state.abrGeneration || !st.playing) return;
             state.abrFetchHandle = null;
-            const live = state.abr;
-            const seg = { idx: index, qualityId: quality.id, sizeMB, downloadSec, causedStall: wasStalled || live.buffer <= 0 };
-            live.fetching = false;
-            live.received = index;
-            live.lastDownloadSec = downloadSec;
-            live.buffer = Math.min(maxBuffer, live.buffer + segmentSec);
-            live.segments.push(seg);
+            const downloadSec = transfer.elapsedSec;
+            const profile = playbackProfile(sim, state, deliveryMode, servingRegion);
+            const seg = { idx: index, qualityId: quality.id, sizeMB, downloadSec, causedStall: wasStalled || st.buffer <= 0 };
+            st.fetching = false; st.received = index; st.attempt = 0;
+            st.lastDownloadSec = downloadSec;
+            st.buffer = Math.min(maxBuffer, st.buffer + segmentSec);
+            st.segments.push(seg);
+            Runtime.finishRequest(state.runtime, request, 'completed', `第 ${index} 段完整收到`);
+            refreshRuntimeSummary(root, sim, state);
             appendSegBlock(seg);
-            const viewer = root.querySelector('[data-drag-viewer]');
-            viewer?.classList.add('receiving');
-            setTimeout(() => viewer?.classList.remove('receiving'), 420 / (state.speed || 1));
-            const nextIdx = chooseNextQuality(live, profile, downloadSec);
-            const nextQuality = ladder[nextIdx];
-            if (nextQuality.id !== quality.id) {
-              const lower = nextIdx < ladder.findIndex(q => q.id === quality.id);
-              traceLine(root, `📉 第 ${index} 段下載 ${downloadSec.toFixed(1)} 秒${downloadSec > segmentSec ? `，超過片段本身的 ${segmentSec} 秒` : ''}；ABR 下一段從 ${quality.label} 改抓 ${nextQuality.label}（球會更小、傳得更快）。`, lower ? 'bad' : 'ok');
-            }
-            live.fetchQualityId = nextQuality.id;
-            if (live.stallActive && live.buffer > 0) {
-              live.stallActive = false;
-              traceLine(root, `▶ 第 ${index} 段終於抵達，累積 ${live.buffer.toFixed(0)} 秒緩衝，停止轉圈並恢復播放。`, 'ok');
+            const nextQuality = ladder[chooseNextQuality(st, profile, downloadSec)];
+            if (nextQuality.id !== quality.id) traceLine(root, `📉 第 ${index} 段下載 ${downloadSec.toFixed(1)} 秒；ABR 下一段從 ${quality.label} 改抓 ${nextQuality.label}，已緩衝的片段照原畫質播放。`, 'bad');
+            st.fetchQualityId = nextQuality.id;
+            if (st.stallActive && st.buffer > 0) {
+              st.stallActive = false;
+              traceLine(root, `▶ ${request.id} 第 ${index} 段抵達，恢復播放。`, 'ok');
             }
             paint();
             fetchNext(generation);
           }
         },
-        onLost: () => {
-          if (generation !== state.abrGeneration || !state.abr) return;
-          state.abr.fetching = false;
-          state.abrFetchHandle = null;
-          traceLine(root, `💥 第 ${index} 段傳輸失敗，播放器會保持轉圈並重新請求。`, 'bad');
-          paint();
-          setTimeout(() => fetchNext(generation), 260 / (state.speed || 1));
-        },
-        onBlocked: () => {
-          if (generation !== state.abrGeneration || !state.abr) return;
-          state.abr.fetching = false;
-          state.abrFetchHandle = null;
-          paint();
-        }
+        onLost: retry,
+        onBlocked: node => retry(`「${node.label}」不可用，找不到完整健康路徑`)
       });
-      state.abrFetchHandle = handle;
+      // onBlocked settles synchronously; never replace a newer handle with an old one.
+      if (st.fetching === transfer) state.abrFetchHandle = handle;
     };
 
     const playbackTick = generation => {
@@ -2975,7 +3049,7 @@
       };
       strip.innerHTML = '';
       appendSegBlock(state.abr.segments[0]);
-      traceLine(root, `— 從${sources[mode].label}開始播放：第一個 ${segmentSec} 秒的 ${firstQuality.label} 片段已在播放器內，所以前五秒一定正常；同時立刻下載第 2 段 —`, 'head');
+      traceLine(root, `— 開始播放，優先使用${mode === 'cdn' ? 'CDN' : '串流回源'}並依健康狀態選路：第一個 ${segmentSec} 秒的 ${firstQuality.label} 片段已在播放器內，所以前五秒一定正常；同時立刻下載第 2 段 —`, 'head');
       paint();
       fetchNext(generation);
       state.abrTimer = setInterval(() => playbackTick(generation), simSecondMs / (state.speed || 1));
@@ -2992,25 +3066,16 @@
         paint();
         return;
       }
-      if (state.abrFetchHandle) {
-        state.abrFetchHandle.stop?.();
-        state.abrFetchHandle.circle?.remove();
-        state.abrFetchHandle = null;
-      }
-      if (state.abrTimer) clearInterval(state.abrTimer);
-      state.abrTimer = null;
-      st.fetching = false;
       st.mode = mode;
-      st.lastDownloadSec = 0;
-      const generation = ++state.abrGeneration;
-      traceLine(root, `🔀 架構來源已切換成「${sources[mode].label}」；保留目前 ${fmtTime(st.playhead)} 的播放位置與 ${st.buffer.toFixed(1)} 秒緩衝，下一顆影片球改走新路徑。`, 'head');
+      if (state.abrFetchHandle) state.abrFetchHandle.abort?.('使用者切換影片來源，原連線已中斷');
+      traceLine(root, `🔀 下一次請求改用${mode === 'cdn' ? 'CDN' : '回源'}；保留目前 ${fmtTime(st.playhead)} 的播放位置與緩衝，不會把舊的傳輸球偷偷重生。`, 'head');
       paint();
-      fetchNext(generation);
-      state.abrTimer = setInterval(() => playbackTick(generation), simSecondMs / (state.speed || 1));
+      fetchNext(state.abrGeneration);
     };
 
     // The topology is the source of truth. The buttons remain useful for comparison, but the
     // CDN circle above can now change the running player's route without resetting playback.
+    state.refreshAbrNetwork = paint;
     state.syncAbrSource = () => switchSource(currentOptionId(sim, 'cdnTier', state) === 'off' ? 'origin' : 'cdn');
     cdnBtn.onclick = () => switchSource('cdn');
     originBtn.onclick = () => switchSource('origin');
@@ -3103,9 +3168,10 @@
         // happens: the segment already in flight was fetched under the old conditions and still
         // plays at its original quality. Real players behave the same way.
         traceLine(root, state.dragViewer.inZone
-          ? `🙋 ${lex(sim, 'testViewer')}走進${lex(sim, 'zoneName')}——目前正在傳的那一段還是照舊${lex(sim, 'quality')}播完，要等下一段收到之後${lex(sim, 'quality')}才會降下來。`
+          ? `🙋 ${lex(sim, 'testViewer')}走進${lex(sim, 'zoneName')}——最後一哩頻寬立即下降，正在傳的球也會變慢；緩衝用完會轉圈。畫質要等 ABR 改抓的片段真正播放時才變。`
           : `🙋 ${lex(sim, 'testViewer')}離開${lex(sim, 'zoneName')}——同樣要等下一段收到之後，${lex(sim, 'quality')}才會開始往回爬。`, state.dragViewer.inZone ? 'bad' : 'ok');
       }
+      state.refreshAbrNetwork?.();
     };
 
     const setPos = (x, y) => {
@@ -3202,10 +3268,13 @@
     g.addEventListener('keydown', evt => {
       if (evt.key !== 'Enter' && evt.key !== ' ') return;
       evt.preventDefault();
-      const target = state.dragViewer.inZone
-        ? cs.start
-        : { x: state.badZone.x + zoneW() / 2, y: state.badZone.y + zoneH() / 2 };
-      setPos(target.x, target.y);
+      const [, , width, height] = topo.viewBox.split(/\s+/).map(Number);
+      const dv = state.dragViewer, z = state.badZone;
+      const outside = [cs.start, { x: z.x - 30, y: dv.y }, { x: z.x + zoneW() + 30, y: dv.y },
+        { x: dv.x, y: z.y - 30 }, { x: dv.x, y: z.y + zoneH() + 30 }]
+        .find(p => p.x >= 20 && p.y >= 20 && p.x <= width - 20 && p.y <= height - 20 && !inZone(p.x, p.y));
+      const target = dv.inZone ? outside : { x: z.x + zoneW() / 2, y: z.y + zoneH() / 2 };
+      if (target) setPos(target.x, target.y);
     });
     zoneG?.addEventListener('keydown', evt => {
       // Arrows move it; shift+arrows resize it — the keyboard equivalent of the corner handle.
@@ -3284,8 +3353,8 @@
     const tick = () => {
       // The explicit CDN-vs-origin player owns the same viewer while it is running. Keep this
       // background probe alive but quiet, then resume it after the comparison stops.
-      if (state.abr?.playing) { scheduleNext(); return; }
       stepWander();
+      if (state.abr?.playing) { scheduleNext(); return; }
       const dv = state.dragViewer;
       const r = dv.regionId;
       const ctx = makeChoiceCtx(sim, state);
@@ -3464,11 +3533,6 @@
       const before = currentOptionId(sim, componentId, state);
       const next = nextOptionId(sim, componentId, state);
       state.choice[componentId] = next;
-      // 換了策略等於重新配置這一層，先前 Shift＋點單獨拔掉的機器要一併復原，
-      // 否則會出現「策略說 3 台、畫面只有 2 台活著」這種對不起來的狀態。
-      (topoOf(sim, state)?.nodes || [])
-        .filter(n => n.componentId === componentId && n.pool)
-        .forEach(n => { for (let i = 0; i < MAX_INSTANCES; i++) setInstanceDown(state, n.id, i, false); });
       // 架構決策一改就立刻寫進共用儲存，這樣「實際運作」讀到的一定是最新的一份，
       // 不必等到使用者按下切換連結才存。
       if (sim.chapterId === 'sd-book-14') window.YouTubeModes?.saveDesign(designOf(sim, state));
@@ -3518,13 +3582,17 @@
       const aliveAfter = aliveInstanceIndexes(sim, state, node).length + (nowDown ? -1 : 1);
       setInstanceDown(state, nodeId, idx, nowDown);
       repaintNodes(root, sim, state);
+      repaintEdges(root, sim, state);
       refreshLoadSummary(root, sim, state);
       // 單台節點沒有 #1、#2 的編號，寫出來只會讓人以為它還有第二台。
       const who = node.pool ? `「${node.label}」#${idx + 1}` : `「${node.label}」`;
       if (nowDown) {
         traceLine(root, aliveAfter > 0
           ? `💀 拔掉${who}。負載平衡器立刻把流量改導到剩下的 ${aliveAfter} 台，正在傳給這台的請求則直接中斷。`
-          : `💀 拔掉${who}——沒有其他機器可以接手，經過這裡的請求現在全部中斷。`, 'bad');
+          : `💀 拔掉${who}——同區這一層已無健康機器，原連線中斷；新請求會檢查是否能跨區接手，共用後端故障則必須等恢復。`, 'bad');
+        if (state.abr?.playing && state.abr.lastRoute && !state.abr.lastRoute.split(' → ').includes(nodeId)) {
+          traceLine(root, `ℹ️ 目前觀看路徑沒有經過${who}，所以這顆影片球不受影響；只有依賴這台機器的請求才會斷線。`, 'ok');
+        }
       } else {
         traceLine(root, node.pool
           ? `🔌 把${who}插回去，它重新開始接收流量（共 ${aliveAfter} 台運作中）。`
@@ -4315,6 +4383,7 @@
   window.__simTestHooks = {
     pointAlongPath, waypointsFor, clusterPositions, hopWeights,
     instanceCount, nodeLoad, overloadedNodes, weeklyCostPenalty, regionIdAtPoint, nodeIsPresent,
+    newState, setInstanceDown, routeStillAlive, playbackProfile, resolveServicePath, spawnToken, spawnRequest, wireAbrLab,
     routeFor, distanceWeights, pathDurationMs, regionShare, instanceIsDown, aliveInstanceIndexes, nodeCanServe, topoOf
   };
 

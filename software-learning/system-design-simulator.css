@@ -484,3 +484,8 @@ svg.sim-sandbox-svg{width:100%;height:auto;display:block;background:#0a0a10;bord
 .sim-topo-data-count.inspectable{cursor:pointer}
 .sim-topo-data-count.inspectable:hover{fill:var(--accent)}
 @media(prefers-reduced-motion:reduce){.sim-topo-instance.killable circle{transition:none}}
+
+/* The active playback route is separate from structural wires, including cross-region retries. */
+.sim-playback-route{fill:none;stroke:#fbbf24;stroke-width:3;stroke-dasharray:8 5;opacity:.85;pointer-events:none}
+.sim-playback-route.broken{stroke:#fb7185;opacity:.7}
+.sim-token-segment.lost,.sim-token-demo.lost,.sim-token.lost{fill:#fb7185!important;stroke:#fff;stroke-width:3;opacity:1;stroke-dasharray:3 2}
