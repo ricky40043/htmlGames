@@ -123,6 +123,13 @@
     return comp.options[0]?.id || 'off';
   }
 
+  // 玩家目前的架構決策，攤平成 { componentId: optionId }。
+  // 這是交給「實際運作」世界的唯一東西——世界模型自己決定每個 optionId 代表什麼行為，
+  // 課程模式不需要知道。兩邊的 optionId 詞彙必須一致（有測試在守）。
+  function designOf(sim, state) {
+    return Object.fromEntries((sim.components || []).map(c => [c.id, currentOptionId(sim, c.id, state)]));
+  }
+
   function currentOption(sim, componentId, state) {
     const comp = findComponent(sim, componentId);
     const id = currentOptionId(sim, componentId, state);
@@ -3351,6 +3358,9 @@
       const before = currentOptionId(sim, componentId, state);
       const next = nextOptionId(sim, componentId, state);
       state.choice[componentId] = next;
+      // 架構決策一改就立刻寫進共用儲存，這樣「實際運作」讀到的一定是最新的一份，
+      // 不必等到使用者按下切換連結才存。
+      if (sim.chapterId === 'sd-book-14') window.YouTubeModes?.saveDesign(designOf(sim, state));
       updateComponentVisual(root, sim, state, componentId);
       const comp = findComponent(sim, componentId);
       const opt = comp?.options.find(o => o.id === next);
@@ -4173,8 +4183,11 @@
         lesson: Object.fromEntries(keys.map(key => [key, state[key]])),
         topo: state.topo,
         dragViewer: state.dragViewer,
-        runtime: state.runtime
+        runtime: state.runtime,
+        design: designOf(sim, state)
       }));
+      // 進頁時先寫一次，讓「還沒改過任何決策就直接去看實際運作」也拿得到目前的架構。
+      window.YouTubeModes.saveDesign(designOf(sim, state));
     }
     // The live state object, so the automated tests can assert on the same architecture the
     // screen is actually rendering (jsdom has no way to read it back out of the SVG).

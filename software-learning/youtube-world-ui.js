@@ -8,7 +8,10 @@
     window.mountYouTubeWorld = root => {
         document.body.classList.add('youtube-world-page');
         document.title = 'YouTube 系統設計遊樂園';
-        let world = new World(14), selectedUser = 1, selectedMachine = null, paused = false, speed = 1, requestPage = 0, requestFilter = 'all', selectedRequest = null;
+        // 架構設計模式選了什麼，這裡就照著開機器。沒玩過課程模式時 design 為 null，
+        // 世界模型會退回自己的預設值，行為與以前相同。
+        let design = window.YouTubeModes?.loadDesign() || null;
+        let world = new World(14, 1, design), selectedUser = 1, selectedMachine = null, paused = false, speed = 1, requestPage = 0, requestFilter = 'all', selectedRequest = null;
         let last = performance.now(), accumulator = 0, painted = 0, regionSignature = '', userSignature = '', machineSignature = '', videoSignature = '', inspectorSignature = '', requestPaint = 0;
         let dragging = null;
         const savedMode = window.YouTubeModes?.load();
@@ -25,6 +28,7 @@
         const option = (id, label) => `<option value="${esc(id)}">${esc(label)}</option>`;
         root.innerHTML = `<section class="yw-app">
             <div class="yw-heading"><div><span class="yw-eyebrow">CHAPTER 14 / LIVE WORLD</span><h1>YouTube 系統設計遊樂園</h1><p>全場預設只有我的角色 1 人，每次可新增 1～10 人。點一個人追蹤體驗，點一台機器查看與處理故障。</p></div><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson">12 月課程關卡 ↗</a></div>
+            <section class="yw-design" id="yw-design" aria-label="套用中的架構設計"></section>
             <div class="yw-toolbar" aria-label="世界控制"><button data-action="pause">暫停世界</button><button data-action="step">單步 0.1 秒</button><label>速度 <select id="yw-speed">${[1,5,20].map(n=>option(n,n+'x')).join('')}</select></label><strong id="yw-clock">00:00</strong><span>1x = 真實時間</span><label>種子 <input id="yw-seed" type="number" value="14" min="1" max="4294967295"></label><button data-action="reset">同種子重新開始</button><span id="yw-notice" role="status"></span></div>
             <div class="yw-metrics" id="yw-metrics"></div>
             <div class="yw-workspace"><div class="yw-main">
@@ -52,6 +56,27 @@
         </section>`;
         const el = id => root.querySelector(`#yw-${id}`);
         const notice = text => { el('notice').textContent = text; };
+        // 把世界正在套用的那份架構攤開來講清楚：哪一項、選了什麼、在這個世界裡代表什麼。
+        // 沒有來自課程模式的設定時，也要明說現在跑的是預設架構，而不是留白讓人猜。
+        function renderDesign() {
+            const { DESIGN_EFFECTS, DESIGN_DEFAULTS } = window.YouTubeWorld;
+            const applied = world.design;
+            const fromLesson = !!design;
+            const rows = Object.keys(DESIGN_DEFAULTS).map(key => {
+                const effect = DESIGN_EFFECTS[key][applied[key]];
+                const isDefault = applied[key] === DESIGN_DEFAULTS[key];
+                return `<li${isDefault ? '' : ' class="yw-design-changed"'}><strong>${esc(effect.label)}</strong><span>${esc(effect.note)}</span></li>`;
+            }).join('');
+            el('design').innerHTML = `<div class="yw-design-head">
+                <div><h2>套用中的架構</h2><p>${fromLesson
+                    ? '這些是你在「架構設計」那 12 個月裡做的決策，這個世界完全照著跑。改了決策再回來，按「同種子重新開始」就會套用新的架構。'
+                    : '你還沒在「架構設計」做過決策，所以這個世界跑的是預設架構。去那邊選完再回來，這裡就會換成你的版本。'}</p></div>
+                <div class="yw-design-actions">
+                    <a class="yw-design-link" href="system-design-simulator.html?chapter=sd-book-14&mode=lesson">${fromLesson ? '回去調整架構 ↗' : '去做架構決策 ↗'}</a>
+                    ${fromLesson ? '<button type="button" data-action="use-default-design">改用預設架構</button>' : ''}
+                </div>
+            </div><ul class="yw-design-list">${rows}</ul>`;
+        }
         function selected() { return world.user(selectedUser) || world.user(1); }
         function syncSelectors() {
             const rs = world.regions.map(r=>option(r.id,r.name)).join('');
@@ -205,7 +230,8 @@
             switch(b.dataset.action) {
                 case 'pause': paused=!paused;accumulator=0;break;
                 case 'step': paused=true;world.step(0.1);accumulator=0;break;
-                case 'reset': world=new World(Number(el('seed').value));selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;accumulator=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});el('machine-detail').textContent='點選機器查看';notice('已用同種子重置世界，暫停中。');break;
+                case 'use-default-design': window.YouTubeModes?.clearDesign();design=null;world=new World(Number(el('seed').value),1,null);renderDesign();selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;accumulator=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});notice('已改用預設架構並重置世界，暫停中。');break;
+                case 'reset': design=window.YouTubeModes?.loadDesign()||null;world=new World(Number(el('seed').value),1,design);renderDesign();selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;accumulator=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});el('machine-detail').textContent='點選機器查看';notice('已用同種子重置世界，暫停中。');break;
                 case 'my-user': selectedUser=1;selectedMachine=null;break;
                 case 'clear-machine': selectedMachine=null;break;
                 case 'weak': world.moveUser(u.id,u.region,.78,.75);break;
@@ -244,6 +270,6 @@
         }
         el('speed').value = speed;
         root.querySelectorAll('[data-option]').forEach(c => { c.checked = world.options[c.dataset.option]; });
-        paint(true);requestAnimationFrame(frame);
+        renderDesign();paint(true);requestAnimationFrame(frame);
     };
 })();

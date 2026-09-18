@@ -16,3 +16,139 @@ test('continuous arrivals replace departed sessions without stopping at 100 requ
 test('seeded clock produces identical outcomes regardless of frame batching',()=>{const a=quiet(12),b=quiet(12);a.options.autoFaults=b.options.autoFaults=true;a.step(90);for(let i=0;i<900;i++)b.step(.1);assert.deepEqual(a.summary(),b.summary());assert.deepEqual(a.users,b.users);assert.deepEqual(a.incidents,b.incidents);});
 test('latest ledger remains newest first and never drops in-flight requests',()=>{const w=quiet(100);w.step(120);assert.ok(w.seq.request>500);assert.equal(w.requests[0].id,`REQ-${String(w.seq.request).padStart(5,'0')}`);w.users.filter(u=>u.pending).forEach(u=>assert.ok(w.requests.some(r=>r.id===u.pending)));assert.ok(w.requests.filter(r=>['completed','failed','cancelled'].includes(r.status)).length<=500);});
 test('CDN outage falls back to origin after health detection',()=>{const w=quiet();w.step(20);const cdn=w.machines.find(m=>m.kind==='cdn'&&m.region==='tw');w.setMachine(cdn.id,false);w.step(25);assert.ok(w.requests.some(r=>r.kind==='segment'&&!r.cacheHit&&r.createdAt>22&&r.status==='completed'));assert.ok(w.user(1).position>20);});
+
+// ---- 架構設計 → 實際運作：兩套引擎之間的契約 ----------------------------------
+const { DESIGN_DEFAULTS, DESIGN_EFFECTS, normalizeDesign } = require('../youtube-world.js');
+const fs = require('node:fs');
+const path = require('node:path');
+
+function lessonComponents() {
+  const sandbox = { window: {} };
+  require('node:vm').runInNewContext(
+    fs.readFileSync(path.join(__dirname, '..', 'data', 'system-design-sim-ch14.js'), 'utf8'),
+    sandbox
+  );
+  return sandbox.window.SYSTEM_DESIGN_SIM['sd-book-14'].components;
+}
+
+test('每一個課程模式的決策與選項，世界模型都認得（詞彙一致）', () => {
+  lessonComponents().forEach(component => {
+    const effects = DESIGN_EFFECTS[component.id];
+    assert.ok(effects, `世界模型沒有 ${component.id} 的行為定義`);
+    // lessonComponents() 是在另一個 vm realm 建出來的，陣列原型不同，
+    // 所以這裡比字串而不是用 deepStrictEqual。
+    assert.equal(
+      [...component.options.map(o => o.id)].sort().join(','),
+      Object.keys(effects).sort().join(','),
+      `${component.id} 的選項在兩套引擎不一致`
+    );
+    assert.ok(DESIGN_DEFAULTS[component.id], `${component.id} 沒有預設值`);
+  });
+  assert.equal(
+    Object.keys(DESIGN_DEFAULTS).sort().join(','),
+    [...lessonComponents().map(c => c.id)].sort().join(','),
+    '世界模型的決策清單與課程模式不一致'
+  );
+});
+
+test('壞掉或缺漏的架構設定會退回預設值，不會讓世界建不起來', () => {
+  assert.deepEqual({ ...normalizeDesign(null) }, { ...DESIGN_DEFAULTS });
+  assert.deepEqual({ ...normalizeDesign({ cdnTier: '不存在的選項' }) }, { ...DESIGN_DEFAULTS });
+  const partial = normalizeDesign({ cdnTier: 'off' });
+  assert.equal(partial.cdnTier, 'off');
+  assert.equal(partial.dbMasterSlave, DESIGN_DEFAULTS.dbMasterSlave);
+  assert.equal(new World(14, 1, { cdnTier: 'off' }).options.cdn, false);
+});
+
+test('熱備援一開始就多開機器，無備援則每區只有一台', () => {
+  const count = (w, kind) => w.machines.filter(m => m.kind === kind && m.region === 'tw').length;
+  const warm = new World(14, 1, { streamRedundancy: 'warmStandby', apiRedundancy: 'warmStandby' });
+  const bare = new World(14, 1, { streamRedundancy: 'off', apiRedundancy: 'off' });
+  assert.equal(count(warm, 'stream'), 3);
+  assert.equal(count(warm, 'api'), 3);
+  assert.equal(count(bare, 'stream'), 1);
+  assert.equal(count(bare, 'api'), 1);
+  // 之後自己蓋的據點也要照同一份架構開機器
+  warm.addRegion('新加坡', 'sg');
+  assert.equal(warm.machines.filter(m => m.kind === 'stream' && m.region === 'sg').length, 3);
+});
+
+test('DB 複寫策略決定故障後多久恢復，沒有複本就不會自己回來', () => {
+  assert.equal(new World(14, 1, { dbMasterSlave: 'auto' }).repairSeconds('db'), 30);
+  assert.equal(new World(14, 1, { dbMasterSlave: 'manual' }).repairSeconds('db'), 300);
+  assert.equal(new World(14, 1, { dbMasterSlave: 'off' }).repairSeconds('db'), -1);
+
+  // 實際跑一次：故障後要等多久才會自己回來（autoRepair 維持開啟）。
+  const recoverSeconds = choice => {
+    const w = new World(14, 3, { dbMasterSlave: choice });
+    Object.assign(w.options, { autoFaults: false, arrivals: false });
+    w.step(5);
+    const db = w.machines.find(m => m.kind === 'db');
+    w.setMachine(db.id, false);
+    const start = w.time;
+    for (let i = 0; i < 4000 && !db.up; i++) w.step(0.1);
+    return db.up ? Math.round(w.time - start) : Infinity;
+  };
+  assert.equal(recoverSeconds('auto'), 30);
+  assert.equal(recoverSeconds('manual'), 300);
+  assert.equal(recoverSeconds('off'), Infinity, '沒有複本時 DB 不該自己恢復');
+});
+
+test('快取複本數決定 metadata 讀取什麼時候會壓回 DB', () => {
+  const tierAfterKilling = (choice, kills) => {
+    const w = new World(14, 5, { cacheReplica: choice });
+    w.options.autoFaults = false;
+    w.step(3);
+    w.machines.filter(m => m.kind === 'cache').slice(0, kills).forEach(m => w.setMachine(m.id, false));
+    w.step(3);
+    w.search(2);
+    w.step(0.3);
+    return w.requests.find(r => r.kind === 'search' && r.cacheTier)?.cacheTier;
+  };
+  assert.equal(new World(14, 1, { cacheReplica: 'off' }).machines.filter(m => m.kind === 'cache').length, 1);
+  assert.equal(new World(14, 1, { cacheReplica: 'replica3Quorum' }).machines.filter(m => m.kind === 'cache').length, 3);
+  assert.equal(tierAfterKilling('off', 0), 'cache');
+  assert.equal(tierAfterKilling('off', 1), 'db', '單節點掛掉就該直接壓 DB');
+  assert.equal(tierAfterKilling('replica2', 1), 'cache', '兩節點掛一台還要有人擋在 DB 前面');
+  assert.equal(tierAfterKilling('replica2', 2), 'db');
+});
+
+test('轉碼容錯：沒有容錯會卡住，checkpoint 保留已完成的進度', () => {
+  const interrupt = choice => {
+    const w = new World(14, 3, { transcodeResilience: choice });
+    w.options.autoFaults = false;
+    const v = w.upload(1, 12);
+    for (let i = 0; i < 3000 && v.status !== 'processing'; i++) w.step(0.1);
+    for (let i = 0; i < 3000 && !w.requests.some(r => r.kind === 'transcode' && r.status === 'running' && r.sent > 6); i++) w.step(0.1);
+    const job = w.requests.find(r => r.kind === 'transcode' && r.status === 'running' && r.sent > 6);
+    assert.ok(job, '應該要有一個轉碼中的任務');
+    const progress = job.sent;
+    w.setMachine(job.machines[0], false);
+    // 機器掛掉後要等健康檢查判定逾時（2 秒）才會結算這一次嘗試。
+    for (let i = 0; i < 100 && job.status === 'running'; i++) w.step(0.1);
+    return { job, progress, world: w };
+  };
+  const off = interrupt('off');
+  assert.equal(off.job.status, 'failed', '沒有容錯時任務應該直接卡住');
+
+  const reassign = interrupt('reassign');
+  assert.equal(reassign.job.sent, 0, '重新指派是從頭重轉');
+
+  const checkpoint = interrupt('checkpointResume');
+  assert.ok(checkpoint.job.sent > 0, 'checkpoint 應該保留已完成的進度');
+  assert.ok(checkpoint.job.history.some(h => /checkpoint/.test(h.text)));
+});
+
+test('只有熱門影片進 CDN 時，長尾影片不會被快取', () => {
+  const cachedVideos = choice => {
+    const w = new World(14, 40, { cdnTier: choice });
+    w.options.autoFaults = false;
+    w.step(400);
+    return new Set([...w.cache].map(key => key.split(':')[1])).size;
+  };
+  const all = cachedVideos('all');
+  const popular = cachedVideos('popularOnly');
+  assert.ok(all > 3, '全部進 CDN 時應該快取超過三支影片');
+  assert.ok(popular <= 3, `只有熱門進 CDN 時最多三支，實際 ${popular}`);
+  assert.ok(popular < all);
+});
