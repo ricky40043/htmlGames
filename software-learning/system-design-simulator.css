@@ -638,3 +638,40 @@ body:has(.sim-workbench) .topbar{position:static}
 .sim-upload-retry-bar>span{font-size:.72rem;color:#e9cbd2}
 .sim-upload-retry-bar>.button{padding:10px;font-size:.8rem;background:#9d3659;border-color:#f1a3bc;color:#fff}
 @media(max-width:1000px){.sim-upload-retry-bar{grid-column:1/-1}}
+
+/* Adjustable workspace: the dividers remain reachable outside scrollable panels. */
+.sim-workbench-grid{grid-template-columns:minmax(320px,1fr) 16px minmax(320px,var(--side-width,42%));gap:0}
+.sim-workbench-side{display:flex;flex-direction:column;align-items:stretch;gap:0}
+.sim-workbench-side .sim-activity{height:var(--activity-height,560px);max-height:none;min-height:0;overflow:auto;flex:none}
+.sim-workbench-side .sim-upload-retry-bar{margin-bottom:10px}
+.sim-workbench-side .sim-trace-body{height:var(--log-height,240px);max-height:none}
+.sim-workbench-side .sim-trace.expanded .sim-trace-body{height:max(420px,var(--log-height,240px));max-height:none}
+.sim-workbench-side .sim-runtime-summary{margin-top:10px}
+.sim-splitter{position:relative;touch-action:none;user-select:none;border-radius:6px;outline-offset:-2px}
+.sim-splitter::after{content:'';position:absolute;border-radius:6px;background:#566079;transition:background .15s}
+.sim-splitter:hover,.sim-splitter:focus-visible,.sim-splitter.dragging{background:#7dacf026;outline:1px solid #82aff0}
+.sim-splitter:hover::after,.sim-splitter:focus-visible::after,.sim-splitter.dragging::after{background:#a3c8ff}
+.sim-splitter-columns{cursor:col-resize;align-self:stretch;min-height:120px}
+.sim-splitter-columns::after{width:4px;height:60px;left:6px;top:min(35%,300px)}
+.sim-splitter-rows{height:18px;flex:none;cursor:row-resize}
+.sim-splitter-rows::after{height:4px;width:60px;top:7px;left:calc(50% - 30px)}
+.sim-layout-controls{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:6px;font-size:.68rem;color:#aabbd6}
+.sim-layout-controls button{font-size:.68rem}
+.sim-workbench-side .sim-operation-panel{padding:10px 12px}
+.sim-workbench-side .sim-operation-panel h2{font-size:.85rem;margin:0 0 6px}
+.sim-workbench-side .sim-operation-panel form{margin-bottom:8px}
+.sim-workbench-side .sim-operation-status{padding:8px;gap:1px}
+.sim-workbench-side .sim-upload-overview{margin-top:8px;padding:10px}
+.sim-workbench-side .sim-operation-queue{padding:7px 12px}
+.sim-workbench-side [data-operation-counts]{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.sim-workbench-side [data-operation-list]{max-height:68px}
+.sim-workbench-side .sim-trace-tools [data-trace-latest]{max-height:48px}
+@media(max-width:1000px){
+  .sim-workbench-grid{grid-template-columns:minmax(0,1fr)}
+  .sim-workbench-map .sim-topo-scroll{height:var(--map-height,420px);min-height:0;max-height:none}
+  .sim-splitter-columns{height:22px;min-height:0;cursor:row-resize}
+  .sim-splitter-columns::after{width:60px;height:4px;left:calc(50% - 30px);top:9px}
+  .sim-activity-tabs{position:sticky;top:0;z-index:2}
+}
+.sim-layout-controls{margin:0 0 0 auto}
+.sim-workbench-map{top:calc(var(--workbench-toolbar-height,170px) + 10px)}

@@ -1230,7 +1230,7 @@
     grid.className = 'sim-workbench-grid';
     const map = document.createElement('section');
     map.className = 'sim-workbench-map';
-    map.innerHTML = `<div class="sim-map-heading"><strong>架構與傳輸</strong><label>縮放 <select data-map-zoom aria-label="架構圖縮放"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label></div>`;
+    map.innerHTML = `<div class="sim-map-heading"><strong>架構與傳輸</strong><label>縮放 <select data-map-zoom aria-label="架構圖縮放"><option value="fit">符合寬度</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label></div>`;
     const scroll = wrap.querySelector('.sim-topo-scroll');
     map.append(scroll, wrap.querySelector('.sim-payload-legend'));
     const hint = wrap.querySelector('.sim-topo-scroll-hint');
@@ -1356,11 +1356,103 @@
     reset.querySelector('button').onclick = () => window.YouTubeModes.resetSession();
     settings.append(reset);
     wrap.append(settings);
+    wireWorkbenchResize(wrap, grid, map, side, activity);
     refreshOperationPanels(root, sim, state);
-    map.querySelector('[data-map-zoom]').onchange = event => {
-      scroll.querySelector('svg').style.width = `${event.target.value}%`;
-      scroll.querySelector('svg').style.minWidth = `${10 * Number(event.target.value)}px`;
+    const zoom = map.querySelector('[data-map-zoom]');
+    zoom.onchange = () => {
+      const fit = zoom.value === 'fit';
+      scroll.querySelector('svg').style.width = fit ? '100%' : `${zoom.value}%`;
+      scroll.querySelector('svg').style.minWidth = fit ? '0' : `${10 * Number(zoom.value)}px`;
     };
+    zoom.onchange();
+  }
+
+  function wireWorkbenchResize(wrap, grid, map, side, activity) {
+    const key = 'youtube-workbench-layout-v1';
+    const defaults = { width: 42, activity: 560, log: 240, map: 420 };
+    let layout = { ...defaults };
+    try {
+      const saved = JSON.parse(localStorage.getItem(key));
+      Object.keys(defaults).forEach(name => { if (Number.isFinite(saved?.[name])) layout[name] = saved[name]; });
+    } catch { /* Layout preferences are optional when browser storage is unavailable. */ }
+    const narrow = () => matchMedia('(max-width:1000px)').matches;
+    const syncHandles = [];
+    const apply = () => {
+      layout.width = clamp(layout.width, 28, 62);
+      layout.activity = clamp(layout.activity, 260, 1100);
+      layout.log = clamp(layout.log, 140, 700);
+      layout.map = clamp(layout.map, 240, 900);
+      grid.style.setProperty('--side-width', `${layout.width}%`);
+      grid.style.setProperty('--activity-height', `${layout.activity}px`);
+      grid.style.setProperty('--log-height', `${layout.log}px`);
+      grid.style.setProperty('--map-height', `${layout.map}px`);
+      syncHandles.forEach(sync => sync());
+    };
+    const save = () => { try { localStorage.setItem(key, JSON.stringify(layout)); } catch { /* Keep resizing usable without storage. */ } };
+    const makeHandle = (name, label, orientation, getValue, setValue, limits) => {
+      const handle = document.createElement('div');
+      handle.className = `sim-splitter sim-splitter-${name}`;
+      handle.dataset.resize = name;
+      handle.tabIndex = 0;
+      handle.setAttribute('role', 'separator');
+      handle.setAttribute('aria-label', label);
+      handle.title = `${label}；方向鍵微調，雙擊恢復預設`;
+      const sync = () => {
+        const [min, max] = limits();
+        handle.setAttribute('aria-orientation', orientation());
+        handle.setAttribute('aria-valuemin', min);
+        handle.setAttribute('aria-valuemax', max);
+        handle.setAttribute('aria-valuenow', Math.round(getValue()));
+      };
+      const update = value => { setValue(value); apply(); sync(); };
+      let drag = null;
+      handle.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        drag = { x: event.clientX, y: event.clientY, value: getValue(), vertical: orientation() === 'vertical' };
+        handle.setPointerCapture(event.pointerId);
+        handle.classList.add('dragging');
+      });
+      handle.addEventListener('pointermove', event => {
+        if (!drag) return;
+        const delta = drag.vertical ? -(event.clientX - drag.x) / grid.clientWidth * 100 : event.clientY - drag.y;
+        update(drag.value + delta);
+      });
+      const finish = () => { if (!drag) return; drag = null; handle.classList.remove('dragging'); save(); };
+      handle.addEventListener('pointerup', finish);
+      handle.addEventListener('pointercancel', finish);
+      handle.addEventListener('lostpointercapture', finish);
+      handle.addEventListener('keydown', event => {
+        const vertical = orientation() === 'vertical';
+        const delta = vertical ? { ArrowLeft: 2, ArrowRight: -2 }[event.key] : { ArrowUp: -24, ArrowDown: 24 }[event.key];
+        if (delta == null && !['Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        update(event.key === 'Home' ? limits()[0] : event.key === 'End' ? limits()[1] : getValue() + delta); save();
+      });
+      handle.addEventListener('dblclick', () => {
+        update(name === 'columns' ? narrow() ? defaults.map : defaults.width : defaults.activity);
+        if (name === 'rows') { layout.log = defaults.log; apply(); }
+        save();
+      });
+      syncHandles.push(sync);
+      new ResizeObserver(sync).observe(grid);
+      sync();
+      return handle;
+    };
+    const columns = makeHandle('columns', '拖曳調整架構圖與操作面板比例', () => narrow() ? 'horizontal' : 'vertical',
+      () => narrow() ? layout.map : layout.width, value => { layout[narrow() ? 'map' : 'width'] = value; }, () => narrow() ? [240, 900] : [28, 62]);
+    grid.insertBefore(columns, side);
+    const rows = makeHandle('rows', '拖曳調整操作面板與 LOG 高度', () => 'horizontal', () => layout.activity,
+      value => { const next = clamp(value, 260, 1100); layout.log += layout.activity - next; layout.activity = next; }, () => [260, 1100]);
+    activity.after(rows);
+    const controls = document.createElement('div');
+    controls.className = 'sim-layout-controls';
+    controls.innerHTML = '<span>拖曳分隔線調整比例 · 雙擊還原</span><button type="button" class="sim-mini-btn">重設版面</button>';
+    controls.querySelector('button').onclick = () => { layout = { ...defaults }; apply(); save(); };
+    const toolbar = wrap.querySelector('.sim-workbench-toolbar');
+    toolbar.querySelector('.sim-speed-controls').append(controls);
+    new ResizeObserver(() => { grid.style.setProperty('--workbench-toolbar-height', `${toolbar.offsetHeight}px`); }).observe(toolbar);
+    apply();
   }
 
   function chooseOperationRegion(sim, state) {
