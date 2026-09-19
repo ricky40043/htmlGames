@@ -565,3 +565,29 @@ svg.sim-sandbox-svg{width:100%;height:auto;display:block;background:#0a0a10;bord
 }
 body:has(.sim-workbench) .youtube-mode-nav{position:static}
 body:has(.sim-workbench) .topbar{position:static}
+.sim-activity{min-width:0;border:1px solid var(--border);border-radius:12px;background:#121723;overflow:hidden}
+.sim-activity-tabs{display:flex;gap:5px;padding:8px;border-bottom:1px solid var(--border);background:#171b2a}
+.sim-activity-tabs button{flex:1;padding:9px 6px;border:1px solid transparent;border-radius:7px;background:transparent;color:#aeb5ce;cursor:pointer;font:inherit;font-size:.8rem;font-weight:700}
+.sim-activity-tabs button[aria-selected="true"]{background:#303950;border-color:#879fd1;color:#fff}
+.sim-activity [hidden]{display:none!important}
+.sim-workbench-side .sim-activity .sim-abrlab{border:0;border-radius:0}
+.sim-operation-panel{padding:12px;font-size:.78rem;line-height:1.6;overflow-wrap:anywhere}
+.sim-operation-panel h2{font-size:.95rem;margin:0 0 12px}
+.sim-operation-panel form{display:flex;gap:8px;align-items:end;margin-bottom:16px}
+.sim-operation-panel form label{flex:1;min-width:0;color:#b9c2d7}
+.sim-operation-panel input{display:block;box-sizing:border-box;width:100%;padding:8px;margin-top:5px;background:#090e19;color:#fff;border:1px solid #414b64;border-radius:6px;font-size:.8rem}
+.sim-operation-panel form button{padding:8px;font-size:.75rem;white-space:nowrap}
+.sim-operation-status{display:grid;gap:3px;padding:10px;background:#20283b;border-radius:8px}
+.sim-operation-status.failed,.sim-operation-error{color:var(--sim-bad)}
+.sim-operation-status.completed{color:var(--sim-good)}
+.sim-operation-location,.sim-operation-empty,.sim-operation-panel small{color:#aeb7cf}
+.sim-operation-branch{display:grid;gap:5px;margin:12px 0}
+.sim-operation-branch progress{width:100%;height:9px;accent-color:#7eafff}
+.sim-search-results{list-style:none;padding:0;margin:8px 0;max-height:220px;overflow:auto}
+.sim-search-results li{display:grid;gap:3px;padding:8px;border-bottom:1px solid var(--border)}
+.sim-operation-panel .sim-chunklab{padding:10px 0;margin:0;border:0;background:none}
+.sim-operation-panel .sim-chunklab h2{font-size:.8rem;margin-top:12px}
+.sim-operation-panel .sim-chunklab-desc{font-size:.74rem}
+.sim-operation-panel .sim-chunklab-actions{flex-direction:column;gap:6px}
+.sim-operation-panel .sim-chunklab-actions .button{font-size:.72rem;padding:7px}
+@media(max-width:1000px){.sim-workbench-side .sim-activity{grid-column:1/-1}}

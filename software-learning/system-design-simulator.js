@@ -1118,7 +1118,7 @@
     const stamp = `${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${Math.floor(now.getMilliseconds() / 100)}`;
     const line = document.createElement('div');
     line.className = `sim-trace-line ${tone}`.trim();
-    line.dataset.kind = /💥|⛔/.test(text) ? 'failed' : /🔀/.test(text) ? 'route' : 'info';
+    line.dataset.kind = /💥|⛔|REQ-\d+ 失敗/.test(text) ? 'failed' : /🔀/.test(text) ? 'route' : 'info';
     const tsSpan = document.createElement('span');
     tsSpan.className = 'sim-trace-ts';
     tsSpan.textContent = stamp;
@@ -1180,7 +1180,7 @@
     refreshTrace(panel);
   }
 
-  function arrangeWorkbench(root, sim) {
+  function arrangeWorkbench(root, sim, state) {
     if (sim.chapterId !== 'sd-book-14') return;
     root.querySelector('.sim-play').classList.add('sim-workbench-page');
     const wrap = root.querySelector('.sim-topo-wrap');
@@ -1209,7 +1209,65 @@
     player.querySelector('.sim-abr-cdn').textContent = '⚡ CDN 播放';
     player.querySelector('.sim-abr-origin').textContent = '▶ 回源播放';
     player.append(explanation);
-    side.append(player, wrap.querySelector('.sim-trace'), wrap.querySelector('.sim-runtime-summary'));
+    const activity = document.createElement('section');
+    activity.className = 'sim-activity';
+    activity.innerHTML = `<div class="sim-activity-tabs" role="tablist" aria-label="觀察操作">
+      ${[['watch', '觀看'], ['upload', '上傳'], ['search', '查詢']].map(([id, label]) => `<button type="button" role="tab" id="activity-tab-${id}" aria-controls="activity-panel-${id}" data-activity-tab="${id}">${label}</button>`).join('')}
+    </div>`;
+    const watch = document.createElement('div');
+    watch.dataset.activityPanel = 'watch';
+    watch.append(player);
+    activity.append(watch);
+    ['upload', 'search'].forEach(kind => {
+      const panel = document.createElement('div');
+      panel.dataset.activityPanel = kind;
+      panel.className = 'sim-operation-panel';
+      panel.innerHTML = `<h2>${kind === 'upload' ? '上傳影片' : '查詢影片'}</h2>
+        <form data-operation-form="${kind}"><label>${kind === 'upload' ? '影片名稱' : '影片名稱或 ID'}<input name="term" maxlength="100" value="${kind === 'upload' ? '我的教學影片' : '教學影片'}" required></label>
+        <button class="button secondary" type="submit">${kind === 'upload' ? '開始上傳' : '查詢'}</button></form>
+        <div data-operation-result="${kind}" aria-live="polite"></div>`;
+      activity.append(panel);
+      panel.querySelector('form').onsubmit = event => {
+        event.preventDefault();
+        runTopologyDemo(root, sim, state, kind, state.operationPayload(kind));
+      };
+    });
+    const chunkLab = root.querySelector('.sim-chunklab');
+    if (chunkLab) {
+      const labHelp = document.createElement('details');
+      labHelp.className = 'sim-player-help';
+      labHelp.innerHTML = '<summary>另外練習：分塊與斷點續傳</summary>';
+      labHelp.append(chunkLab);
+      activity.querySelector('[data-activity-panel="upload"]').append(labHelp);
+    }
+    state.operationPayload = kind => {
+      const term = root.querySelector(`[data-operation-form="${kind}"] input`)?.value.trim();
+      return kind === 'upload' ? { title: term || '我的教學影片' } : kind === 'search' ? { query: term || '教學影片' } : {};
+    };
+    state.selectActivity = kind => {
+      state.activityTab = kind;
+      activity.querySelectorAll('[data-activity-tab]').forEach(button => {
+        const active = button.dataset.activityTab === kind;
+        button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1;
+      });
+      activity.querySelectorAll('[data-activity-panel]').forEach(panel => { panel.hidden = panel.dataset.activityPanel !== kind; });
+    };
+    activity.querySelectorAll('[data-activity-panel]').forEach(panel => {
+      panel.id = `activity-panel-${panel.dataset.activityPanel}`;
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('aria-labelledby', `activity-tab-${panel.dataset.activityPanel}`);
+    });
+    const tabs = [...activity.querySelectorAll('[data-activity-tab]')];
+    tabs.forEach((button, index) => {
+      button.onclick = () => state.selectActivity(button.dataset.activityTab);
+      button.onkeydown = event => {
+        const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
+        if (next < 0) return;
+        event.preventDefault(); tabs[next].click(); tabs[next].focus();
+      };
+    });
+    side.append(activity, wrap.querySelector('.sim-trace'), wrap.querySelector('.sim-runtime-summary'));
+    state.selectActivity(state.activityTab || 'watch');
     const settings = document.createElement('details');
     settings.className = 'sim-workbench-settings';
     settings.innerHTML = '<summary>架構設定與操作說明</summary>';
@@ -1221,10 +1279,30 @@
     grid.append(map, side);
     wrap.prepend(toolbar, grid);
     wrap.append(settings);
+    refreshOperationPanels(root, sim, state);
     map.querySelector('[data-map-zoom]').onchange = event => {
       scroll.querySelector('svg').style.width = `${event.target.value}%`;
       scroll.querySelector('svg').style.minWidth = `${10 * Number(event.target.value)}px`;
     };
+  }
+
+  function refreshOperationPanels(root, sim, state) {
+    for (const kind of ['upload', 'search']) {
+      const box = root.querySelector(`[data-operation-result="${kind}"]`);
+      if (!box) continue;
+      const request = state.operationRequests?.[kind];
+      if (!request) { box.innerHTML = '<p class="sim-operation-empty">尚未送出請求。可從上方操作列或這裡開始。</p>'; continue; }
+      const status = { running: '處理中', completed: '完成', failed: '失敗', cancelled: '已取消' }[request.status];
+      const node = findNode(topoOf(sim, state), request.currentNodeId || request.hops.at(-1)?.nodeId);
+      const branches = request.branches || [];
+      box.innerHTML = `<div class="sim-operation-status ${esc(request.status)}"><b>${esc(request.id)} · ${status}</b><span>${esc(request.label)}</span></div>
+        <p class="sim-operation-location">最近經過：${esc(node?.label || '等待傳送')}</p>
+        ${branches.map(branch => `<div class="sim-operation-branch"><span>${esc(branch.label)}</span><progress value="${branch.done}" max="${branch.total}"></progress><small>${branch.done}/${branch.total} 個示意封包完成${branch.failed ? ` · ${branch.failed} 個失敗` : ''}</small></div>`).join('')}
+        ${request.status === 'failed' ? '<p class="sim-operation-error">路徑中斷，這次請求失敗。已完成的其他資料仍保留；恢復機器後可重新送出。</p>' : ''}
+        ${kind === 'upload' ? `<p>轉碼／上架：${request.status === 'completed' ? '轉碼與所有分支完成，影片已上架' : request.status === 'failed' ? '未完成上架' : request.hops.some(h => h.nodeId === 'transcodeArch') ? '已抵達轉碼節點，等待所有分支完成' : '等待影片抵達轉碼節點'}</p><small>進度表示架構圖中的示意封包完成數，不是實際位元組百分比。</small>` :
+        `<p>查詢條件：${esc(request.payload.query)}</p><p>已經過的節點：${esc([...new Set(request.hops.map(h => findNode(topoOf(sim, state), h.nodeId)?.label || h.nodeId))].join(' → ') || '等待傳送')}</p>
+        ${request.status === 'completed' ? `<p>找到 ${request.results?.length || 0} 部已上架影片</p><ul class="sim-search-results">${(request.results || []).map(row => `<li><b>${esc(row.title || row.video_id)}</b><small>${esc(row.video_id)} · 可播放</small></li>`).join('')}</ul>${!request.results?.length ? '<small>目前沒有符合的影片。可以先上傳一部，再查詢它的名稱。</small>' : ''}` : ''}`}`;
+    }
   }
 
   // Cumulative fraction-of-total-duration boundary for each waypoint (0..1). Uniform when no
@@ -1642,7 +1720,7 @@
     setTimeout(() => edge?.classList.remove('transmitting'), 760);
   }
 
-  function runTopologyDemo(root, sim, state, kind) {
+  function runTopologyDemo(root, sim, state, kind, payload = {}) {
     const svgEl = root.querySelector('svg.sim-topo');
     const topo = topoOf(sim, state);
     if (!svgEl || !topo) return;
@@ -1652,7 +1730,7 @@
     const regionLabel = regionId && topo.regionLabel?.[regionId];
     const flows = topologyFlows(topo, kind, ctx, regionId);
     if (!flows.length || !Runtime || !state.runtime) return;
-    const spec = operationSpec(sim, state, kind, regionId);
+    const spec = operationSpec(sim, state, kind, regionId, payload);
     const request = Runtime.beginRequest(state.runtime, {
       kind,
       label: spec.label,
@@ -1660,6 +1738,12 @@
       region: regionLabel || regionId || ''
     });
     if (!request) return;
+    if (sim.chapterId === 'sd-book-14' && ['upload', 'search'].includes(kind)) {
+      state.operationRequests ||= {};
+      state.operationRequests[kind] = request;
+    }
+    request.branches = [];
+    refreshOperationPanels(root, sim, state);
     applyRuntimeWrites(state, spec.writesOnStart, request);
     refreshRuntimeSummary(root, sim, state);
     repaintNodes(root, sim, state);
@@ -1682,10 +1766,18 @@
         traceLine(root, `— ${request.id} 失敗；已完成的其他 request 與資料不會被清掉 —`, 'bad');
       } else {
         applyRuntimeWrites(state, spec.writesOnComplete, request);
+        if (sim.chapterId === 'sd-book-14' && kind === 'search') {
+          const rows = state.runtime.stores.youtubeMetadata?.tables.video?.rows || [];
+          const cached = state.runtime.stores.youtubeCache?.tables.entries?.rows || [];
+          const query = String(request.payload.query || '').toLocaleLowerCase();
+          request.results = rows.filter(row => row.status === 'ready' && cached.some(entry => entry.video_id === row.video_id && entry.status === 'ready')
+            && `${row.title || ''} ${row.video_id}`.toLocaleLowerCase().includes(query)).map(row => ({ video_id: row.video_id, title: row.title }));
+        }
         Runtime.finishRequest(state.runtime, request, 'completed', '所有分支完成');
         traceLine(root, `— ${request.id} 完成；這是第 ${state.runtime.counts[kind]} 次${kind === 'upload' ? '上傳' : '操作'} —`, 'done');
       }
       refreshRuntimeSummary(root, sim, state);
+      refreshOperationPanels(root, sim, state);
       repaintNodes(root, sim, state);
     };
 
@@ -1703,9 +1795,14 @@
         const visualNote = logicalPacketCount > packetCount ? `；畫面抽樣顯示其中 ${packetCount} 個` : '';
         traceLine(root, `${request.id} 客戶端先把${flow.packetLabel || '內容'}切成 ${logicalPacketCount} 個可獨立重試的小封包${visualNote}，並依序送出。`, 'ok');
       }
+      const branchProgress = { label: flow.label || (kind === 'search' ? '查詢與回應' : '傳輸'), total: packetCount, done: 0, failed: 0 };
+      request.branches.push(branchProgress);
+      refreshOperationPanels(root, sim, state);
       let packetsRemaining = packetCount;
       let packetFailed = false;
       const settlePacket = ok => {
+        if (ok) branchProgress.done += 1; else branchProgress.failed += 1;
+        refreshOperationPanels(root, sim, state);
         packetsRemaining -= 1;
         if (!ok) packetFailed = true;
         if (packetsRemaining === 0) settleBranch(flow.id, !packetFailed);
@@ -1731,6 +1828,7 @@
                 const n = findNode(topoOf(sim, state), nodeId);
                 const which = machine ? ` #${machine.idx + 1}` : '';
                 if (verbose) Runtime.visitNode(state.runtime, request, nodeId, `${flow.label || kind}${which}`);
+                refreshOperationPanels(root, sim, state);
                 flashTopologyHop(root, previous, nodeId, previousMachine, machine);
                 previous = nodeId;
                 previousMachine = machine;
@@ -2116,7 +2214,10 @@
       svgEl.addEventListener('pointerleave', evt => { if (evt.buttons === 0) dropNode(); });
     }
     root.querySelectorAll('.sim-demo').forEach(btn => {
-      btn.onclick = () => runTopologyDemo(root, sim, state, btn.dataset.kind);
+      btn.onclick = () => {
+        state.selectActivity?.(btn.dataset.kind);
+        runTopologyDemo(root, sim, state, btn.dataset.kind, state.operationPayload?.(btn.dataset.kind) || {});
+      };
     });
     wireRandomTraffic(root, sim, state);
     // "N people watching the SAME video" is a different demonstration than the generic +users
@@ -3642,7 +3743,7 @@
       ${state.log.length ? `<section class="sim-log"><h2>即時事件紀錄</h2><ul>${state.log.map(e => logEntry(sim, e)).join('')}</ul></section>` : ''}
     </section>`;
 
-    arrangeWorkbench(root, sim);
+    arrangeWorkbench(root, sim, state);
     wireTopologyControls(root, sim, state, componentId => {
       const before = currentOptionId(sim, componentId, state);
       const next = nextOptionId(sim, componentId, state);

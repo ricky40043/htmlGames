@@ -198,8 +198,8 @@
       }
       if (kind === 'search') return {
         label: `搜尋影片 #${pad}`,
-        payload: { query: `system design ${pad}`, region },
-        writesOnComplete: [{ storeId: 'youtubeMetadata', tableId: 'search_query', row: { query_id: `query-${pad}`, query: `system design ${pad}`, region } }]
+        payload: { query: ctx.payload?.query || '教學影片', region },
+        writesOnComplete: [{ storeId: 'youtubeMetadata', tableId: 'search_query', row: { query_id: `query-${pad}`, query: ctx.payload?.query || '教學影片', region } }]
       };
       return {
         label: `觀看影片 #${pad}`,

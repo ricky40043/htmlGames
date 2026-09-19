@@ -41,3 +41,11 @@ node --test software-learning/tests/simulator-network.test.cjs software-learning
 - LOG 保留最近 200 筆，可篩選失敗、切換路徑；摘要保留最新失敗與其後接手紀錄。
 - 往上閱讀不自動跳回底部，顯示新增筆數；可回到最新、展開或清空。失敗數是目前保留紀錄內的數量。
 - 瀏覽器回歸：先執行 `tests/simulator-network-browser.js`，再執行 `tests/simulator-workbench-browser.js`，檢查篩選、閱讀位置、縮放與窄視窗溢出。
+
+### 觀看／上傳／查詢分頁（2026-09-19）
+
+- 右側分頁可手動或用方向鍵切換；上方觀看、上傳、搜尋按鈕會切到對應畫面。切頁只改可見性，不重新建立播放器或請求。
+- 上傳分頁顯示最新上傳 Request、實際示意封包完成數、經過節點、轉碼／上架結果；分塊與斷點續傳練習收在同一頁的展開區。
+- 查詢可輸入影片名稱或 ID，沿既有 Metadata 快取路徑執行。成功後從已上架且快取可用的影片紀錄取得結果快照，失敗不顯示舊結果。
+- 每次送出都是獨立 Request，分頁顯示最新一筆，各筆完整紀錄仍可從共用 LOG／Request 清單查看。
+- 新增 `tests/simulator-activity-browser.js`：驗證上傳後查詢、故障結果、播放不中斷、分頁鍵盤操作與窄視窗。
