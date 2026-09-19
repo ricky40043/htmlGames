@@ -22,7 +22,7 @@
     check(state.abr === playback && state.abrGeneration === generation && state.abr.playing, 'switching tabs does not restart or stop playback');
     await until(() => upload.status === 'completed', 'upload completes while observed from another tab');
     check(upload.branches.every(b => b.done === b.total), 'progress reflects completed simulation packets');
-    check(document.querySelector('[data-operation-result="upload"]').textContent.includes('影片已上架'), 'upload panel reports actual publish completion');
+    check(document.querySelector('[data-operation-result="upload"]').textContent.includes('已上架'), 'upload panel reports actual publish completion');
     document.querySelector('[data-operation-form="search"] input').value = '分頁測試影片';
     click('[data-kind="search"]');
     check(visible('search'), 'toolbar search selects query panel');
@@ -43,7 +43,7 @@
     click('[data-instance="storage::0"]');
     click('[data-kind="upload"]');
     await until(() => state.operationRequests.upload.status === 'failed', 'storage outage fails upload');
-    check(document.querySelector('[data-operation-result="upload"]').textContent.includes('未完成上架'), 'failed upload is not reported published');
+    check(document.querySelector('[data-operation-result="upload"]').textContent.includes('中斷，尚未上架'), 'failed upload is not reported published');
     click('[data-instance="storage::0"]');
     tab('watch');
     check(visible('watch') && state.abr === playback, 'returning to watch keeps the original player');

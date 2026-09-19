@@ -29,7 +29,7 @@
     check(batch.every(r => r.hops[0]?.nodeId === `users_${r.payload.region}`), 'actual packet paths start at each chosen region');
     click(`[data-operation-id="${batch[3].id}"]`);
     check(state.operationRequests.upload === batch[3], 'clicking an older upload opens its own details');
-    check(document.querySelectorAll('.sim-upload-stages>div').length === 4, 'upload has four illustrated process stages');
+    check(!!document.querySelector('.sim-upload-overview progress') && document.querySelector('.sim-upload-overview').textContent.includes('已完整確認'), 'upload shows confirmed capacity and progress');
     origin('random');
     const savedRandom = Math.random;
     const randomRegions = [];

@@ -596,13 +596,6 @@ body:has(.sim-workbench) .topbar{position:static}
 .sim-origin-controls select{padding:6px 10px;border:1px solid #51617f;border-radius:6px;background:#101725;color:#fff;margin-left:5px}
 .sim-origin-controls>span{color:#aeb7cf;font-size:.7rem}
 .sim-origin-controls>button{margin-left:auto}
-.sim-upload-stages{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:12px 0}
-.sim-upload-stages>div{display:grid;align-content:start;text-align:center;gap:5px;padding:9px 3px;background:#1a2030;border:1px solid #343d52;border-radius:8px;color:#99a4ba}
-.sim-upload-stages>div>span{font-size:1.5rem}
-.sim-upload-stages b{font-size:.68rem}
-.sim-upload-stages small{font-size:.62rem;line-height:1.4}
-.sim-upload-stages .reached{border-color:#83aef7;background:#1e2b45;color:#d8e8ff}
-.sim-upload-stages .done{border-color:#388766;background:#142d27;color:#b9f6d8}
 .sim-watch-action{padding:0 12px 12px;display:grid;gap:6px}
 .sim-watch-action button{font-size:.76rem;padding:8px}
 .sim-watch-action small{font-size:.7rem;color:#aeb7cf}
@@ -632,3 +625,16 @@ body:has(.sim-workbench) .topbar{position:static}
 .sim-packet-chips .failed{color:#ffadbf;border-color:#a34c64;background:#3a1e29}
 .sim-packet-chips .sending{color:#b4d3ff;border-color:#77abed;background:#203854}
 .sim-packet-status .button{font-size:.72rem;padding:8px;white-space:normal}
+.sim-upload-overview{margin-top:12px;padding:12px;border:1px solid #4c6385;border-radius:10px;background:#18243a}
+.sim-upload-progress-heading{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sim-upload-progress-heading strong{font-size:1.6rem;color:#a6ceff}
+.sim-upload-overview>progress{width:100%;height:16px;accent-color:#67bbff;margin:10px 0 4px}
+.sim-upload-overview p{margin:4px 0;font-size:.8rem}
+.sim-upload-outcome{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:12px 0;padding-top:10px;border-top:1px solid #3c4d68;font-size:.72rem}
+.sim-upload-outcome b{text-align:right}
+.sim-upload-retry-bar{padding:12px;border:1px solid #ba6179;background:#2d1b29;border-radius:10px;display:grid;gap:8px;font-size:.78rem}
+.sim-upload-retry-bar[hidden]{display:none}
+.sim-upload-retry-bar>strong{color:#ffb5c6}
+.sim-upload-retry-bar>span{font-size:.72rem;color:#e9cbd2}
+.sim-upload-retry-bar>.button{padding:10px;font-size:.8rem;background:#9d3659;border-color:#f1a3bc;color:#fff}
+@media(max-width:1000px){.sim-upload-retry-bar{grid-column:1/-1}}

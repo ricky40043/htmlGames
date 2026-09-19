@@ -39,7 +39,7 @@
     check(!document.querySelector('.sim-workbench-settings').open, 'secondary settings start collapsed');
     check(document.documentElement.scrollWidth <= innerWidth, 'page has no horizontal overflow');
     panel.querySelector('.sim-trace-clear').click();
-    check(!body.children.length && panel.querySelector('[data-trace-count]').textContent === '失敗 0', 'clear resets logs and failure counter');
+    check(![...body.children].some(line => line.dataset.operation === panel.dataset.operation) && panel.querySelector('[data-trace-count]').textContent === '失敗 0', 'clear resets logs and failure counter');
     document.querySelector('.sim-workbench').scrollIntoView();
     return { passed: results.length, results };
 })()
