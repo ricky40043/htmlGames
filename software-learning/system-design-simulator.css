@@ -623,3 +623,12 @@ body:has(.sim-workbench) .topbar{position:static}
   .sim-activity-tabs{position:sticky;top:0;z-index:2}
 }
 .sim-operation-queue [data-operation-list]{max-height:112px}
+.sim-packet-number{font:700 14px ui-monospace,monospace;fill:#fff;stroke:#080b14;stroke-width:3px;paint-order:stroke;pointer-events:none}
+.sim-packet-number.lost{fill:#ff8fa5}
+.sim-packet-status{margin:12px 0;padding:10px;border:1px solid #3b4861;border-radius:8px;background:#111a2a;font-size:.74rem}
+.sim-packet-chips{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}
+.sim-packet-chips span{padding:4px 7px;border:1px solid #45506a;border-radius:5px;color:#aeb7cf}
+.sim-packet-chips .completed{color:#91f2bb;border-color:#39865b;background:#153427}
+.sim-packet-chips .failed{color:#ffadbf;border-color:#a34c64;background:#3a1e29}
+.sim-packet-chips .sending{color:#b4d3ff;border-color:#77abed;background:#203854}
+.sim-packet-status .button{font-size:.72rem;padding:8px;white-space:normal}

@@ -1291,6 +1291,11 @@
     queue.className = 'sim-operation-queue';
     queue.innerHTML = '<div data-operation-counts></div><div data-operation-list></div>';
     activity.insertBefore(queue, watch);
+    activity.addEventListener('click', event => {
+      const button = event.target.closest('[data-retry-upload]');
+      if (!button) return;
+      state.operationHistory?.find(request => request.id === button.dataset.retryUpload)?.retryUpload?.();
+    });
     queue.addEventListener('click', event => {
       const button = event.target.closest('[data-operation-id]');
       const request = state.operationHistory?.find(r => r.id === button?.dataset.operationId);
@@ -1345,6 +1350,18 @@
     }).join('')}</div>`;
   }
 
+  function uploadPacketsHtml(request) {
+    if (!request.branches.some(branch => branch.packets)) return '';
+    const video = request.branches.find(branch => branch.id !== 'metadata');
+    const firstIncomplete = video?.packets.find(packet => packet.status !== 'completed');
+    const retryTag = firstIncomplete ? (request.resumable ? firstIncomplete.tag : video.packets[0].tag) : null;
+    return `<section class="sim-packet-status"><b>封包確認清單 · ${request.resumable ? '已開啟斷點續傳' : '未開啟斷點續傳'}</b>
+      ${request.branches.map(branch => `<div class="sim-packet-chips">${(branch.packets || []).map(packet => `<span class="${packet.status}" title="${esc(packet.range + (packet.reason ? '：' + packet.reason : ''))}">${packet.status === 'completed' ? '✓' : packet.status === 'failed' ? '✕' : packet.status === 'sending' ? '➜' : '·'} ${packet.tag}${packet.attempts.length > 1 ? ` ↻${packet.attempts.length}` : ''}</span>`).join('')}</div>`).join('')}
+      <small>✓ 已確認　➜ 傳送中　✕ 失敗　· 尚未傳送<br>M＝影片資料，P＝上傳傳輸組，S＝播放片段；R 編號對應 Request。</small>
+      ${request.status === 'failed' ? `<p class="sim-operation-error">${request.branches.flatMap(branch => branch.packets || []).filter(packet => packet.status === 'failed').map(packet => `${packet.tag} 失敗：${esc(packet.reason)}`).join('<br>')}<br>${request.resumable ? `已確認封包不重傳；${retryTag ? `影片從 ${retryTag} 接續` : '影片封包已確認，只重試未完成的資料分支'}` : retryTag ? '未開啟斷點續傳：影片 P1 起全部重傳' : '影片封包已確認，只重試未完成的資料分支'}。</p>${typeof request.retryUpload === 'function' ? `<button type="button" class="button secondary" data-retry-upload="${esc(request.id)}">↻ 恢復連線後，${retryTag ? `從 ${retryTag}` : '從 M1'} 重傳</button>` : '<small>頁面已重新載入，請重新送出上傳。</small>'}` : ''}
+    </section>`;
+  }
+
   function scheduleOperationPanels(root, sim, state) {
     if (state.operationPaintTimer) return;
     state.operationPaintTimer = setTimeout(() => {
@@ -1374,11 +1391,11 @@
         box.innerHTML = `<div class="sim-operation-status ${esc(request.status)}"><b>▶ 獨立觀看請求 ${esc(request.id)} · ${status}</b><span>🌏 ${esc(request.region)} · ${esc(request.payload.video_id)}</span></div><p>📍 最近經過：${esc(node?.label || '等待傳送')}</p><small>此筆是架構圖中的獨立觀看請求，不會取代上方播放器的觀眾。</small>`;
         continue;
       }
-      box.innerHTML = `<div class="sim-operation-status ${esc(request.status)}"><b>${esc(request.id)} · ${status}</b><span>${esc(request.label)}</span><small>🌏 出發地：${esc(request.region)}</small></div>${kind === 'upload' ? uploadStagesHtml(request) : ''}
+      box.innerHTML = `<div class="sim-operation-status ${esc(request.status)}"><b>${esc(request.id)} · ${status}</b><span>${esc(request.label)}</span><small>🌏 出發地：${esc(request.region)}</small></div>${kind === 'upload' ? uploadStagesHtml(request) + uploadPacketsHtml(request) : ''}
         <p class="sim-operation-location">📍 最近經過：${esc(node?.label || '等待傳送')}</p>
         ${branches.map(branch => `<div class="sim-operation-branch"><span>${branch.id === 'metadata' ? '📝 影片資料' : kind === 'upload' ? '📦 影片傳輸' : '🔎 查詢與回應'}</span><progress value="${branch.done}" max="${branch.total}"></progress><small>${branch.done}/${branch.total} 個示意封包完成${branch.failed ? ` · ${branch.failed} 個失敗` : ''}</small></div>`).join('')}
         ${request.status === 'failed' ? '<p class="sim-operation-error">路徑中斷，這次請求失敗。已完成的其他資料仍保留；恢復機器後可重新送出。</p>' : ''}
-        ${kind === 'upload' ? `<p>🎬 轉碼／上架：${request.status === 'completed' ? '轉碼與所有分支完成，影片已上架' : request.status === 'failed' ? '未完成上架' : request.hops.some(h => h.nodeId === 'transcodeArch') ? '已抵達轉碼節點，等待所有分支完成' : '等待影片抵達轉碼節點'}</p><details class="sim-player-help"><summary>這些進度代表什麼？</summary><p>📝 影片資料：名稱、狀態等資訊。📦 影片傳輸：影片切成封包後經過轉碼與上架。兩條路都完成才上架。</p><p>進度表示示意封包完成數，不是實際位元組百分比。</p></details>` :
+        ${kind === 'upload' ? `<p>🎬 轉碼／上架：${request.status === 'completed' ? '轉碼與所有分支完成，影片已上架' : request.status === 'failed' ? '未完成上架' : request.hops.some(h => h.nodeId === 'transcodeArch') ? '已抵達轉碼節點，等待所有分支完成' : '等待影片抵達轉碼節點'}</p><details class="sim-player-help"><summary>這些進度代表什麼？</summary><p>📝 影片資料：名稱、狀態等資訊。📦 影片傳輸：影片切成封包後經過轉碼與上架。兩條路都完成才上架；影片傳輸組逐組確認，斷線後後續組暫停。</p><p>進度表示示意封包完成數，不是實際位元組百分比。</p></details>` :
         `<p>查詢條件：${esc(request.payload.query)}</p><p>已經過的節點：${esc([...new Set(request.hops.map(h => findNode(topoOf(sim, state), h.nodeId)?.label || h.nodeId))].join(' → ') || '等待傳送')}</p>
         ${request.status === 'completed' ? `<p>找到 ${request.results?.length || 0} 部已上架影片</p><ul class="sim-search-results">${(request.results || []).map(row => `<li><b>${esc(row.title || row.video_id)}</b><small>${esc(row.video_id)} · 可播放</small></li>`).join('')}</ul>${!request.results?.length ? '<small>目前沒有符合的影片。可以先上傳一部，再查詢它的名稱。</small>' : ''}` : ''}`}`;
     }
@@ -1419,7 +1436,7 @@
   // `guard` is checked every frame: the moment it returns false the packet is considered lost in
   // transit — it stops where it is, turns red, and `onLost` fires instead of `onDone`. That is
   // what "pull a machine out and watch the half-delivered requests die" actually looks like.
-  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, weights, radius = 7, onDone, onHop, guard, onLost, advance } = {}) {
+  function spawnToken(svgEl, waypoints, { className = '', tokenClass = 'sim-token', durationMs = 1800, weights, radius = 7, onDone, onHop, guard, onLost, advance, label = '' } = {}) {
     if (!svgEl || !waypoints.length) { onDone?.(null); return null; }
     if (waypoints.length === 1) {
       onHop?.(0);
@@ -1432,6 +1449,24 @@
     circle.setAttribute('cx', waypoints[0].x);
     circle.setAttribute('cy', waypoints[0].y);
     svgEl.appendChild(circle);
+    let labelEl = null;
+    const positionLabel = (x, y) => {
+      if (!labelEl) return;
+      labelEl.setAttribute('x', x + radius + 5);
+      labelEl.setAttribute('y', y - radius - 3);
+    };
+    if (label) {
+      circle.setAttribute('data-packet-label', label);
+      labelEl = document.createElementNS(SVG_NS, 'text');
+      labelEl.setAttribute('class', 'sim-packet-number');
+      labelEl.setAttribute('aria-hidden', 'true');
+      labelEl.textContent = label;
+      svgEl.appendChild(labelEl);
+      positionLabel(waypoints[0].x, waypoints[0].y);
+      // Callers remove tokens on completion, stop and rebuild. Keep the label in that lifecycle.
+      const removeCircle = circle.remove.bind(circle);
+      circle.remove = () => { labelEl.remove(); removeCircle(); };
+    }
     // The source is a real hop too. Previously only indices 1…N fired, so the request ledger
     // silently omitted the client that originated every operation.
     onHop?.(0);
@@ -1451,6 +1486,7 @@
       settled = true;
       clearInterval(timer);
       circle.classList.add('lost');
+      labelEl?.classList.add('lost');
       setTimeout(() => circle.remove(), 1200);
       onLost?.(circle, reason);
     };
@@ -1467,6 +1503,7 @@
         const end = waypoints[waypoints.length - 1];
         circle.setAttribute('cx', end.x);
         circle.setAttribute('cy', end.y);
+        positionLabel(end.x, end.y);
         onDone?.(circle);
         return;
       }
@@ -1474,6 +1511,7 @@
       const p = pointAlongPath(waypoints, t, weights);
       circle.setAttribute('cx', p.x);
       circle.setAttribute('cy', p.y);
+      positionLabel(p.x, p.y);
     }, 40);
     return { circle, abort: lose, stop: () => { settled = true; clearInterval(timer); } };
   }
@@ -1826,6 +1864,8 @@
       state.operationHistory = state.operationHistory.filter(r => r.status === 'running' || completed++ < 30);
     }
     request.branches = [];
+    const numberedUpload = sim.chapterId === 'sd-book-14' && kind === 'upload';
+    if (numberedUpload) { request.resumable = currentOptionId(sim, 'resumableUpload', state) !== 'off'; request.attempt = 1; }
     refreshOperationPanels(root, sim, state);
     applyRuntimeWrites(state, spec.writesOnStart, request);
     refreshRuntimeSummary(root, sim, state);
@@ -1864,81 +1904,113 @@
       repaintNodes(root, sim, state);
     };
 
-    flows.forEach((flow, flowIndex) => {
-      if (flow.label) traceLine(root, `${request.id} 分支 ${flowIndex + 1}：${flow.label}`, '');
-      const payloadType = payloadTypeFor(sim, kind, flow);
-      const visualPacketLimit = Math.max(1, Math.min(12, Number(flow.packetCount) || 1));
-      const logicalPacketCount = visualPacketLimit > 1
-        ? Math.max(1, Number(spec.payload?.block_count)
-          || (flow.chunkBytes && spec.payload?.size_bytes ? Math.ceil(Number(spec.payload.size_bytes) / Number(flow.chunkBytes)) : 0)
-          || visualPacketLimit)
-        : 1;
-      const packetCount = Math.min(visualPacketLimit, logicalPacketCount);
-      if (packetCount > 1) {
-        const visualNote = logicalPacketCount > packetCount ? `；畫面抽樣顯示其中 ${packetCount} 個` : '';
-        traceLine(root, `${request.id} 客戶端先把${flow.packetLabel || '內容'}切成 ${logicalPacketCount} 個可獨立重試的小封包${visualNote}，並依序送出。`, 'ok');
-      }
-      const branchProgress = { id: flow.id, label: flow.label || (kind === 'search' ? '查詢與回應' : '傳輸'), total: packetCount, done: 0, failed: 0 };
-      request.branches.push(branchProgress);
-      scheduleOperationPanels(root, sim, state);
-      let packetsRemaining = packetCount;
-      let packetFailed = false;
-      const settlePacket = ok => {
-        if (ok) branchProgress.done += 1; else branchProgress.failed += 1;
-        scheduleOperationPanels(root, sim, state);
-        packetsRemaining -= 1;
-        if (!ok) packetFailed = true;
-        if (packetsRemaining === 0) settleBranch(flow.id, !packetFailed);
-      };
-      for (let packetIndex = 0; packetIndex < packetCount; packetIndex++) {
-        setTimeout(() => {
-          let previous = '';
-          let previousMachine = null;
-          let packetSettled = false;
-          const settleThisPacket = ok => {
-            if (packetSettled) return;
-            packetSettled = true;
-            settlePacket(ok);
-          };
-          const verbose = packetIndex === 0;
-          const handle = spawnRequest(root, sim, state, svgEl, flow.nodes, {
-            trace: verbose,
-            token: {
-              className: `${kind} branch-${flowIndex + 1} payload-${payloadType} packet-${packetIndex + 1}`,
-              tokenClass: 'sim-token-demo',
-              radius: packetCount > 1 ? 4.5 : (flows.length > 1 ? 6 + flowIndex : 7),
-              onHop: (idx, machine, nodeId) => {
-                const n = findNode(topoOf(sim, state), nodeId);
-                const which = machine ? ` #${machine.idx + 1}` : '';
-                if (verbose) Runtime.visitNode(state.runtime, request, nodeId, `${flow.label || kind}${which}`);
-                scheduleOperationPanels(root, sim, state);
-                flashTopologyHop(root, previous, nodeId, previousMachine, machine);
-                previous = nodeId;
-                previousMachine = machine;
-                if (!verbose) {
-                  if (machine) traceLine(root, `${request.id} ${logicalPacketCount > packetCount ? '視覺抽樣 · ' : ''}${flow.packetLabel || '內容'}封包 ${packetIndex + 1}/${packetCount} →「${n?.label || nodeId}」 #${machine.idx + 1}`);
-                  return;
-                }
+    const branches = flows.map((flow, flowIndex) => {
+      if (flow.label) traceLine(root, `${request.id} 分支 ${flowIndex + 1}：${flow.label}`);
+      const packetCount = Math.max(1, Math.min(12, Number(flow.packetCount) || 1));
+      const blockCount = flow.chunkBytes && spec.payload.size_bytes ? Math.ceil(spec.payload.size_bytes / flow.chunkBytes) : packetCount;
+      const progress = { id: flow.id, label: flow.label || '傳輸', total: packetCount, done: 0, failed: 0 };
+      if (numberedUpload) progress.packets = Array.from({ length: packetCount }, (_, index) => ({
+        number: index + 1, tag: `${flow.id === 'metadata' ? 'M' : 'P'}${index + 1}`,
+        status: 'queued', attempts: [],
+        range: flow.id === 'metadata' ? '影片資料' : `區塊 ${Math.floor(index * blockCount / packetCount) + 1}–${Math.floor((index + 1) * blockCount / packetCount)}`
+      }));
+      request.branches.push(progress);
+      if (numberedUpload && flow.id !== 'metadata') traceLine(root, `${request.id} 將全部 ${blockCount} 個區塊分成 ${packetCount} 個編號傳輸組 P1–P${packetCount}；每組完整確認後才傳下一組，並非略過其他區塊。`);
+      return { flow, flowIndex, progress };
+    });
+
+    const executeBranch = ({ flow, flowIndex, progress }) => {
+      const packets = progress.packets;
+      let pending = progress.total;
+      let branchFailed = false;
+      const send = packetIndex => {
+        const packet = packets?.[packetIndex];
+        if (packet?.status === 'completed') { send(packetIndex + 1); return; }
+        if (packetIndex >= progress.total) { settleBranch(flow.id, true); return; }
+        let previous = '', previousMachine = null, packetSettled = false;
+        const tag = packet?.tag || `P${packetIndex + 1}`;
+        const attempt = { number: request.attempt || 1, status: 'sending' };
+        if (packet) { packet.status = 'sending'; packet.attempts.push(attempt); }
+        const finish = (ok, reason = '') => {
+          if (packetSettled) return;
+          packetSettled = true;
+          if (packet) {
+            packet.status = ok ? 'completed' : 'failed';
+            packet.reason = reason;
+            attempt.status = packet.status;
+            attempt.reason = reason;
+            progress.done = packets.filter(p => p.status === 'completed').length;
+            progress.failed = packets.filter(p => p.status === 'failed').length;
+            traceLine(root, ok
+              ? `✅ ${request.id} ${tag}（${packet.range}）已完整確認，${packetIndex + 1 < progress.total ? `下一包 ${packets[packetIndex + 1].tag}` : '此分支完成'}。`
+              : `💥 ${request.id} ${tag}（${packet.range}）第 ${request.attempt} 次傳送失敗：${reason}。後續封包尚未送出。${flow.id === 'metadata' ? '影片資料會重試 M1。' : request.resumable ? `保留 ${progress.done} 包確認進度，恢復連線後從 ${tag} 重傳。` : '未開啟斷點續傳，恢復連線後必須從 P1 重傳。'}`, ok ? 'ok' : 'bad');
+          } else { if (ok) progress.done++; else progress.failed++; }
+          scheduleOperationPanels(root, sim, state);
+          if (numberedUpload) {
+            if (ok) send(packetIndex + 1);
+            else settleBranch(flow.id, false);
+          } else {
+            pending--;
+            branchFailed ||= !ok;
+            if (!pending) settleBranch(flow.id, !branchFailed);
+          }
+        };
+        const verbose = numberedUpload || packetIndex === 0;
+        if (packet) traceLine(root, `📤 ${request.id} 送出 ${tag}（${packet.range}），第 ${request.attempt} 次嘗試。`);
+        const handle = spawnRequest(root, sim, state, svgEl, flow.nodes, {
+          trace: !numberedUpload && verbose,
+          token: {
+            className: `${kind} branch-${flowIndex + 1} payload-${payloadTypeFor(sim, kind, flow)} packet-${packetIndex + 1}`,
+            tokenClass: 'sim-token-demo', radius: numberedUpload ? 7 : progress.total > 1 ? 4.5 : 7,
+            label: sim.chapterId === 'sd-book-14' ? `${request.id.replace('REQ-', 'R')}·${tag}` : '',
+            onHop: (idx, machine, nodeId) => {
+              const n = findNode(topoOf(sim, state), nodeId);
+              const which = machine ? ` #${machine.idx + 1}` : '';
+              if (verbose) Runtime.visitNode(state.runtime, request, nodeId, `${tag} · ${flow.label || kind}${which}`);
+              flashTopologyHop(root, previous, nodeId, previousMachine, machine);
+              previous = nodeId; previousMachine = machine;
+              if (!verbose && machine) traceLine(root, `${request.id} ${tag} →「${n?.label || nodeId}」${which}`);
+              if (verbose) {
                 (spec.writesOnHop || []).forEach((write, writeIndex) => {
                   if (write.nodeId !== nodeId || appliedHopWrites.has(writeIndex)) return;
                   appliedHopWrites.add(writeIndex);
                   applyRuntimeWrites(state, [write], request);
                   repaintNodes(root, sim, state);
                 });
-                traceLine(root, `${request.id} 抵達「${n?.label || nodeId}」${which}${n?.arriveLabel ? '：' + n.arriveLabel : ''}`);
-              },
-              onDone: circle => {
-                setTimeout(() => circle?.remove(), 320);
-                settleThisPacket(true);
+                if (!numberedUpload) traceLine(root, `${request.id} 抵達「${n?.label || nodeId}」${which}${n?.arriveLabel ? '：' + n.arriveLabel : ''}`);
               }
+              scheduleOperationPanels(root, sim, state);
             },
-            onLost: () => settleThisPacket(false),
-            onBlocked: () => settleThisPacket(false)
-          });
-          if (!handle) settleThisPacket(false);
-        }, packetIndex * Math.max(70, 170 / (state.speed || 1)));
-      }
-    });
+            onDone: circle => { setTimeout(() => circle?.remove(), 320); finish(true); }
+          },
+          onLost: reason => finish(false, reason),
+          onBlocked: node => finish(false, `「${node.label}」不可用，封包未送出`)
+        });
+        if (!handle) finish(false, '找不到可用路徑');
+      };
+      if (numberedUpload) send(0);
+      else for (let i = 0; i < progress.total; i++) setTimeout(() => send(i), i * Math.max(70, 170 / (state.speed || 1)));
+    };
+    if (numberedUpload) request.retryUpload = () => {
+      if (request.status !== 'failed') return;
+      request.attempt++;
+      request.status = 'running'; request.finishedAt = ''; request.result = '';
+      failed = false; remaining = flows.length; settled.clear();
+      branches.forEach(({ flow, progress }) => {
+        const restartVideo = !request.resumable && flow.id !== 'metadata' && progress.packets.some(p => p.status !== 'completed');
+        progress.packets.forEach(packet => {
+          if (packet.status !== 'completed' || restartVideo) packet.status = 'queued';
+        });
+        progress.done = progress.packets.filter(packet => packet.status === 'completed').length;
+        progress.failed = 0;
+      });
+      applyRuntimeWrites(state, (spec.writesOnFail || []).map(write => ({ ...write, row: { ...write.row, status: 'active' } })), request);
+      traceLine(root, `🔁 ${request.id} 保留同一影片 ${request.payload.video_id}，第 ${request.attempt} 次嘗試：${branches.map(({ progress }) => progress.packets.find(p => p.status !== 'completed')?.tag).filter(Boolean).join('、')} 開始重傳。`, 'head');
+      branches.forEach(executeBranch);
+      refreshRuntimeSummary(root, sim, state); refreshOperationPanels(root, sim, state);
+    };
+    branches.forEach(executeBranch);
+    scheduleOperationPanels(root, sim, state);
   }
 
   function randomTrafficButtonText(state) {
@@ -3238,6 +3310,7 @@
         },
         token: {
           tokenClass: 'sim-token-segment', className: `q-${quality.id}`,
+          label: `${request.id.replace('REQ-', 'R')}·S${index}`,
           radius: 5 + Math.max(0, ladder.findIndex(q => q.id === quality.id)) * 4,
           advance: elapsedMs => {
             // Read last-mile conditions every frame: moving the weak zone slows THIS packet.

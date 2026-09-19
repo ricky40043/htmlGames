@@ -1,0 +1,52 @@
+(async () => {
+    const results = [];
+    const check = (ok, label) => { if (!ok) throw new Error(label); results.push(label); };
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const until = async (fn, label) => { for (let i = 0; i < 800 && !fn(); i++) await wait(40); check(!!fn(), label); };
+    document.querySelector('.sim-start')?.click();
+    const state = window.__simTestHooks.stateRef();
+    const click = selector => document.querySelector(selector).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    click('.sim-abr-stop');
+    click('[data-speed="2"]');
+    state.operationOrigin = 'tw';
+    const video = request => request.branches.find(branch => branch.id === 'bytes');
+    const label = (request, tag) => `${request.id.replace('REQ-', 'R')}·${tag}`;
+    for (const resumable of [true, false]) {
+        state.choice.resumableUpload = resumable ? 'on' : 'off';
+        click('[data-kind="upload"]');
+        const request = state.operationRequests.upload;
+        const videoId = request.payload.video_id;
+        await until(() => video(request).packets[2].status === 'sending', `${resumable ? 'resume' : 'restart'} reaches P3 after P1/P2 acknowledged`);
+        const ball = document.querySelector(`[data-packet-label="${label(request, 'P3')}"]`);
+        check(!!ball, 'moving packet has request and packet number');
+        const x = ball.getAttribute('cx'), y = ball.getAttribute('cy');
+        click('[data-instance="storage::0"]');
+        await until(() => request.status === 'failed', 'disconnect marks same upload failed');
+        check(ball.classList.contains('lost') && ball.getAttribute('cx') === x && ball.getAttribute('cy') === y, 'P3 freezes and turns red at failure point');
+        check(video(request).done === 2 && video(request).packets[2].status === 'failed', 'exactly P1/P2 acknowledged and P3 failed');
+        check(video(request).packets.slice(3).every(p => p.status === 'queued'), 'P4–P6 are not silently sent after failure');
+        check(document.querySelector('.sim-trace-body').textContent.includes(`${request.id} P3`), 'log names failing packet and owning request');
+        const retry = document.querySelector(`[data-retry-upload="${request.id}"]`);
+        check(retry.textContent.includes(resumable ? 'P3' : 'P1'), 'retry button states actual restart boundary');
+        const count = state.runtime.counts.upload;
+        click('[data-instance="storage::0"]');
+        retry.click();
+        check(state.runtime.counts.upload === count && request.payload.video_id === videoId, 'retry retains request and video identity');
+        check(video(request).packets[resumable ? 2 : 0].status === 'sending', 'retry really starts from promised packet');
+        await until(() => request.status === 'completed', 'same upload completes after retry');
+        check(video(request).packets[0].attempts.length === (resumable ? 1 : 2), 'acknowledged P1 is skipped only when resumable');
+        check(video(request).packets[2].attempts.length === 2, 'P3 keeps its failed and successful attempts');
+        check(video(request).packets.every(p => p.status === 'completed'), 'all six packets confirmed before publish');
+        check(state.runtime.stores.youtubeMetadata.tables.video.rows.filter(v => v.video_id === videoId).length === 1, 'retry does not create a duplicate video');
+        await wait(400);
+        check(![...document.querySelectorAll('.sim-packet-number')].some(e => e.textContent.startsWith(request.id.replace('REQ-', 'R'))), 'packet labels are removed with completed tokens');
+    }
+    click('[data-kind="upload"]');
+    const first = state.operationRequests.upload;
+    click('[data-kind="upload"]');
+    const second = state.operationRequests.upload;
+    check(!!document.querySelector(`[data-packet-label="${label(first, 'P1')}"]`) && !!document.querySelector(`[data-packet-label="${label(second, 'P1')}"]`), 'parallel uploads have distinct P1 labels');
+    await until(() => first.status === 'completed' && second.status === 'completed', 'parallel numbered uploads both complete');
+    check(document.documentElement.scrollWidth <= innerWidth, 'packet detail fits viewport');
+    return { passed: results.length, results };
+})()
