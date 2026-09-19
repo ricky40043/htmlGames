@@ -32,3 +32,12 @@ node --test software-learning/tests/simulator-network.test.cjs software-learning
 ```
 
 共 42 項通過：新增 12 項路由／傳輸檢查，既有世界 28 項與互動內容 2 項。瀏覽器流程腳本另存於 `tests/simulator-network-browser.js`，在乾淨的第 14 章架構頁用 `agent-browser eval --stdin` 執行；涵蓋弱網進出、原球中斷、Request 失敗、同片段重試、美國接手、共用儲存故障、CDN 回源及普通點擊不增加機器。桌面與 760px 各通過 33 項流程檢查，無 JavaScript 錯誤；另外以實際滑鼠把弱區拖到觀眾身上，量到 CDN 從 18 降至 0.4 Mbps，緩衝耗盡後停在原播放時間並轉圈。
+
+### 架構操作區與失敗紀錄（2026-09-19）
+
+- 桌面把操作列、架構圖、播放器與 LOG 放在同一個工作區；760px 改成架構圖下方緊接 LOG。
+- 操作列固定於頂端，模式導覽不再遮住它；架構圖保留內部捲動與 100／125／150% 縮放。
+- 架構設定與播放說明預設收合，不打斷操作與觀察。
+- LOG 保留最近 200 筆，可篩選失敗、切換路徑；摘要保留最新失敗與其後接手紀錄。
+- 往上閱讀不自動跳回底部，顯示新增筆數；可回到最新、展開或清空。失敗數是目前保留紀錄內的數量。
+- 瀏覽器回歸：先執行 `tests/simulator-network-browser.js`，再執行 `tests/simulator-workbench-browser.js`，檢查篩選、閱讀位置、縮放與窄視窗溢出。

@@ -1090,28 +1090,141 @@
 
   // Appends one timestamped line to the trace-log panel — this is the "what actually happened
   // when I did X" detail view, one step per node the request/token visits.
+  function refreshTrace(panel) {
+    const body = panel.querySelector('.sim-trace-body');
+    const filter = panel.dataset.filter || 'all';
+    const lines = Array.from(body.children);
+    lines.forEach(line => { line.hidden = filter !== 'all' && line.dataset.kind !== filter; });
+    const failures = lines.filter(line => line.dataset.kind === 'failed');
+    const count = panel.querySelector('[data-trace-count]');
+    if (count) count.textContent = `失敗 ${failures.length}`;
+    const latest = panel.querySelector('[data-trace-latest]');
+    const lastFailure = lines.findLastIndex(line => line.dataset.kind === 'failed');
+    const incident = lastFailure >= 0 ? [lines[lastFailure], ...lines.slice(lastFailure + 1).filter(line => line.dataset.kind === 'route').slice(0, 1)] : [];
+    if (latest) latest.textContent = incident.length ? incident.map(line => line.textContent.split('。')[0]).join(' → ') : '尚無斷線事件。點機器球可觀察失敗與接手。';
+    const unread = panel.querySelector('[data-trace-unread]');
+    if (unread) {
+      unread.hidden = !Number(panel.dataset.unread);
+      unread.textContent = `新增 ${panel.dataset.unread} 筆 · 回到最新`;
+    }
+  }
+
   function traceLine(root, text, tone = '') {
     const body = root.querySelector('.sim-trace-body');
     if (!body) return;
+    const panel = body.closest('.sim-trace');
+    const following = panel.dataset.paused !== 'true';
     const now = new Date();
     const stamp = `${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${Math.floor(now.getMilliseconds() / 100)}`;
     const line = document.createElement('div');
     line.className = `sim-trace-line ${tone}`.trim();
+    line.dataset.kind = /💥|⛔/.test(text) ? 'failed' : /🔀/.test(text) ? 'route' : 'info';
     const tsSpan = document.createElement('span');
     tsSpan.className = 'sim-trace-ts';
     tsSpan.textContent = stamp;
     line.appendChild(tsSpan);
     line.appendChild(document.createTextNode(text));
     body.appendChild(line);
-    while (body.children.length > 50) body.removeChild(body.firstChild);
-    body.scrollTop = body.scrollHeight;
+    // Keep the user's reading position while browsing history; cap retained DOM work.
+    const oldHeight = body.scrollHeight;
+    while (body.children.length > 200) body.removeChild(body.firstChild);
+    if (!following) {
+      body.scrollTop = Math.max(0, body.scrollTop - (oldHeight - body.scrollHeight));
+      panel.dataset.unread = String(Number(panel.dataset.unread || 0) + 1);
+    }
+    refreshTrace(panel);
+    if (following) body.scrollTop = body.scrollHeight;
   }
 
   function wireTraceClear(root) {
-    root.querySelector('.sim-trace-clear')?.addEventListener('click', () => {
-      const body = root.querySelector('.sim-trace-body');
-      if (body) body.innerHTML = '';
+    const panel = root.querySelector('.sim-trace');
+    if (!panel) return;
+    const body = panel.querySelector('.sim-trace-body');
+    panel.querySelector('.sim-trace-head span').textContent = '即時紀錄 · 最近 200 筆';
+    if (!panel.querySelector('.sim-trace-tools')) {
+      const tools = document.createElement('div');
+      tools.className = 'sim-trace-tools';
+      tools.innerHTML = `<div class="sim-trace-filters" aria-label="紀錄篩選">
+        <button type="button" data-trace-filter="all" aria-pressed="true">全部</button>
+        <button type="button" data-trace-filter="failed" aria-pressed="false" data-trace-count>失敗 0</button>
+        <button type="button" data-trace-filter="route" aria-pressed="false">切換路徑</button>
+        <button type="button" data-trace-expand aria-expanded="false">展開</button>
+      </div><p data-trace-latest role="status"></p><button type="button" data-trace-unread hidden></button>`;
+      panel.insertBefore(tools, body);
+    }
+    body.setAttribute('tabindex', '0');
+    body.setAttribute('aria-label', '處理紀錄，可捲動閱讀');
+    body.addEventListener('scroll', () => {
+      panel.dataset.paused = String(body.scrollHeight - body.clientHeight - body.scrollTop > 12);
+      if (panel.dataset.paused === 'false') { panel.dataset.unread = '0'; refreshTrace(panel); }
     });
+    panel.querySelectorAll('[data-trace-filter]').forEach(button => {
+      button.onclick = () => {
+        panel.dataset.filter = button.dataset.traceFilter;
+        panel.querySelectorAll('[data-trace-filter]').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+        refreshTrace(panel);
+      };
+    });
+    panel.querySelector('[data-trace-unread]').onclick = () => {
+      panel.dataset.paused = 'false'; panel.dataset.unread = '0';
+      refreshTrace(panel); body.scrollTop = body.scrollHeight;
+    };
+    panel.querySelector('[data-trace-expand]').onclick = event => {
+      const expanded = panel.classList.toggle('expanded');
+      event.currentTarget.textContent = expanded ? '收合' : '展開';
+      event.currentTarget.setAttribute('aria-expanded', String(expanded));
+    };
+    panel.querySelector('.sim-trace-clear').onclick = () => {
+      body.innerHTML = ''; panel.dataset.unread = '0'; panel.dataset.paused = 'false'; refreshTrace(panel);
+    };
+    refreshTrace(panel);
+  }
+
+  function arrangeWorkbench(root, sim) {
+    if (sim.chapterId !== 'sd-book-14') return;
+    root.querySelector('.sim-play').classList.add('sim-workbench-page');
+    const wrap = root.querySelector('.sim-topo-wrap');
+    wrap.classList.add('sim-workbench');
+    const toolbar = document.createElement('div');
+    toolbar.className = 'sim-workbench-toolbar';
+    toolbar.setAttribute('aria-label', '模擬操作');
+    toolbar.append(wrap.querySelector('.sim-topo-controls'), wrap.querySelector('.sim-speed-controls'));
+    const grid = document.createElement('div');
+    grid.className = 'sim-workbench-grid';
+    const map = document.createElement('section');
+    map.className = 'sim-workbench-map';
+    map.innerHTML = `<div class="sim-map-heading"><strong>架構與傳輸</strong><label>縮放 <select data-map-zoom aria-label="架構圖縮放"><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label></div>`;
+    const scroll = wrap.querySelector('.sim-topo-scroll');
+    map.append(scroll, wrap.querySelector('.sim-payload-legend'));
+    const hint = wrap.querySelector('.sim-topo-scroll-hint');
+    if (hint) map.append(hint);
+    const side = document.createElement('aside');
+    side.className = 'sim-workbench-side';
+    const player = root.querySelector('.sim-abrlab');
+    const explanation = document.createElement('details');
+    explanation.className = 'sim-player-help';
+    explanation.innerHTML = '<summary>播放原理與片段明細</summary>';
+    ['.sim-abrlab-desc', '.sim-abr-session-link', '.sim-abr-strip', '.sim-abr-ball-legend'].forEach(sel => explanation.append(player.querySelector(sel)));
+    player.querySelector('h2').textContent = '觀眾播放器';
+    player.querySelector('.sim-abr-cdn').textContent = '⚡ CDN 播放';
+    player.querySelector('.sim-abr-origin').textContent = '▶ 回源播放';
+    player.append(explanation);
+    side.append(player, wrap.querySelector('.sim-trace'), wrap.querySelector('.sim-runtime-summary'));
+    const settings = document.createElement('details');
+    settings.className = 'sim-workbench-settings';
+    settings.innerHTML = '<summary>架構設定與操作說明</summary>';
+    const editor = wrap.querySelector('.sim-architecture-editor');
+    // The editor is the only details block in the original topology wrapper.
+    const originalEditor = editor || wrap.querySelector('details');
+    if (originalEditor) { originalEditor.removeAttribute('open'); settings.append(originalEditor); }
+    settings.append(wrap.querySelector('.sim-topo-hint'), wrap.querySelector('.sim-topo-legend'));
+    grid.append(map, side);
+    wrap.prepend(toolbar, grid);
+    wrap.append(settings);
+    map.querySelector('[data-map-zoom]').onchange = event => {
+      scroll.querySelector('svg').style.width = `${event.target.value}%`;
+      scroll.querySelector('svg').style.minWidth = `${10 * Number(event.target.value)}px`;
+    };
   }
 
   // Cumulative fraction-of-total-duration boundary for each waypoint (0..1). Uniform when no
@@ -3529,6 +3642,7 @@
       ${state.log.length ? `<section class="sim-log"><h2>即時事件紀錄</h2><ul>${state.log.map(e => logEntry(sim, e)).join('')}</ul></section>` : ''}
     </section>`;
 
+    arrangeWorkbench(root, sim);
     wireTopologyControls(root, sim, state, componentId => {
       const before = currentOptionId(sim, componentId, state);
       const next = nextOptionId(sim, componentId, state);
@@ -3605,7 +3719,7 @@
       const log = root.querySelector('.sim-trace-body')?.innerHTML || '';
       renderPlay(root, sim, state);
       const body = root.querySelector('.sim-trace-body');
-      if (body && log) { body.innerHTML = log; body.scrollTop = body.scrollHeight; }
+      if (body && log) { body.innerHTML = log; refreshTrace(body.closest('.sim-trace')); body.scrollTop = body.scrollHeight; }
     }, () => refreshLoadSummary(root, sim, state), storeId => openDataInspector(root, sim, state, storeId));
     wireTraceClear(root);
     wireUploadLab(root, sim, state);

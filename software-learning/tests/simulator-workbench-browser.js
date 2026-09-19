@@ -1,0 +1,45 @@
+// Run after simulator-network-browser.js to include real failure and failover records.
+(async () => {
+    const results = [];
+    const check = (ok, label) => { if (!ok) throw new Error(label); results.push(label); };
+    const pause = () => new Promise(resolve => setTimeout(resolve, 80));
+    const panel = document.querySelector('.sim-trace');
+    const body = panel.querySelector('.sim-trace-body');
+    document.querySelector('.sim-abr-stop').click();
+    document.querySelector('[data-trace-filter="failed"]').click();
+    check([...body.children].filter(e => !e.hidden).every(e => e.dataset.kind === 'failed'), 'failure filter excludes normal traffic');
+    check([...body.children].some(e => !e.hidden), 'actual failed transfer remains visible');
+    document.querySelector('[data-trace-filter="route"]').click();
+    check([...body.children].filter(e => !e.hidden).every(e => e.dataset.kind === 'route'), 'route filter shows failover');
+    check(panel.querySelector('[data-trace-latest]').textContent.includes('斷線'), 'incident summary remains visible across filters');
+    document.querySelector('[data-trace-filter="all"]').click();
+    const clickMachine = () => document.querySelector('[data-instance="apiServer_tw::0"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    for (let i = 0; i < 20; i++) clickMachine();
+    body.scrollTop = 0;
+    body.dispatchEvent(new Event('scroll'));
+    await pause();
+    const readingPosition = body.scrollTop;
+    clickMachine();
+    await pause();
+    check(body.scrollTop === readingPosition, 'new log does not pull reader away from old records');
+    check(!panel.querySelector('[data-trace-unread]').hidden, 'unread log button appears');
+    panel.querySelector('[data-trace-unread]').click();
+    await pause();
+    check(body.scrollHeight - body.clientHeight - body.scrollTop < 12, 'return to latest resumes following');
+    const before = body.clientHeight;
+    panel.querySelector('[data-trace-expand]').click();
+    check(body.clientHeight > before, 'log can expand for reading');
+    panel.querySelector('[data-trace-expand]').click();
+    const zoom = document.querySelector('[data-map-zoom]');
+    const map = document.querySelector('.sim-topo');
+    const oldWidth = map.getBoundingClientRect().width;
+    zoom.value = '150'; zoom.dispatchEvent(new Event('change'));
+    check(map.getBoundingClientRect().width > oldWidth, 'map zoom works even on narrow screen');
+    zoom.value = '100'; zoom.dispatchEvent(new Event('change'));
+    check(!document.querySelector('.sim-workbench-settings').open, 'secondary settings start collapsed');
+    check(document.documentElement.scrollWidth <= innerWidth, 'page has no horizontal overflow');
+    panel.querySelector('.sim-trace-clear').click();
+    check(!body.children.length && panel.querySelector('[data-trace-count]').textContent === '失敗 0', 'clear resets logs and failure counter');
+    document.querySelector('.sim-workbench').scrollIntoView();
+    return { passed: results.length, results };
+})()
