@@ -5,6 +5,7 @@
     const until = async (fn, label) => { for (let i = 0; i < 300 && !fn(); i++) await wait(50); check(fn(), label); };
     document.querySelector('.sim-start')?.click();
     const state = window.__simTestHooks.stateRef();
+    state.operationOrigin = 'tw';
     const click = selector => document.querySelector(selector).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     const tab = kind => click(`[data-activity-tab="${kind}"]`);
     const visible = kind => !document.querySelector(`[data-activity-panel="${kind}"]`).hidden;

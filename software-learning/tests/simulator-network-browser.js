@@ -10,6 +10,7 @@
     };
     document.querySelector('.sim-start')?.click();
     const state = window.__simTestHooks.stateRef();
+    state.operationOrigin = 'tw';
     const click = selector => document.querySelector(selector).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     const key = () => document.querySelector('[data-drag-viewer]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     click('.sim-abr-stop');

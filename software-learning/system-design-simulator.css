@@ -591,3 +591,35 @@ body:has(.sim-workbench) .topbar{position:static}
 .sim-operation-panel .sim-chunklab-actions{flex-direction:column;gap:6px}
 .sim-operation-panel .sim-chunklab-actions .button{font-size:.72rem;padding:7px}
 @media(max-width:1000px){.sim-workbench-side .sim-activity{grid-column:1/-1}}
+.sim-origin-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px;font-size:.76rem}
+.sim-origin-controls label{color:#e4eaff;font-weight:700}
+.sim-origin-controls select{padding:6px 10px;border:1px solid #51617f;border-radius:6px;background:#101725;color:#fff;margin-left:5px}
+.sim-origin-controls>span{color:#aeb7cf;font-size:.7rem}
+.sim-origin-controls>button{margin-left:auto}
+.sim-upload-stages{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:12px 0}
+.sim-upload-stages>div{display:grid;align-content:start;text-align:center;gap:5px;padding:9px 3px;background:#1a2030;border:1px solid #343d52;border-radius:8px;color:#99a4ba}
+.sim-upload-stages>div>span{font-size:1.5rem}
+.sim-upload-stages b{font-size:.68rem}
+.sim-upload-stages small{font-size:.62rem;line-height:1.4}
+.sim-upload-stages .reached{border-color:#83aef7;background:#1e2b45;color:#d8e8ff}
+.sim-upload-stages .done{border-color:#388766;background:#142d27;color:#b9f6d8}
+.sim-watch-action{padding:0 12px 12px;display:grid;gap:6px}
+.sim-watch-action button{font-size:.76rem;padding:8px}
+.sim-watch-action small{font-size:.7rem;color:#aeb7cf}
+.sim-operation-queue{border-top:1px solid var(--border);padding:10px 12px}
+[data-operation-counts]{display:grid;gap:4px;margin-bottom:8px;font-size:.76rem}
+[data-operation-counts]>span{font-size:.7rem;color:#aeb7cf}
+[data-operation-list]{max-height:180px;overflow:auto;display:grid;gap:5px}
+[data-operation-list]>button{display:flex;justify-content:space-between;gap:8px;border:1px solid #3b4861;border-radius:6px;padding:7px;background:#1c263b;color:#ceddfb;font-size:.7rem;text-align:left;cursor:pointer}
+[data-operation-list] .completed{background:#12271f;border-color:#2b5945;color:#a1dcb9}
+[data-operation-list] .failed{background:#301d25;border-color:#7a394b;color:#ffb6c5}
+[data-operation-list]>p{font-size:.72rem;color:#aeb7cf}
+.sim-reset-controls{margin-top:14px;font-size:.76rem;color:#abb6ce}
+.sim-reset-controls summary{cursor:pointer}
+.sim-workbench-map{top:170px}
+@media(max-width:620px){.sim-origin-controls{gap:6px}.sim-origin-controls>span{flex-basis:100%}.sim-origin-controls>button{margin-left:0}}
+@media(min-width:1001px){
+  .sim-workbench-side .sim-activity{max-height:calc(100dvh - 430px);min-height:300px;overflow:auto}
+  .sim-activity-tabs{position:sticky;top:0;z-index:2}
+}
+.sim-operation-queue [data-operation-list]{max-height:112px}

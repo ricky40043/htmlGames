@@ -46,7 +46,13 @@
     function clearDesign() {
         try { sessionStorage.removeItem(designKey); } catch { /* 清不掉就算了，改用預設不受影響。 */ }
     }
-    window.YouTubeModes = { register: fn => { capture = fn; }, load, notice, saveDesign, loadDesign, clearDesign };
+    function resetSession() {
+        capture = null;
+        sessionStorage.removeItem(key);
+        if (mode === 'architecture') clearDesign();
+        location.reload();
+    }
+    window.YouTubeModes = { resetSession, register: fn => { capture = fn; }, load, notice, saveDesign, loadDesign, clearDesign };
     nav.addEventListener('click', event => {
         const link = event.target.closest('a');
         if (!link) return;

@@ -61,7 +61,8 @@
     if (!saved || typeof saved !== 'object') return fresh;
     fresh.requestSeq = Number(saved.requestSeq) || 0;
     fresh.counts = { ...(saved.counts || {}) };
-    fresh.requests = clone(saved.requests || []).slice(0, 100);
+    let settled = 0;
+    fresh.requests = clone(saved.requests || []).filter(request => request.status === 'running' || settled++ < 100);
     fresh.nodeActivity = clone(saved.nodeActivity || {});
     fresh.routeCursor = { ...(saved.routeCursor || {}) };
     Object.entries(saved.stores || {}).forEach(([storeId, oldStore]) => {
@@ -94,7 +95,9 @@
       hops: []
     };
     runtime.requests.unshift(request);
-    if (runtime.requests.length > 100) runtime.requests.length = 100;
+    // Active operations must remain inspectable even during a burst of requests.
+    let settled = 0;
+    runtime.requests = runtime.requests.filter(item => item.status === 'running' || settled++ < 100);
     return request;
   }
 

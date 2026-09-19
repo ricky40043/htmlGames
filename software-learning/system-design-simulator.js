@@ -1188,7 +1188,19 @@
     const toolbar = document.createElement('div');
     toolbar.className = 'sim-workbench-toolbar';
     toolbar.setAttribute('aria-label', '模擬操作');
-    toolbar.append(wrap.querySelector('.sim-topo-controls'), wrap.querySelector('.sim-speed-controls'));
+    const originControls = document.createElement('div');
+    originControls.className = 'sim-origin-controls';
+    originControls.innerHTML = `<label>🌏 出發地 <select data-operation-origin aria-label="操作出發地"><option value="random">🎲 隨機</option>${topoOf(sim, state).regionIds.map(id => `<option value="${esc(id)}">${esc(topoOf(sim, state).regionLabel[id] || id)}</option>`).join('')}</select></label><span>每按一次新增一筆，可連按、同時進行</span><button type="button" class="sim-mini-btn" data-restore-machines>🔌 恢復全部連線</button>`;
+    toolbar.append(originControls, wrap.querySelector('.sim-topo-controls'), wrap.querySelector('.sim-speed-controls'));
+    const originSelect = originControls.querySelector('select');
+    originSelect.value = topoOf(sim, state).regionIds.includes(state.operationOrigin) ? state.operationOrigin : 'random';
+    state.operationOrigin = originSelect.value;
+    originSelect.onchange = () => { state.operationOrigin = originSelect.value; };
+    originControls.querySelector('[data-restore-machines]').onclick = () => {
+      Object.keys(state.instanceDown).forEach(key => { const [id, idx] = key.split('::'); setInstanceDown(state, id, Number(idx), false); });
+      repaintNodes(root, sim, state); repaintEdges(root, sim, state); refreshLoadSummary(root, sim, state);
+      traceLine(root, '🔌 已恢復所有已建置機器的連線。未建置的功能仍維持原架構設定；失敗請求可重新送出。', 'ok');
+    };
     const grid = document.createElement('div');
     grid.className = 'sim-workbench-grid';
     const map = document.createElement('section');
@@ -1212,11 +1224,20 @@
     const activity = document.createElement('section');
     activity.className = 'sim-activity';
     activity.innerHTML = `<div class="sim-activity-tabs" role="tablist" aria-label="觀察操作">
-      ${[['watch', '觀看'], ['upload', '上傳'], ['search', '查詢']].map(([id, label]) => `<button type="button" role="tab" id="activity-tab-${id}" aria-controls="activity-panel-${id}" data-activity-tab="${id}">${label}</button>`).join('')}
+      ${[['watch', '▶ 觀看'], ['upload', '📤 上傳'], ['search', '🔎 查詢']].map(([id, label]) => `<button type="button" role="tab" id="activity-tab-${id}" aria-controls="activity-panel-${id}" data-activity-tab="${id}">${label}</button>`).join('')}
     </div>`;
     const watch = document.createElement('div');
     watch.dataset.activityPanel = 'watch';
     watch.append(player);
+    const watchAction = document.createElement('div');
+    watchAction.className = 'sim-watch-action';
+    watchAction.innerHTML = '<button class="button secondary" type="button" data-send-watch>＋ 新增一筆觀看請求</button><small>可連按；上方播放器持續觀察同一位觀眾。</small>';
+    watchAction.querySelector('button').onclick = () => runTopologyDemo(root, sim, state, 'watch');
+    watch.append(watchAction);
+    const watchRequest = document.createElement('div');
+    watchRequest.className = 'sim-operation-panel';
+    watchRequest.dataset.operationResult = 'watch';
+    watch.append(watchRequest);
     activity.append(watch);
     ['upload', 'search'].forEach(kind => {
       const panel = document.createElement('div');
@@ -1266,6 +1287,19 @@
         event.preventDefault(); tabs[next].click(); tabs[next].focus();
       };
     });
+    const queue = document.createElement('section');
+    queue.className = 'sim-operation-queue';
+    queue.innerHTML = '<div data-operation-counts></div><div data-operation-list></div>';
+    activity.insertBefore(queue, watch);
+    queue.addEventListener('click', event => {
+      const button = event.target.closest('[data-operation-id]');
+      const request = state.operationHistory?.find(r => r.id === button?.dataset.operationId);
+      if (!request) return;
+      state.operationRequests ||= {};
+      state.operationRequests[request.kind] = request;
+      state.selectActivity(request.kind);
+      refreshOperationPanels(root, sim, state);
+    });
     side.append(activity, wrap.querySelector('.sim-trace'), wrap.querySelector('.sim-runtime-summary'));
     state.selectActivity(state.activityTab || 'watch');
     const settings = document.createElement('details');
@@ -1278,6 +1312,11 @@
     settings.append(wrap.querySelector('.sim-topo-hint'), wrap.querySelector('.sim-topo-legend'));
     grid.append(map, side);
     wrap.prepend(toolbar, grid);
+    const reset = document.createElement('details');
+    reset.className = 'sim-reset-controls';
+    reset.innerHTML = '<summary>↺ 重設本模式</summary><p>清除本模式的架構、操作資料與進度，回到初始設定。其他模式的進度與課程成績會保留。</p><button type="button" class="button secondary">清除並重新開始</button>';
+    reset.querySelector('button').onclick = () => window.YouTubeModes.resetSession();
+    settings.append(reset);
     wrap.append(settings);
     refreshOperationPanels(root, sim, state);
     map.querySelector('[data-map-zoom]').onchange = event => {
@@ -1286,8 +1325,44 @@
     };
   }
 
+  function chooseOperationRegion(sim, state) {
+    const ids = topoOf(sim, state)?.regionIds || [];
+    return ids.includes(state.operationOrigin) ? state.operationOrigin : ids[Math.floor(Math.random() * ids.length)];
+  }
+
+  function uploadStagesHtml(request) {
+    const visited = id => request.hops.some(h => h.nodeId === id);
+    const stages = [
+      ['📝', '建立影片資料', visited('metadataDB')],
+      ['📤', '傳送影片', visited('storage')],
+      ['⚙️', '轉碼處理', visited('transcodeArch')],
+      ['🎬', '完成上架', request.status === 'completed']
+    ];
+    return `<div class="sim-upload-stages" aria-label="上傳流程">${stages.map(([icon, label, reached]) => {
+      const done = request.status === 'completed';
+      const failed = request.status === 'failed' && !done;
+      return `<div class="${done ? 'done' : reached ? 'reached' : ''}"><span aria-hidden="true">${icon}</span><b>${label}</b><small>${done ? '✓ 已完成' : failed ? (reached ? '已經過 · 流程中斷' : '未完成') : reached ? '已抵達' : '等待中'}</small></div>`;
+    }).join('')}</div>`;
+  }
+
+  function scheduleOperationPanels(root, sim, state) {
+    if (state.operationPaintTimer) return;
+    state.operationPaintTimer = setTimeout(() => {
+      state.operationPaintTimer = null;
+      refreshOperationPanels(root, sim, state);
+    }, 100);
+  }
+
   function refreshOperationPanels(root, sim, state) {
-    for (const kind of ['upload', 'search']) {
+    const counts = root.querySelector('[data-operation-counts]');
+    if (counts) {
+      const history = state.operationHistory || [];
+      const active = history.filter(r => r.status === 'running');
+      counts.innerHTML = `<strong>⚡ 同時進行 ${active.length} 筆</strong><span>▶ ${active.filter(r => r.kind === 'watch').length} 觀看 · 📤 ${active.filter(r => r.kind === 'upload').length} 上傳 · 🔎 ${active.filter(r => r.kind === 'search').length} 查詢</span>`;
+      const recent = history.filter(r => r.status !== 'running').slice(0, 8);
+      root.querySelector('[data-operation-list]').innerHTML = [...active, ...recent].map(request => `<button type="button" data-operation-id="${esc(request.id)}" class="${esc(request.status)}"><b>${{ watch: '▶', upload: '📤', search: '🔎' }[request.kind]} ${esc(request.id)}</b><span>${esc(request.region)} · ${{ running: '進行中', completed: '✓ 完成', failed: '✕ 失敗' }[request.status] || esc(request.status)}</span></button>`).join('') || '<p>尚無操作，可連按上方按鈕新增。</p>';
+    }
+    for (const kind of ['watch', 'upload', 'search']) {
       const box = root.querySelector(`[data-operation-result="${kind}"]`);
       if (!box) continue;
       const request = state.operationRequests?.[kind];
@@ -1295,11 +1370,15 @@
       const status = { running: '處理中', completed: '完成', failed: '失敗', cancelled: '已取消' }[request.status];
       const node = findNode(topoOf(sim, state), request.currentNodeId || request.hops.at(-1)?.nodeId);
       const branches = request.branches || [];
-      box.innerHTML = `<div class="sim-operation-status ${esc(request.status)}"><b>${esc(request.id)} · ${status}</b><span>${esc(request.label)}</span></div>
-        <p class="sim-operation-location">最近經過：${esc(node?.label || '等待傳送')}</p>
-        ${branches.map(branch => `<div class="sim-operation-branch"><span>${esc(branch.label)}</span><progress value="${branch.done}" max="${branch.total}"></progress><small>${branch.done}/${branch.total} 個示意封包完成${branch.failed ? ` · ${branch.failed} 個失敗` : ''}</small></div>`).join('')}
+      if (kind === 'watch') {
+        box.innerHTML = `<div class="sim-operation-status ${esc(request.status)}"><b>▶ 獨立觀看請求 ${esc(request.id)} · ${status}</b><span>🌏 ${esc(request.region)} · ${esc(request.payload.video_id)}</span></div><p>📍 最近經過：${esc(node?.label || '等待傳送')}</p><small>此筆是架構圖中的獨立觀看請求，不會取代上方播放器的觀眾。</small>`;
+        continue;
+      }
+      box.innerHTML = `<div class="sim-operation-status ${esc(request.status)}"><b>${esc(request.id)} · ${status}</b><span>${esc(request.label)}</span><small>🌏 出發地：${esc(request.region)}</small></div>${kind === 'upload' ? uploadStagesHtml(request) : ''}
+        <p class="sim-operation-location">📍 最近經過：${esc(node?.label || '等待傳送')}</p>
+        ${branches.map(branch => `<div class="sim-operation-branch"><span>${branch.id === 'metadata' ? '📝 影片資料' : kind === 'upload' ? '📦 影片傳輸' : '🔎 查詢與回應'}</span><progress value="${branch.done}" max="${branch.total}"></progress><small>${branch.done}/${branch.total} 個示意封包完成${branch.failed ? ` · ${branch.failed} 個失敗` : ''}</small></div>`).join('')}
         ${request.status === 'failed' ? '<p class="sim-operation-error">路徑中斷，這次請求失敗。已完成的其他資料仍保留；恢復機器後可重新送出。</p>' : ''}
-        ${kind === 'upload' ? `<p>轉碼／上架：${request.status === 'completed' ? '轉碼與所有分支完成，影片已上架' : request.status === 'failed' ? '未完成上架' : request.hops.some(h => h.nodeId === 'transcodeArch') ? '已抵達轉碼節點，等待所有分支完成' : '等待影片抵達轉碼節點'}</p><small>進度表示架構圖中的示意封包完成數，不是實際位元組百分比。</small>` :
+        ${kind === 'upload' ? `<p>🎬 轉碼／上架：${request.status === 'completed' ? '轉碼與所有分支完成，影片已上架' : request.status === 'failed' ? '未完成上架' : request.hops.some(h => h.nodeId === 'transcodeArch') ? '已抵達轉碼節點，等待所有分支完成' : '等待影片抵達轉碼節點'}</p><details class="sim-player-help"><summary>這些進度代表什麼？</summary><p>📝 影片資料：名稱、狀態等資訊。📦 影片傳輸：影片切成封包後經過轉碼與上架。兩條路都完成才上架。</p><p>進度表示示意封包完成數，不是實際位元組百分比。</p></details>` :
         `<p>查詢條件：${esc(request.payload.query)}</p><p>已經過的節點：${esc([...new Set(request.hops.map(h => findNode(topoOf(sim, state), h.nodeId)?.label || h.nodeId))].join(' → ') || '等待傳送')}</p>
         ${request.status === 'completed' ? `<p>找到 ${request.results?.length || 0} 部已上架影片</p><ul class="sim-search-results">${(request.results || []).map(row => `<li><b>${esc(row.title || row.video_id)}</b><small>${esc(row.video_id)} · 可播放</small></li>`).join('')}</ul>${!request.results?.length ? '<small>目前沒有符合的影片。可以先上傳一部，再查詢它的名稱。</small>' : ''}` : ''}`}`;
     }
@@ -1726,7 +1805,7 @@
     if (!svgEl || !topo) return;
     const ctx = makeChoiceCtx(sim, state);
     const regionIds = topo.regionIds;
-    const regionId = regionIds?.length ? regionIds[Math.floor(Math.random() * regionIds.length)] : undefined;
+    const regionId = chooseOperationRegion(sim, state);
     const regionLabel = regionId && topo.regionLabel?.[regionId];
     const flows = topologyFlows(topo, kind, ctx, regionId);
     if (!flows.length || !Runtime || !state.runtime) return;
@@ -1738,9 +1817,13 @@
       region: regionLabel || regionId || ''
     });
     if (!request) return;
-    if (sim.chapterId === 'sd-book-14' && ['upload', 'search'].includes(kind)) {
+    if (sim.chapterId === 'sd-book-14') {
       state.operationRequests ||= {};
       state.operationRequests[kind] = request;
+      state.operationHistory ||= [];
+      state.operationHistory.unshift(request);
+      let completed = 0;
+      state.operationHistory = state.operationHistory.filter(r => r.status === 'running' || completed++ < 30);
     }
     request.branches = [];
     refreshOperationPanels(root, sim, state);
@@ -1795,14 +1878,14 @@
         const visualNote = logicalPacketCount > packetCount ? `；畫面抽樣顯示其中 ${packetCount} 個` : '';
         traceLine(root, `${request.id} 客戶端先把${flow.packetLabel || '內容'}切成 ${logicalPacketCount} 個可獨立重試的小封包${visualNote}，並依序送出。`, 'ok');
       }
-      const branchProgress = { label: flow.label || (kind === 'search' ? '查詢與回應' : '傳輸'), total: packetCount, done: 0, failed: 0 };
+      const branchProgress = { id: flow.id, label: flow.label || (kind === 'search' ? '查詢與回應' : '傳輸'), total: packetCount, done: 0, failed: 0 };
       request.branches.push(branchProgress);
-      refreshOperationPanels(root, sim, state);
+      scheduleOperationPanels(root, sim, state);
       let packetsRemaining = packetCount;
       let packetFailed = false;
       const settlePacket = ok => {
         if (ok) branchProgress.done += 1; else branchProgress.failed += 1;
-        refreshOperationPanels(root, sim, state);
+        scheduleOperationPanels(root, sim, state);
         packetsRemaining -= 1;
         if (!ok) packetFailed = true;
         if (packetsRemaining === 0) settleBranch(flow.id, !packetFailed);
@@ -1828,7 +1911,7 @@
                 const n = findNode(topoOf(sim, state), nodeId);
                 const which = machine ? ` #${machine.idx + 1}` : '';
                 if (verbose) Runtime.visitNode(state.runtime, request, nodeId, `${flow.label || kind}${which}`);
-                refreshOperationPanels(root, sim, state);
+                scheduleOperationPanels(root, sim, state);
                 flashTopologyHop(root, previous, nodeId, previousMachine, machine);
                 previous = nodeId;
                 previousMachine = machine;
@@ -2230,7 +2313,7 @@
         const topo = topoOf(sim, state);
         const ctx = makeChoiceCtx(sim, state);
         const regionIds = topo.regionIds;
-        const regionId = regionIds?.length ? regionIds[Math.floor(Math.random() * regionIds.length)] : undefined;
+        const regionId = chooseOperationRegion(sim, state);
         const regionLabel = regionId && topo.regionLabel?.[regionId];
         const flowIds = topo.computeFlow('watch', ctx, regionId);
         const route = routeFor(sim, state, flowIds);
@@ -3273,6 +3356,7 @@
       if (mode === 'cdn') ensureCdnEnabled();
       const st = state.abr;
       if (!st?.playing) {
+        state.moveViewerToRegion?.(chooseOperationRegion(sim, state));
         start(mode);
         return;
       }
@@ -3413,6 +3497,10 @@
       refreshZoneFlag();
     };
 
+    state.moveViewerToRegion = regionId => {
+      const anchor = findNode(topoOf(sim, state), `users_${regionId}`);
+      if (anchor) setPos(anchor.x, anchor.y - 65);
+    };
     const handle = root.querySelector('[data-zone-handle]');
     const paintZone = () => {
       const { x, y } = state.badZone;
@@ -4559,7 +4647,7 @@
     document.title = `模擬關卡｜${sim.title}`;
     const state = newState(sim);
     if (chapterId === 'sd-book-14' && window.YouTubeModes) {
-      const keys = ['month', 'uptime', 'qoe', 'costEff', 'choice', 'usersServed', 'speed', 'extraInstances', 'instancePositions', 'showConnections', 'instanceDown', 'regionWeight', 'nextRegionSeq', 'nextGroupSeq', 'badZone', 'log', 'history', 'phase', 'summarySaved'];
+      const keys = ['month', 'uptime', 'qoe', 'costEff', 'choice', 'usersServed', 'speed', 'extraInstances', 'instancePositions', 'showConnections', 'operationOrigin', 'regionWeight', 'nextRegionSeq', 'nextGroupSeq', 'badZone', 'log', 'history', 'phase', 'summarySaved'];
       const saved = window.YouTubeModes.load();
       if (saved?.lesson) {
         keys.forEach(key => { if (saved.lesson[key] !== undefined) state[key] = saved.lesson[key]; });
@@ -4568,14 +4656,17 @@
         if (saved.runtime) {
           state.runtime = Runtime.hydrateRuntime(saved.runtime, dataModelOf(sim));
           state.runtime.requests.forEach(request => {
-            if (request.status === 'running') { request.status = 'failed'; request.finishedAt = '切換頁面'; }
+            if (request.status === 'running') { request.status = 'failed'; request.finishedAt = '切換頁面'; request.result = '頁面重新載入，原連線已中斷'; }
           });
+          state.operationHistory = state.runtime.requests.filter(request => Array.isArray(request.branches));
+          state.operationRequests = Object.fromEntries(['watch', 'upload', 'search'].map(kind => [kind, state.operationHistory.find(request => request.kind === kind)]));
         }
         if (state.phase === 'event') {
           state.pendingEvent = sim.events.find(event => event.month === state.month);
           if (!state.pendingEvent || state.log.some(entry => entry.month === state.month && entry.title === state.pendingEvent.title)) state.phase = 'play';
         }
-        window.YouTubeModes.notice('已恢復課程進度、架構設定與資料；教學動畫可重新啟動。');
+        state.instanceDown = {};
+        window.YouTubeModes.notice('已恢復課程進度、架構設定與資料；所有已建置機器已恢復連線。');
       }
       window.YouTubeModes.register(() => ({
         lesson: Object.fromEntries(keys.map(key => [key, state[key]])),
