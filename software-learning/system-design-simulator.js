@@ -1320,6 +1320,8 @@
     queue.innerHTML = '<div data-operation-counts></div><div data-operation-list></div>';
     activity.insertBefore(queue, watch);
     side.addEventListener('click', event => {
+      const stop = event.target.closest('[data-stop-upload-retry]');
+      if (stop) { state.operationHistory?.find(request => request.id === stop.dataset.stopUploadRetry)?.stopAutoRetry?.(); return; }
       const button = event.target.closest('[data-retry-upload]');
       if (!button) return;
       const request = state.operationHistory?.find(request => request.id === button.dataset.retryUpload);
@@ -1518,22 +1520,22 @@
     const upload = state.operationRequests?.upload;
     if (retryBar) {
       retryBar.hidden = state.activityTab !== 'upload' || upload?.status !== 'failed';
-      retryBar.innerHTML = upload?.status === 'failed' ? `<strong>${esc(upload.id)} · 上傳失敗</strong><span>先恢復故障機器，再按下方按鈕。${upload.branches?.some(branch => branch.packets) ? '' : '舊紀錄缺少逐包確認，會從頭重傳同一影片。'}</span><button type="button" class="button" data-retry-upload="${esc(upload.id)}">${uploadRetryLabel(upload)}</button>` : '';
+      retryBar.innerHTML = upload?.status === 'failed' ? `<strong>${esc(upload.id)} · ${upload.autoRetryAt ? '連線中斷，等待自動重試' : '上傳失敗'}</strong><span>${upload.autoRetryAt ? `${Math.max(0, Math.ceil((upload.autoRetryAt - Date.now()) / 1000))} 秒後尋找可用路徑 · 自動重試 ${(upload.autoRetries || 0) + 1}/3；${upload.resumable ? '保留已確認封包' : '未開啟續傳，影片從 P1 重傳'}。` : upload.autoRetryStopped ? '已停止自動重試，可手動重新上傳。' : upload.autoRetries >= 3 ? '自動重試 3 次仍失敗，請恢復連線後手動重傳。' : '可手動重新上傳。'}${upload.branches?.some(branch => branch.packets) ? '' : '舊紀錄缺少逐包確認，會從頭重傳同一影片。'}</span><button type="button" class="button" data-retry-upload="${esc(upload.id)}">${uploadRetryLabel(upload)}</button>${upload.autoRetryAt ? `<button type="button" class="sim-mini-btn" data-stop-upload-retry="${esc(upload.id)}">停止自動重試</button>` : ''}` : '';
     }
     const counts = root.querySelector('[data-operation-counts]');
     if (counts) {
       const history = state.operationHistory || [];
-      const active = history.filter(r => r.status === 'running');
+      const active = history.filter(r => r.status === 'running' || r.autoRetryAt);
       counts.innerHTML = `<strong>⚡ 同時進行 ${active.length} 筆</strong><span>▶ ${active.filter(r => r.kind === 'watch').length} 觀看 · 📤 ${active.filter(r => r.kind === 'upload').length} 上傳 · 🔎 ${active.filter(r => r.kind === 'search').length} 查詢</span>`;
-      const recent = history.filter(r => r.status !== 'running').slice(0, 8);
-      root.querySelector('[data-operation-list]').innerHTML = [...active, ...recent].map(request => `<button type="button" data-operation-id="${esc(request.id)}" class="${esc(request.status)}"><b>${{ watch: '▶', upload: '📤', search: '🔎' }[request.kind]} ${esc(request.id)}</b><span>${esc(request.region)} · ${{ running: '進行中', completed: '✓ 完成', failed: '✕ 失敗' }[request.status] || esc(request.status)}</span></button>`).join('') || '<p>尚無操作，可連按上方按鈕新增。</p>';
+      const recent = history.filter(r => r.status !== 'running' && !r.autoRetryAt).slice(0, 8);
+      root.querySelector('[data-operation-list]').innerHTML = [...active, ...recent].map(request => `<button type="button" data-operation-id="${esc(request.id)}" class="${esc(request.status)}"><b>${{ watch: '▶', upload: '📤', search: '🔎' }[request.kind]} ${esc(request.id)}</b><span>${esc(request.region)} · ${request.autoRetryAt ? '↻ 等待重試' : { running: '進行中', completed: '✓ 完成', failed: '✕ 失敗' }[request.status] || esc(request.status)}</span></button>`).join('') || '<p>尚無操作，可連按上方按鈕新增。</p>';
     }
     for (const kind of ['watch', 'upload', 'search']) {
       const box = root.querySelector(`[data-operation-result="${kind}"]`);
       if (!box) continue;
       const request = state.operationRequests?.[kind];
       if (!request) { box.innerHTML = '<p class="sim-operation-empty">尚未送出請求。可從上方操作列或這裡開始。</p>'; continue; }
-      const status = { running: '處理中', completed: '完成', failed: '失敗', cancelled: '已取消' }[request.status];
+      const status = request.autoRetryAt ? '斷線，等待自動重試' : { running: '處理中', completed: '完成', failed: '失敗', cancelled: '已取消' }[request.status];
       const node = findNode(topoOf(sim, state), request.currentNodeId || request.hops.at(-1)?.nodeId);
       const branches = request.branches || [];
       if (kind === 'watch') {
@@ -2017,7 +2019,7 @@
       state.operationHistory ||= [];
       if (!state.operationHistory.includes(request)) state.operationHistory.unshift(request);
       let completed = 0;
-      state.operationHistory = state.operationHistory.filter(r => r.status === 'running' || completed++ < 30);
+      state.operationHistory = state.operationHistory.filter(r => r.status === 'running' || r.autoRetryAt || completed++ < 30);
     }
     const savedBranches = restoredRequest?.branches || [];
     request.branches = [];
@@ -2038,6 +2040,26 @@
     let failed = false;
     const settled = new Set();
     const appliedHopWrites = new Set();
+    let retryTimer = null;
+    const clearRetry = () => { clearTimeout(retryTimer); retryTimer = null; request.autoRetryAt = 0; };
+    const scheduleRetry = () => {
+      if (!numberedUpload || request.autoRetryStopped || (request.autoRetries || 0) >= 3) return;
+      const delay = 2000 * 2 ** (request.autoRetries || 0);
+      request.autoRetryAt = Date.now() + delay;
+      operationTrace(root, `↻ ${request.id} 連線中斷，${delay / 1000} 秒後自動重試 ${(request.autoRetries || 0) + 1}/3；重新尋找可用路徑。`, 'head');
+      const tick = () => {
+        if (!svgEl.isConnected || request.status !== 'failed') { clearRetry(); return; }
+        if (Date.now() >= request.autoRetryAt) { request.retryUpload(true); return; }
+        scheduleOperationPanels(root, sim, state);
+        retryTimer = setTimeout(tick, 250);
+      };
+      retryTimer = setTimeout(tick, 250);
+    };
+    if (numberedUpload) request.stopAutoRetry = () => {
+      clearRetry(); request.autoRetryStopped = true;
+      operationTrace(root, `⏸ ${request.id} 已停止自動重試，保留已確認的封包。`);
+      refreshOperationPanels(root, sim, state);
+    };
     const settleBranch = (branchId, ok) => {
       if (settled.has(branchId)) return;
       settled.add(branchId);
@@ -2048,6 +2070,8 @@
         Runtime.finishRequest(state.runtime, request, 'failed', '路徑中斷');
         applyRuntimeWrites(state, spec.writesOnFail, request);
         operationTrace(root, `— ${request.id} 失敗；已完成的其他 request 與資料不會被清掉 —`, 'bad');
+        scheduleRetry();
+        if (numberedUpload && request.autoRetries >= 3) operationTrace(root, `⛔ ${request.id} 自動重試 3 次仍失敗，停止重試，等待手動處理。`, 'bad');
       } else {
         applyRuntimeWrites(state, spec.writesOnComplete, request);
         if (sim.chapterId === 'sd-book-14' && kind === 'search') {
@@ -2127,6 +2151,11 @@
         if (packet) operationTrace(root, `📤 ${request.id} 送出 ${tag}（${packet.range}），第 ${request.attempt} 次嘗試。`);
         const handle = spawnRequest(root, sim, state, svgEl, flow.nodes, {
           trace: !numberedUpload && verbose, traceKind: kind,
+          onRoute: route => {
+            if (!numberedUpload || request.attempt <= 1) return;
+            const machines = route.chosen.map(machine => `${findNode(topoOf(sim, state), machine.nodeId)?.label || machine.nodeId} #${machine.idx + 1}`).join(' → ');
+            operationTrace(root, `${route.rerouted ? '🔀 切換路徑' : '🔌 重新連線'} ${request.id} ${tag}：${machines}。`, 'ok');
+          },
           token: {
             className: `${kind} branch-${flowIndex + 1} payload-${payloadTypeFor(sim, kind, flow)} packet-${packetIndex + 1}`,
             tokenClass: 'sim-token-demo', radius: numberedUpload ? 7 : progress.total > 1 ? 4.5 : 7,
@@ -2159,8 +2188,11 @@
       if (numberedUpload) send(0);
       else for (let i = 0; i < progress.total; i++) setTimeout(() => send(i), i * Math.max(70, 170 / (state.speed || 1)));
     };
-    if (numberedUpload) request.retryUpload = () => {
+    if (numberedUpload) request.retryUpload = (automatic = false) => {
       if (request.status !== 'failed') return;
+      clearRetry();
+      if (automatic) request.autoRetries = (request.autoRetries || 0) + 1;
+      else { request.autoRetries = 0; request.autoRetryStopped = false; }
       request.attempt++;
       request.status = 'running'; request.finishedAt = ''; request.result = '';
       failed = false; remaining = flows.length; settled.clear();
@@ -4901,6 +4933,7 @@
         if (saved.runtime) {
           state.runtime = Runtime.hydrateRuntime(saved.runtime, dataModelOf(sim));
           state.runtime.requests.forEach(request => {
+            request.autoRetryAt = 0; // Timers belong to the previous page; retained uploads can be retried manually.
             if (request.status === 'running') { request.status = 'failed'; request.finishedAt = '切換頁面'; request.result = '頁面重新載入，原連線已中斷'; }
           });
           state.operationHistory = state.runtime.requests.filter(request => Array.isArray(request.branches));

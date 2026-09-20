@@ -22,3 +22,22 @@ test('burst retains every in-flight request while limiting completed history', (
     const restored = api.hydrateRuntime(runtime);
     assert.equal(restored.requests.filter(request => request.status === 'running').length, 151);
 });
+
+test('retry countdowns survive request history pruning and hydration', () => {
+    const context = { window: {} };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../system-design-runtime.js'), 'utf8'), context);
+    const api = context.window.SystemDesignRuntime;
+    const runtime = api.createRuntime();
+    const waiting = api.beginRequest(runtime, { kind: 'upload' });
+    api.finishRequest(runtime, waiting, 'failed');
+    waiting.autoRetryAt = Date.now() + 8000;
+    for (let i = 0; i < 150; i++) {
+        const request = api.beginRequest(runtime, { kind: 'search' });
+        api.finishRequest(runtime, request, 'completed');
+    }
+    assert.ok(runtime.requests.includes(waiting));
+    assert.ok(api.hydrateRuntime(runtime).requests.some(request => request.id === waiting.id));
+    waiting.autoRetryAt = 0;
+    api.beginRequest(runtime, { kind: 'search' });
+    assert.ok(!runtime.requests.includes(waiting));
+});
