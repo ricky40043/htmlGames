@@ -16,10 +16,12 @@
         let pacing = new FrameStepper(), rateElapsed = 0, rateTicks = 0, actualSpeed = 0;
         let pressure = [];
         let inspectorTab = 'user', operationFilter = 'all', lastBatch = null;
+        let view = new URLSearchParams(location.search).get('mode') === 'world' ? 'people' : 'architecture';
         let dragging = null;
         const savedMode = window.YouTubeModes?.load();
         if (savedMode?.world?.users?.length && savedMode.world.cache instanceof Set) {
             world = Object.assign(new World(savedMode.world.seed, 0), savedMode.world);
+            world.machines.forEach(m => { if (!m.up && m.repairAt === null) m.repairAt = Infinity; });
             selectedUser = world.user(savedMode.selectedUser)?.id || 1;
             selectedMachine = savedMode.selectedMachine || null;
             selectedRequest = savedMode.selectedRequest || null;
@@ -147,6 +149,26 @@
             if(m?.kind==='api'){el('api-slots').value=m.slots;el('api-rate').value=m.capacity;el('api-timeout').value=m.queueTimeout??12;}
         };
         window.__worldWorkbench = { get world(){return world;}, get paused(){return paused;}, paint:()=>paint(true) };
+        const topology = root.querySelector('.yw-topology');
+        const diagram = new window.YouTubeWorldDiagram(root.querySelector('.yw-main'), {
+            machine: id => { originalMachineClick(id); paint(true); },
+            user: id => { selectedUser=id; selectedRequest=null; selectInspector('user'); paint(true); }
+        });
+        const setView = (next, updateUrl = true) => {
+            view = next;
+            topology.hidden = view !== 'people';
+            diagram.element.hidden = view !== 'architecture';
+            root.querySelector('.yw-legend').hidden = view !== 'people';
+            window.YouTubeModes?.markView(view);
+            if (updateUrl) {
+                const url = new URL(location.href);
+                if (view === 'people') url.searchParams.set('mode', 'world'); else url.searchParams.delete('mode');
+                history.pushState(null, '', url);
+            }
+            paint(true);
+        };
+        window.YouTubeModes?.bindView(next => { if (next !== view) setView(next); });
+        addEventListener('popstate', () => setView(new URLSearchParams(location.search).get('mode') === 'world' ? 'people' : 'architecture', false));
         // 把世界正在套用的那份架構攤開來講清楚：哪一項、選了什麼、在這個世界裡代表什麼。
         // 沒有來自課程模式的設定時，也要明說現在跑的是預設架構，而不是留白讓人猜。
         function renderDesign() {
@@ -160,8 +182,8 @@
             }).join('');
             el('design').innerHTML = `<div class="yw-design-head">
                 <div><h2>套用中的架構</h2><p>${fromLesson
-                    ? '這些是你在「架構設計」那 12 個月裡做的決策，已套用下列初始配置；世界中的故障與實驗設定另外保留。改了決策再回來，按「同種子重新開始」就會套用新的架構。'
-                    : '你還沒在「架構設計」做過決策，所以這個世界跑的是預設架構。去那邊選完再回來，這裡就會換成你的版本。'}</p></div>
+                    ? '這些是你在「12 月策略課程」那 12 個月裡做的決策，已套用下列初始配置；世界中的故障與實驗設定另外保留。改了決策再回來，按「同種子重新開始」就會套用新的架構。'
+                    : '你還沒在「12 月策略課程」做過決策，所以這個世界跑的是預設架構。去那邊選完再回來，這裡就會換成你的版本。'}</p></div>
                 <div class="yw-design-actions">
                     <a class="yw-design-link" href="system-design-simulator.html?chapter=sd-book-14&mode=lesson">${fromLesson ? '回去調整架構 ↗' : '去做架構決策 ↗'}</a>
                     ${fromLesson ? '<button type="button" data-action="use-default-design">改用預設架構</button>' : ''}
@@ -306,7 +328,9 @@
         function paint(force = false) {
             pressure = world.capacityPressure();
             drawCapacity();
-            syncSelectors(); syncInspector(force); drawMachines(); drawUsers(); drawRoute();
+            syncSelectors(); syncInspector(force); drawMachines(); drawUsers();
+            if (view === 'people') drawRoute();
+            else el('route').textContent = diagram.paint(world, { userId: selectedUser, machineId: selectedMachine, requestId: selectedRequest });
             const s=world.summary(),u=selected();
             el('clock').textContent=clock(world.time)+'.'+Math.round((world.time%1)*10);
             el('metrics').innerHTML=[['活躍使用者',s.users+' 人'],['緩衝／等待',s.buffering+' 人'],['請求佇列',s.queue+' 筆'],['再緩衝比例',s.rebuffer.toFixed(1)+'%'],['完成／失敗嘗試',`${s.completed} / ${s.failed}`],['跨區傳輸',s.crossRegionMB.toFixed(1)+' MB']].map(([label,value])=>`<div><span>${label}</span><strong>${value}</strong></div>`).join('');
@@ -401,7 +425,7 @@
         }
         el('speed').value = speed;
         root.querySelectorAll('[data-option]').forEach(c => { c.checked = world.options[c.dataset.option]; });
-        renderDesign();paint(true);
+        renderDesign();selectInspector(selectedRequest ? 'request' : selectedMachine ? 'machine' : 'user');setView(view, false);
         if(new URLSearchParams(location.search).get('lab')==='api')root.querySelector('[data-action="api-lab"]').click();
         requestAnimationFrame(frame);
     };

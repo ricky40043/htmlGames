@@ -3,20 +3,26 @@
     'use strict';
     const params = new URLSearchParams(location.search);
     if ((params.get('chapter') || 'sd-book-14') !== 'sd-book-14') return;
-    const mode = params.get('mode') === 'world' ? 'operations' : 'architecture';
+    const isLesson = params.get('mode') === 'lesson';
+    const mode = isLesson ? 'architecture' : 'operations';
     const key = `youtube-mode-session-v1:${mode}`;
-    // 每個模式各自保存自己的進度（上面那把 key），但「架構決策」這一份是共用的：
-    // 架構設計模式寫、實際運作模式讀，這是兩套引擎之間唯一互通的東西。
+    // Both live views share one snapshot. The monthly strategy course stays separate.
     const designKey = 'youtube-architecture-v1';
     const nav = document.createElement('nav');
     nav.className = 'youtube-mode-nav';
     nav.setAttribute('aria-label', 'YouTube 模擬頁面切換');
-    nav.innerHTML = `<div class="youtube-mode-links"><a href="system-design-simulator.html?chapter=sd-book-14" ${mode === 'architecture' ? 'aria-current="page"' : ''}>架構設計</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=world" ${mode === 'operations' ? 'aria-current="page"' : ''}>實際運作</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">重新模擬會清除兩個模式的月份、請求紀錄與機器設定，回到初始狀態。</p><p>架構策略與課程、人群播放與日誌，兩套完整功能均保留。<span>你在架構設計做的決策會套用到實際運作；兩邊的人數與執行進度分開，不會互相同步。</span></p><span class="youtube-mode-notice" role="status"></span>`;
+    nav.innerHTML = `<div class="youtube-mode-links"><a data-world-view="architecture" href="system-design-simulator.html?chapter=sd-book-14">架構與傳輸</a><a data-world-view="people" href="system-design-simulator.html?chapter=sd-book-14&mode=world">觀眾與機器</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson" ${isLesson ? 'aria-current="page"' : ''}>12 月策略課程</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">重新模擬會清除即時世界與課程進度，回到初始狀態。</p><p>${isLesson ? '這是獨立的月份策略練習；課程情境與評分不代表即時世界的人數或請求。即時觀察請使用上方兩種視圖。' : '兩張圖是同一個世界：人數、機器、CDN、請求與時間完全共用。切換視圖不會重新開始。'}</p><span class="youtube-mode-notice" role="status"></span>`;
     document.querySelector('.sim-shell').prepend(nav);
     const notice = message => { nav.querySelector('.youtube-mode-notice').textContent = message; };
     let capture = null;
-    const replacer = (_, value) => value instanceof Set ? { __youtubeSet: [...value] } : value;
-    const reviver = (_, value) => value && Array.isArray(value.__youtubeSet) ? new Set(value.__youtubeSet) : value;
+    let switchView = null;
+    const markView = view => nav.querySelectorAll('[data-world-view]').forEach(link => {
+        if (!isLesson && link.dataset.worldView === view) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+    });
+    markView(params.get('mode') === 'world' ? 'people' : 'architecture');
+    const replacer = (_, value) => value instanceof Set ? { __youtubeSet: [...value] } : value === Infinity ? { __youtubeInfinity: true } : value;
+    const reviver = (_, value) => value && Array.isArray(value.__youtubeSet) ? new Set(value.__youtubeSet) : value?.__youtubeInfinity === true ? Infinity : value;
     function save() {
         if (!capture) return;
         let snapshot;
@@ -67,10 +73,15 @@
         }
         location.reload();
     };
-    window.YouTubeModes = { resetSession, register: fn => { capture = fn; }, load, notice, saveDesign, loadDesign, clearDesign };
+    window.YouTubeModes = { resetSession, bindView: fn => { switchView = fn; }, markView, register: fn => { capture = fn; }, load, notice, saveDesign, loadDesign, clearDesign };
     nav.addEventListener('click', event => {
         const link = event.target.closest('a');
         if (!link) return;
+        if (link.dataset.worldView && switchView) {
+            event.preventDefault();
+            switchView(link.dataset.worldView);
+            return;
+        }
         if (link.hasAttribute('aria-current')) { event.preventDefault(); return; }
         save();
     });
