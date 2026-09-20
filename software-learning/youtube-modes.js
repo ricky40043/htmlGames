@@ -11,7 +11,7 @@
     const nav = document.createElement('nav');
     nav.className = 'youtube-mode-nav';
     nav.setAttribute('aria-label', 'YouTube 模擬頁面切換');
-    nav.innerHTML = `<div class="youtube-mode-links"><a href="system-design-simulator.html?chapter=sd-book-14" ${mode === 'architecture' ? 'aria-current="page"' : ''}>架構設計</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=world" ${mode === 'operations' ? 'aria-current="page"' : ''}>實際運作</a></div><p>架構策略與課程、人群播放與日誌，兩套完整功能均保留。<span>你在架構設計做的決策會套用到實際運作；兩邊的執行進度仍各自保存。</span></p><span class="youtube-mode-notice" role="status"></span>`;
+    nav.innerHTML = `<div class="youtube-mode-links"><a href="system-design-simulator.html?chapter=sd-book-14" ${mode === 'architecture' ? 'aria-current="page"' : ''}>架構設計</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=world" ${mode === 'operations' ? 'aria-current="page"' : ''}>實際運作</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">重新模擬會清除兩個模式的月份、請求紀錄與機器設定，回到初始狀態。</p><p>架構策略與課程、人群播放與日誌，兩套完整功能均保留。<span>你在架構設計做的決策會套用到實際運作；兩邊的執行進度仍各自保存。</span></p><span class="youtube-mode-notice" role="status"></span>`;
     document.querySelector('.sim-shell').prepend(nav);
     const notice = message => { nav.querySelector('.youtube-mode-notice').textContent = message; };
     let capture = null;
@@ -52,6 +52,21 @@
         if (mode === 'architecture') clearDesign();
         location.reload();
     }
+    nav.querySelector('.youtube-restart').onclick = () => {
+        // Disable pagehide capture before clearing, or reload would save the old world again.
+        const previousCapture = capture;
+        capture = null;
+        try {
+            sessionStorage.removeItem('youtube-mode-session-v1:architecture');
+            sessionStorage.removeItem('youtube-mode-session-v1:operations');
+            sessionStorage.removeItem(designKey);
+        } catch {
+            capture = previousCapture;
+            notice('瀏覽器無法清除進度，請允許此網站使用儲存空間後再試。');
+            return;
+        }
+        location.reload();
+    };
     window.YouTubeModes = { resetSession, register: fn => { capture = fn; }, load, notice, saveDesign, loadDesign, clearDesign };
     nav.addEventListener('click', event => {
         const link = event.target.closest('a');
