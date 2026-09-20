@@ -3,7 +3,7 @@
     'use strict';
     const params = new URLSearchParams(location.search);
     if ((params.get('chapter') || 'sd-book-14') !== 'sd-book-14') return;
-    const isLesson = params.get('mode') === 'legacy';
+    const isLesson = true;
     const mode = isLesson ? 'architecture' : 'operations';
     const key = `youtube-mode-session-v1:${mode}`;
     // Both live views share one snapshot. The monthly strategy course stays separate.
@@ -11,7 +11,7 @@
     const nav = document.createElement('nav');
     nav.className = 'youtube-mode-nav';
     nav.setAttribute('aria-label', 'YouTube 模擬頁面切換');
-    nav.innerHTML = `<div class="youtube-mode-links"><a data-world-view="architecture" href="system-design-simulator.html?chapter=sd-book-14">架構與傳輸</a><a data-world-view="people" href="system-design-simulator.html?chapter=sd-book-14&mode=world">觀眾與機器</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson" ${isLesson ? 'aria-current="page"' : ''} data-world-course>月份課程</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">重新模擬會清除即時世界與課程進度，回到初始狀態。</p><p>${isLesson ? '這是獨立的月份策略練習；課程情境與評分不代表即時世界的人數或請求。即時觀察請使用上方兩種視圖。' : '月份課程、架構與觀眾共用同一個世界；加人、分組、故障與請求都在這裡繼續。'}</p><span class="youtube-mode-notice" role="status"></span>`;
+    nav.innerHTML = `<div class="youtube-mode-links"><a href="system-design-simulator.html?chapter=sd-book-14" aria-current="page">月份課程與完整架構</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">月份、策略、觀眾群組與傳輸都在下方同一張架構圖操作。重新模擬會清除課程進度。</p><span class="youtube-mode-notice" role="status"></span>`;
     document.querySelector('.sim-shell').prepend(nav);
     const notice = message => { nav.querySelector('.youtube-mode-notice').textContent = message; };
     let capture = null;

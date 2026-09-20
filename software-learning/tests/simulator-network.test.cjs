@@ -151,3 +151,28 @@ test('live network changes slow the same ball, without resetting its progress', 
     handle.abort('來源被關閉');
     assert.match(handle.circle.attrs.class, /lost/);
 });
+
+test('course cohorts split and merge exact members without replacing topology or machines', () => {
+    const {h,sim,state}=setup(), topo=h.topoOf(sim,state);
+    const machines=topo.nodes.filter(n=>n.kind!=='user');
+    const group=h.addUserGroup(sim,state,'tw',10), ids=[...group.members].sort().join();
+    const weak=h.moveCourseAudience(sim,state,group.id,5,true);
+    assert.equal(group.headcount,5); assert.equal(weak.headcount,5);
+    assert.equal(h.audienceWeak(state,weak),true);
+    assert.equal([...group.members,...weak.members].sort().join(),ids);
+    assert.equal(h.moveCourseAudience(sim,state,weak.id,6,false),null);
+    assert.equal(h.moveCourseAudience(sim,state,weak.id,1.5,false),null);
+    const merged=h.moveCourseAudience(sim,state,weak.id,5,false);
+    assert.equal(merged.headcount,10); assert.equal(merged.members.sort().join(),ids);
+    assert.equal(topo.nodes.filter(n=>n.headcount).length,1);
+    machines.forEach(n=>assert.equal(topo.nodes.find(m=>m.id===n.id),n));
+});
+
+test('course cohort drag geometry respects weak area and can restore normal network',()=>{
+    const {h,sim,state}=setup();state.badZone={x:500,y:500,width:200,height:200};
+    const group=h.addUserGroup(sim,state,'tw',10);
+    const weak=h.moveCourseAudience(sim,state,group.id,5,true,{x:550,y:550});
+    assert.equal(h.audienceWeak(state,weak),true);
+    const normal=h.moveCourseAudience(sim,state,weak.id,5,false);
+    assert.equal(normal.headcount,10);assert.equal(h.audienceWeak(state,normal),false);
+});

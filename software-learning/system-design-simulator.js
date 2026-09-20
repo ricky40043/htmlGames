@@ -641,7 +641,7 @@
     // One line BELOW the node label, not two pixels under it — at +16 against the label's +14
     // the two strings printed on top of each other and rendered the users node unreadable.
     const headText = n.kind === 'user'
-      ? (n.headcount ? `${numFmt(n.headcount)} 人` : `已服務 ${numFmt(state.usersServed || 0)} 人`)
+      ? (n.headcount ? `${numFmt(n.headcount)} 人 · ${audienceWeak(state, n) ? '弱網 0.4 Mbps' : '正常網路'}` : `新增觀眾 ${numFmt(topoOf(sim, state).nodes.filter(g => g.headcount && g.regionKey === n.regionKey).reduce((sum, g) => sum + g.headcount, 0))} 人`)
       : '';
     const badge = headText ? `<text class="sim-topo-badge" x="${uiX}" y="${n.y + labelOffset + 30}">${esc(headText)}</text>` : '';
     const store = storeForNode(sim, n.id);
@@ -694,7 +694,7 @@
       : '';
     const absentNote = !present
       ? `<text class="sim-topo-absent" x="${uiX}" y="${n.pool ? layout.bottom + 54 : n.y + labelOffset + 28}">（未建置，流量不會經過這裡）</text>` : '';
-    return `${machines}${storeBadge}
+    return `${n.headcount && audienceWeak(state, n) ? `<rect class="sim-cohort-weak" x="${n.x-68}" y="${n.y-38}" width="136" height="115" rx="12"/><text x="${n.x}" y="${n.y-43}" text-anchor="middle" fill="#ffa4b7" font-size="12">訊號不良區</text>` : ''}${machines}${storeBadge}
         <text class="sim-topo-label" x="${uiX}" y="${labelY}">${esc(n.label)}</text>
         ${costText ? `<text class="sim-topo-cost${interactive ? ' strategy' : ''}" x="${uiX}" y="${costY}"${interactive ? ' data-strategy-hit="1" role="button" tabindex="0"' : ''}><title>${esc(costTextFull)}</title>${esc(costText)}</text>` : ''}
         ${loadText}${absentNote}${badge}
@@ -886,12 +886,72 @@
     const id = `userGroup_${seq}`;
     topo.nodes.push({
       id, kind: 'user', label: `使用者群組 #${seq}`, region: anchor.region, regionKey,
-      headcount, movable: true,
+      headcount, cohort: id, members: Array.from({ length: headcount }, (_, i) => `${id}:${i + 1}`), movable: true,
       x: anchor.x + 4 + (ring % 2 ? 46 : -34), y: anchor.y + 62 + Math.floor(ring / 2) * 40,
       arriveLabel: '這一群使用者的裝置收到回應'
     });
     topo.edges.push({ from: id, to: `loadBalancer_${regionKey}`, kind: 'stub' });
     return findNode(topo, id);
+  }
+
+  function audienceWeak(state, node) {
+    if (!node) return false;
+    const z = state.badZone;
+    return !!node.weak || !!(z && node.x >= z.x && node.x <= z.x + (z.width || 240) && node.y >= z.y && node.y <= z.y + (z.height || 160));
+  }
+
+  function moveCourseAudience(sim, state, id, count, weak, position) {
+    const topo = topoOf(sim, state), source = findNode(topo, id);
+    if (!source?.headcount || !Number.isInteger(count) || count < 1 || count > source.headcount) return null;
+    source.cohort ||= source.id;
+    source.members ||= Array.from({length: source.headcount}, (_, i) => `${source.id}:${i+1}`);
+    let target = topo.nodes.find(n => n.id !== id && n.cohort === source.cohort && n.regionKey === source.regionKey && audienceWeak(state,n) === weak);
+    if (!target && count === source.headcount) target = source;
+    if (!target) {
+      target = addUserGroup(sim, state, source.regionKey, 1);
+      Object.assign(target, {cohort:source.cohort, label:source.label, headcount:0, members:[], x:source.x+150, y:source.y, weak});
+    }
+    if (target !== source) { target.members.push(...source.members.splice(0,count)); target.headcount=target.members.length; source.headcount=source.members.length; }
+    target.weak = weak;
+    if(position) Object.assign(target,position);
+    if(!weak && audienceWeak(state,target)) { const anchor=findNode(topo,`users_${target.regionKey}`); target.x=anchor.x+40; target.y=anchor.y+80; }
+    if(!source.headcount) { topo.nodes=topo.nodes.filter(n=>n!==source); topo.edges=topo.edges.filter(e=>e.from!==source.id&&e.to!==source.id); }
+    return target;
+  }
+
+  function syncAudienceNodes(root, sim, state) {
+    const svg=root.querySelector('svg.sim-topo'), topo=topoOf(sim,state);
+    svg.querySelectorAll('[data-node^="userGroup_"]').forEach(el=>{if(!findNode(topo,el.dataset.node))el.remove();});
+    topo.nodes.filter(n=>n.headcount).forEach(n=>{
+      if(!svg.querySelector(`[data-node="${n.id}"]`)) svg.insertAdjacentHTML('beforeend',`<g data-node="${n.id}" data-interactive="1"></g>`);
+    });
+    repaintNodes(root,sim,state); repaintEdges(root,sim,state); refreshLoadSummary(root,sim,state);
+  }
+
+  function wireCourseAudience(root, sim, state) {
+    if(sim.chapterId !== 'sd-book-14') return;
+    const panel=document.createElement('div'); panel.className='sim-cohort-controls';
+    panel.innerHTML='<label>觀眾群組 <select data-cohort-select aria-label="觀眾群組"></select></label><label>移動人數 <input data-cohort-count type="number" min="1" value="5" aria-label="移動人數"></label><button type="button" data-cohort-weak>移入弱網</button><button type="button" data-cohort-good>移回正常</button><span data-cohort-summary role="status"></span>';
+    root.querySelector('.sim-topo-controls').after(panel);
+    state.refreshCohorts=()=>{
+      const groups=topoOf(sim,state).nodes.filter(n=>n.headcount), select=panel.querySelector('select');
+      panel.hidden=!groups.length;
+      if(!groups.some(n=>n.id===state.selectedCohort))state.selectedCohort=groups[0]?.id;
+      select.innerHTML=groups.map(n=>`<option value="${n.id}">${esc(n.label)} · ${n.headcount} 人 · ${audienceWeak(state,n)?'弱網':'正常'}</option>`).join(''); select.value=state.selectedCohort;
+      const selected=groups.find(n=>n.id===state.selectedCohort), input=panel.querySelector('input');
+      if(selected){input.max=selected.headcount; input.value=Math.min(Number(input.value)||1,selected.headcount);}
+      const weak=groups.filter(n=>audienceWeak(state,n)).reduce((a,n)=>a+n.headcount,0), total=groups.reduce((a,n)=>a+n.headcount,0);
+      panel.querySelector('[data-cohort-summary]').textContent=`新增觀眾 ${total} 人：正常 ${total-weak} 人／弱網 ${weak} 人。選人數後，可拖群組到訊號不良區。`;
+    };
+    panel.querySelector('select').onchange=e=>{state.selectedCohort=e.target.value;state.refreshCohorts();};
+    const move=weak=>{
+      const target=moveCourseAudience(sim,state,state.selectedCohort,Number(panel.querySelector('input').value),weak);
+      if(!target){panel.querySelector('[data-cohort-summary]').textContent='請輸入群組人數範圍內的整數。';return;}
+      state.selectedCohort=target.id;syncAudienceNodes(root,sim,state);state.refreshCohorts();
+      traceLine(root,`觀眾分組：${target.label} ${target.headcount} 人${weak?'進入弱網，傳輸限制為 0.4 Mbps':'回到正常網路'}；保留觀眾身份與已送出的傳輸。`,'head','watch');
+    };
+    panel.querySelector('[data-cohort-weak]').onclick=()=>move(true);panel.querySelector('[data-cohort-good]').onclick=()=>move(false);
+    state.refreshCohorts();
   }
 
   function architectureEditorHtml(sim, state) {
@@ -950,7 +1010,7 @@
     return `<div class="sim-topo-wrap ${interactive ? '' : 'locked'}${connectionVisible ? '' : ' connections-hidden'}">
       <div class="sim-topo-scroll">
         <svg class="sim-topo" viewBox="${esc(topo.viewBox)}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="架構拓樸圖">
-          ${regionBoxesSvg(topo)}
+          <defs><pattern id="cohort-hatch" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#482b39"/><path d="M0 12L12 0" stroke="#a36e6e" stroke-width="2"/></pattern></defs>${regionBoxesSvg(topo)}
           <g class="sim-topo-edges">${edgesSvg(sim, state)}</g>
           ${nodesSvg(sim, state, interactive)}
           ${interactive && showControls ? dragViewerSvg(sim, state) : ''}
@@ -961,7 +1021,7 @@
         ? '<p class="sim-topo-hint"><b>點機器球＝關閉／恢復這一台；點上方策略文字＝切換方案。</b>未建置的 CDN 點一下可建置。關機後，傳到一半的球會在原地標紅並留下斷線紀錄；播放器保留進度與緩衝，重試同一片段。同區沒有健康服務時會嘗試跨區接手。<br><b>點 🗃 徽章</b>看資料與 Request。球可拖曳移動，＋／− 用來加／收機器；「無備援」代表仍有一台運作，不是關機。</p>'
         : '<p class="sim-topo-hint">目前是唯讀狀態——結果由你先前選的做法與當時開的機器數量決定。</p>'}
       ${showControls ? `<div class="sim-topo-controls">
-        <button class="button secondary sim-add-users" type="button" data-add="100">${esc(sim.addUsersLabel || '＋100 使用者')}</button>
+        <label>新增人數 <select data-audience-add-count><option>1</option><option>5</option><option selected>10</option><option>100</option></select></label><button class="button secondary sim-add-users" type="button" data-add="10">＋ 新增觀眾</button>
         <button class="button secondary sim-demo" type="button" data-kind="watch">${esc(sim.demoLabels?.watch || '▶ 模擬一次讀取請求')}</button>
         <button class="button secondary sim-demo" type="button" data-kind="upload">${esc(sim.demoLabels?.upload || '⬆ 模擬一次寫入請求')}</button>
         ${sim.demoLabels?.search ? `<button class="button secondary sim-demo" type="button" data-kind="search">${esc(sim.demoLabels.search)}</button>` : ''}
@@ -1230,7 +1290,7 @@
     grid.className = 'sim-workbench-grid';
     const map = document.createElement('section');
     map.className = 'sim-workbench-map';
-    map.innerHTML = `<div class="sim-map-heading"><strong>架構與傳輸</strong><label>縮放 <select data-map-zoom aria-label="架構圖縮放"><option value="fit">符合寬度</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label></div>`;
+    map.innerHTML = `<div class="sim-map-heading"><strong>月份課程 · 完整架構</strong><label>縮放 <select data-map-zoom aria-label="架構圖縮放"><option value="fit">符合寬度</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label></div>`;
     const scroll = wrap.querySelector('.sim-topo-scroll');
     map.append(scroll, wrap.querySelector('.sim-payload-legend'));
     const hint = wrap.querySelector('.sim-topo-scroll-hint');
@@ -1499,7 +1559,6 @@
     controls.innerHTML = '<span>拖曳分隔線調整比例 · 雙擊還原</span><button type="button" class="sim-mini-btn">重設版面</button>';
     controls.querySelector('button').onclick = () => { layout = { ...defaults }; apply(); save(); };
     const toolbar = wrap.querySelector('.sim-workbench-toolbar');
-    controls.insertAdjacentHTML('beforeend', '<a href="system-design-simulator.html?chapter=sd-book-14&mode=world&lab=api">API 壓力測試 ↗</a>');
     toolbar.querySelector('.sim-speed-controls').append(controls);
     new ResizeObserver(() => { grid.style.setProperty('--workbench-toolbar-height', `${toolbar.offsetHeight}px`); }).observe(toolbar);
     apply();
@@ -1938,6 +1997,10 @@
       weights,
       durationMs: pathDurationMs(weights, state.speed, opts.durationScale ?? 1),
       ...opts.token,
+      advance: opts.token?.advance ? dt => {
+        if (opts.mapPoint) points.forEach((p,i) => Object.assign(finalPoints[i], opts.mapPoint(visited[i],p) || p));
+        return opts.token.advance(dt);
+      } : undefined,
       guard: () => routeStillAlive(sim, state, chosen),
       onLost: (circle, reason) => {
         const dead = chosen.find(c => !routeStillAlive(sim, state, [c]));
@@ -1960,7 +2023,8 @@
     if (!topo?.computeFlow) return;
     const ctx = makeChoiceCtx(sim, state);
     const regionIds = topo.regionIds;
-    const count = clamp(Math.round(batchSize / 40), 1, 4);
+    const audienceMembers = [...(originNode?.members || [])];
+    const count = audienceMembers.length || clamp(Math.round(batchSize / 40), 1, 4);
     // Picked up front (not inside the setTimeout below) so the trace-log breakdown line can
     // report real counts immediately instead of racing the staggered spawns that haven't fired yet.
     // A batch that belongs to one specific user group all comes from that group's own region.
@@ -1975,16 +2039,21 @@
         const regionId = picks[i];
         const flowIds = topo.computeFlow('watch', ctx, regionId);
         if (flowIds.length < 2) return;
+        const member = audienceMembers[i];
+        let progress = 0;
+        const currentGroup = () => topoOf(sim, state).nodes.find(n => n.members?.includes(member)) || originNode;
         spawnRequest(root, sim, state, svgEl, flowIds, {
-          trace: false,
+          trace: true,
           // These viewers are the group standing at `originNode`, so their requests start and
           // end there rather than at the region's generic users icon.
-          mapPoint: originNode ? (nodeId, p) => (nodeId === `users_${regionId}` ? { x: originNode.x, y: originNode.y } : p) : undefined,
+          mapPoint: originNode ? (nodeId, p) => (nodeId === `users_${regionId}` ? { x: currentGroup().x, y: currentGroup().y } : p) : undefined,
           durationScale: 0.9 + Math.random() * 0.35,
           token: {
             className: `ambient payload-${sim.chapterId === 'sd-book-14' ? 'video' : 'file'}`,
             tokenClass: 'sim-token-ambient',
-            onDone: circle => setTimeout(() => circle?.remove(), 300 / (state.speed || 1))
+            label: member ? `觀眾 ${i + 1}` : '',
+            advance: member ? dt => { progress += dt / 1000 * (state.speed || 1) * (audienceWeak(state, currentGroup()) ? 0.4 : 12) / 40; return progress; } : undefined,
+            onDone: circle => { if(member) traceLine(root, `${member}：影片示意片段已傳到觀眾（${audienceWeak(state,currentGroup()) ? '弱網 0.4 Mbps' : '正常網路'}）。`, 'ok', 'watch'); setTimeout(() => circle?.remove(), 300 / (state.speed || 1)); }
           }
         });
       }, Math.random() * 650);
@@ -2449,7 +2518,7 @@
     });
     root.querySelectorAll('.sim-add-users').forEach(btn => {
       btn.onclick = () => {
-        const batch = Number(btn.dataset.add || 100);
+        const batch = Number(root.querySelector('[data-audience-add-count]')?.value || btn.dataset.add || 10);
         state.usersServed = (state.usersServed || 0) + batch;
         const topo = topoOf(sim, state);
         burstUsers(topo, svgEl);
@@ -2457,14 +2526,15 @@
         // own node on the diagram, in a region, draggable to another one, and counted in that
         // region's load like any other audience.
         if (sim.mutableTopology && topo.regionIds?.length) {
-          const pick = root.querySelector('[data-group-region]')?.value || topo.regionIds[0];
+          const pick = state.operationOrigin && state.operationOrigin !== 'random' ? state.operationOrigin : topo.regionIds[0];
           const node = addUserGroup(sim, state, pick, batch);
           if (node) {
             traceLine(root, `湧入 ${numFmt(batch)} 位新使用者，成為「${node.label}」這個獨立節點，放在「${esc(topo.regionLabel?.[pick] || pick)}」，可以直接把它拖到別的地區。`, 'head');
             // Rebuild the diagram so the new node exists, THEN show those people arriving and
             // actually watching something — on the fresh SVG, and starting from their own node
             // rather than from the region's generic users icon.
-            onStructureChange?.();
+            syncAudienceNodes(root, sim, state);
+            state.selectedCohort = node.id; state.refreshCohorts?.();
             const freshSvg = root.querySelector('svg.sim-topo');
             burstUsers(topoOf(sim, state), freshSvg, node);
             spawnAmbientViewers(root, sim, state, freshSvg, batch, pick, node);
@@ -2560,7 +2630,7 @@
     // --- Draggable logical nodes. Ch14 user groups retain their region hand-off behaviour;
     // Ch14/15 can additionally opt the whole topology into free layout with draggableTopology. ---
     {
-      let dragNode = null, dx = 0, dy = 0, moved = false, startClient = null;
+      let dragNode = null, dx = 0, dy = 0, moved = false, startClient = null, startNode = null;
       svgEl.addEventListener('pointerdown', evt => {
         if (evt.target.closest?.('[data-instance],[data-instance-delta],[data-strategy-hit]')) return;
         const g = evt.target.closest?.('[data-node]');
@@ -2568,6 +2638,8 @@
         const n = findNode(topoOf(sim, state), g.dataset.node);
         if (!n || (!n.movable && !sim.draggableTopology)) return;
         const p = svgCoordsFromEvent(svgEl, evt);
+        startNode = {x:n.x,y:n.y};
+        if (n.headcount) { state.selectedCohort=n.id; state.refreshCohorts?.(); }
         dragNode = n; dx = p.x - n.x; dy = p.y - n.y;
         moved = false;
         startClient = { x: evt.clientX, y: evt.clientY };
@@ -2603,6 +2675,15 @@
           const edge = topo.edges.find(e => e.from === dragNode.id);
           if (edge) edge.to = `loadBalancer_${hit}`;
           traceLine(root, `🏗️「${dragNode.label}」搬到「${esc(topo.regionLabel[hit] || hit)}」，改由這一區的機器承載。`, 'head');
+        }
+        if (moved && dragNode.headcount) {
+          const count = Number(root.querySelector('[data-cohort-count]')?.value || dragNode.headcount);
+          const destination = {x:dragNode.x,y:dragNode.y};
+          const weak = audienceWeak(state, {...dragNode, weak:false});
+          Object.assign(dragNode, startNode);
+          const target = moveCourseAudience(sim, state, dragNode.id, count, weak, destination);
+          if(target) state.selectedCohort=target.id;
+          syncAudienceNodes(root, sim, state); state.refreshCohorts?.();
         }
         if (moved) state._suppressNodeClick = dragNode.id;
         svgEl.querySelector(`[data-node="${dragNode.id}"]`)?.classList.remove('dragging');
@@ -3838,6 +3919,7 @@
       handle?.setAttribute('x', x + zoneW() - 9);
       handle?.setAttribute('y', y + zoneH() - 9);
       refreshZoneFlag();
+      repaintNodes(root,sim,state); state.refreshCohorts?.();
     };
     const setZonePos = (x, y) => {
       state.badZone.x = x;
@@ -4235,6 +4317,7 @@
       const body = root.querySelector('.sim-trace-body');
       if (body && log) { body.innerHTML = log; refreshTrace(body.closest('.sim-trace')); body.scrollTop = body.scrollHeight; }
     }, () => refreshLoadSummary(root, sim, state), storeId => openDataInspector(root, sim, state, storeId));
+    wireCourseAudience(root, sim, state);
     wireTraceClear(root);
     wireUploadLab(root, sim, state);
     wireChunkLab(root, sim, state);
@@ -5023,10 +5106,6 @@
       renderSandbox(root, sandboxState);
       return;
     }
-    if (chapterId === 'sd-book-14' && params.get('mode') !== 'legacy' && window.mountYouTubeWorld) {
-      window.mountYouTubeWorld(root);
-      return;
-    }
     const sim = window.SYSTEM_DESIGN_SIM?.[chapterId];
     if (!sim) {
       const available = Object.keys(window.SYSTEM_DESIGN_SIM || {});
@@ -5077,7 +5156,7 @@
   // Exposed only for the automated test harness (jsdom can't fast-forward real timers, so the
   // pure geometry used by the token animation needs to be reachable and testable in isolation).
   window.__simTestHooks = {
-    pointAlongPath, waypointsFor, clusterPositions, hopWeights,
+    addUserGroup, moveCourseAudience, audienceWeak, pointAlongPath, waypointsFor, clusterPositions, hopWeights,
     instanceCount, nodeLoad, overloadedNodes, weeklyCostPenalty, regionIdAtPoint, nodeIsPresent,
     newState, setInstanceDown, routeStillAlive, playbackProfile, resolveServicePath, spawnToken, spawnRequest, wireAbrLab,
     routeFor, distanceWeights, pathDurationMs, regionShare, instanceIsDown, aliveInstanceIndexes, nodeCanServe, topoOf
