@@ -681,3 +681,5 @@ body:has(.sim-workbench) .topbar{position:static}
 .sim-layout-controls a{color:#acd6ff}
 .sim-simple-details{margin:8px 0;padding:8px 12px;border:1px solid #3b3d52;border-radius:9px;background:#171924}.sim-simple-details>summary{cursor:pointer;color:#c3c9dd;font-size:13px}.sim-simple-details[open]>summary{margin-bottom:10px}.sim-workbench-side>.sim-simple-details{min-width:0}.sim-workbench-toolbar:has(.sim-simple-details){position:static}
 .sim-map-simple .sim-topo-cost,.sim-map-simple .sim-node-stepper,.sim-map-simple .sim-topo-load:not(.over){display:none}.sim-map-heading{flex-wrap:wrap;gap:8px}.sim-map-heading [data-map-detail]{accent-color:#93baff}
+
+.sim-map-pannable{cursor:grab;touch-action:none;user-select:none}.sim-map-pannable.is-panning,.sim-map-pannable.is-panning *{cursor:grabbing!important}

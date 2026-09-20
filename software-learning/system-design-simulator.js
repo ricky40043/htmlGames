@@ -1391,7 +1391,28 @@
       setZoom(next, event);
     }, { passive: false });
     zoom.onchange();
-    if (hint) hint.textContent = '滑鼠滾輪縮放 · 放大後用捲軸移動 · 選「符合寬度」還原';
+    let pan = null;
+    scroll.classList.add('sim-map-pannable');
+    scroll.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || !event.isPrimary || event.defaultPrevented || event.target.closest('[data-node], [data-instance], [role="button"], [data-drag-viewer], [data-drag-zone], button, a, input, select')) return;
+      pan = { id: event.pointerId, x: event.clientX, y: event.clientY, left: scroll.scrollLeft, top: scroll.scrollTop };
+      scroll.setPointerCapture(event.pointerId);
+      scroll.classList.add('is-panning');
+      event.preventDefault();
+    });
+    scroll.addEventListener('pointermove', event => {
+      if (!pan || pan.id !== event.pointerId) return;
+      scroll.scrollLeft = pan.left - (event.clientX - pan.x);
+      scroll.scrollTop = pan.top - (event.clientY - pan.y);
+    });
+    const stopPan = event => {
+      if (!pan || pan.id !== event.pointerId) return;
+      pan = null;
+      scroll.classList.remove('is-panning');
+      if (scroll.hasPointerCapture(event.pointerId)) scroll.releasePointerCapture(event.pointerId);
+    };
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => scroll.addEventListener(type, stopPan));
+    if (hint) hint.textContent = '按住空白處拖曳整張圖 · 滾輪縮放 · 選「符合寬度」還原';
     const collapse = (nodes, title, parent) => {
       const details = document.createElement('details'); details.className = 'sim-simple-details';
       details.innerHTML = `<summary>${title}</summary>`;
