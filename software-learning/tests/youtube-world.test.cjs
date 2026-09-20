@@ -233,3 +233,26 @@ test('unavailable backend is diagnosed with zero healthy slots', () => {
     assert.equal(storage.healthy, 0);
     assert.equal(storage.slots, 0);
 });
+
+test('API pressure uses real slots and queue timeouts, then more capacity improves the same burst',()=>{
+  const w=quiet(0),api=w.machines.find(m=>m.kind==='api'&&m.region==='tw');
+  assert.ok(w.configureApi(api.id,{slots:2,capacity:2,queueTimeout:2}));
+  const batch=w.burstApi('tw',10);
+  w.step(.1);
+  assert.equal(batch.filter(r=>r.status==='running').length,2);
+  assert.equal(batch.filter(r=>r.status==='queued').length,8);
+  w.step(2.1);
+  assert.ok(batch.some(r=>r.retries>0 && r.history.some(h=>h.text.includes('容量滿'))));
+  assert.equal(batch.filter(r=>r.status==='running').length,2);
+  assert.ok(w.configureApi(api.id,{slots:16,capacity:32,queueTimeout:12}));
+  w.step(12);
+  assert.ok(batch.every(r=>r.status==='completed'));
+  assert.equal(w.users.length,0);
+});
+test('API pressure is deterministic across frame batching and validates capacity controls',()=>{
+  const setup=()=>{const w=quiet(0),m=w.machines.find(m=>m.kind==='api'&&m.region==='tw');w.configureApi(m.id,{slots:2,capacity:2,queueTimeout:2});w.burstApi('tw',10);return w;};
+  const a=setup(),b=setup();a.step(20);for(let i=0;i<200;i++)b.step(.1);
+  assert.deepEqual(a.requests,b.requests);
+  assert.equal(a.configureApi(a.machines.find(m=>m.kind==='api').id,{slots:0,capacity:2,queueTimeout:2}),false);
+  assert.deepEqual(a.burstApi('missing',10),[]);
+});

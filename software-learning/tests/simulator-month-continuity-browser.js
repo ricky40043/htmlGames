@@ -1,0 +1,32 @@
+(async()=>{
+    const results=[];const check=(ok,label)=>{if(!ok)throw new Error(label);results.push(label);};
+    const wait=ms=>new Promise(r=>setTimeout(r,ms));
+    document.querySelector('.sim-start')?.click();
+    const state=window.__simTestHooks.stateRef();
+    if(state.month===0)document.querySelector('.sim-advance').click();
+    document.querySelector('.sim-abr-stop').click();document.querySelector('[data-speed="2"]').click();
+    document.querySelector('[data-kind="upload"]').click();
+    const request=state.operationRequests.upload,videoId=request.payload.video_id;
+    const svg=document.querySelector('svg.sim-topo'),workbench=document.querySelector('.sim-workbench'),trace=document.querySelector('.sim-trace-body');
+    const firstLine=trace.firstElementChild;
+    document.querySelector('.sim-advance').click();
+    check(state.month===2&&!!document.querySelector('[data-month-card]'),'month event appears inline');
+    check(svg===document.querySelector('svg.sim-topo')&&workbench===document.querySelector('.sim-workbench'),'advance preserves original live map and workbench DOM');
+    check(firstLine.isConnected&&trace===document.querySelector('.sim-trace-body'),'existing log survives month advance');
+    check(state.operationRequests.upload===request,'same upload remains selected');
+    check(document.querySelector('.sim-advance').disabled,'cannot skip unresolved teaching event');
+    document.querySelector('[data-month-resolve]').click();
+    const count=state.log.length;
+    document.querySelector('[data-month-resolve]').click();
+    check(state.log.length===count&&!document.querySelector('[data-month-card]'),'closing event does not grade twice');
+    for(let i=0;i<500&&request.status!=='completed';i++)await wait(30);
+    check(request.status==='completed'&&request.payload.video_id===videoId,'in-flight upload completes across event without replacement');
+    document.querySelector('.sim-advance').click();
+    check(state.month===3&&svg===document.querySelector('svg.sim-topo'),'month without event also keeps live map');
+    document.querySelector('.sim-advance').click();
+    check(state.month===4&&document.querySelector('[data-month-card]').textContent.includes('API'),'API lesson remains a card beside active workspace');
+    check(state.runtime.stores.youtubeMetadata.tables.video.rows.some(row=>row.video_id===videoId&&row.status==='ready'),'published data remains after several months');
+    check(!!document.querySelector('[data-month-history] .sim-chart-wrap'),'monthly history remains available');
+    check(document.documentElement.scrollWidth<=innerWidth,'inline month card fits viewport');
+    return{passed:results.length,results};
+})()

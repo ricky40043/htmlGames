@@ -1452,6 +1452,7 @@
     controls.innerHTML = '<span>拖曳分隔線調整比例 · 雙擊還原</span><button type="button" class="sim-mini-btn">重設版面</button>';
     controls.querySelector('button').onclick = () => { layout = { ...defaults }; apply(); save(); };
     const toolbar = wrap.querySelector('.sim-workbench-toolbar');
+    controls.insertAdjacentHTML('beforeend', '<a href="system-design-simulator.html?chapter=sd-book-14&mode=world&lab=api">API 壓力測試 ↗</a>');
     toolbar.querySelector('.sim-speed-controls').append(controls);
     new ResizeObserver(() => { grid.style.setProperty('--workbench-toolbar-height', `${toolbar.offsetHeight}px`); }).observe(toolbar);
     apply();
@@ -4046,7 +4047,7 @@
 
   function render(root, sim, state) {
     if (state.phase === 'briefing') return renderBriefing(root, sim, state);
-    if (state.phase === 'event') return renderEvent(root, sim, state);
+    if (state.phase === 'event' && sim.chapterId !== 'sd-book-14') return renderEvent(root, sim, state);
     if (state.phase === 'summary') return renderSummary(root, sim, state);
     return renderPlay(root, sim, state);
   }
@@ -4104,8 +4105,8 @@
       ${renderChunkLab(sim)}
       ${nextEvent ? `<div class="sim-hint">下個月可能會發生足以考驗架構的事件——先決定好要不要調整能力配置。</div>` : ''}
       <button class="button sim-advance" type="button">${state.month >= sim.months ? '查看今年總結' : `推進到第 ${state.month + 1} 個月`}</button>
-      ${historyChart(state.history, sim.months, lab)}
-      ${state.log.length ? `<section class="sim-log"><h2>即時事件紀錄</h2><ul>${state.log.map(e => logEntry(sim, e)).join('')}</ul></section>` : ''}
+      <div data-month-history>${historyChart(state.history, sim.months, lab)}
+      ${state.log.length ? `<section class="sim-log"><h2>即時事件紀錄</h2><ul>${state.log.map(e => logEntry(sim, e)).join('')}</ul></section>` : ''}</div>
     </section>`;
 
     arrangeWorkbench(root, sim, state);
@@ -4193,7 +4194,9 @@
     wireAbrLab(root, sim, state);
     wireDragViewer(root, sim, state);
 
+    if (sim.chapterId === 'sd-book-14' && state.phase === 'event') showMonthCard(root, sim, state);
     root.querySelector('.sim-advance').onclick = () => {
+      if (sim.chapterId === 'sd-book-14') { advanceWorkbenchMonth(root, sim, state); return; }
       stopRandomTraffic(root, state, false);
       if (state.abrTimer) clearInterval(state.abrTimer);
       state.abrTimer = null;
@@ -4230,6 +4233,68 @@
       }
       render(root, sim, state);
     };
+  }
+
+  function refreshMonthHeader(root, sim, state) {
+    root.querySelector('.sim-dashboard-head h1').textContent = `第 ${state.month} / ${sim.months} 個月`;
+    root.querySelector('.sim-viewers strong').textContent = numFmt(sim.viewersAtMonth(state.month));
+    const lab = labels(sim);
+    root.querySelector('.sim-meters').innerHTML = [[lab.uptime, state.uptime], [lab.qoe, state.qoe], [lab.cost, state.costEff]].map(([label, value]) => meterRow(label, value, value >= 80 ? 'good' : value >= 50 ? 'warn' : 'bad')).join('');
+    const history = root.querySelector('[data-month-history]');
+    if (history) history.innerHTML = historyChart(state.history, sim.months, lab) + `<details class="sim-log"><summary>逐月事件紀錄（${state.log.length}）</summary><ul>${state.log.map(entry => logEntry(sim, entry)).join('')}</ul></details>`;
+    const advance = root.querySelector('.sim-advance');
+    advance.disabled = state.phase === 'event';
+    advance.textContent = state.phase === 'event' ? '請先完成本月事件' : state.month >= sim.months ? '查看今年總結' : `推進到第 ${state.month + 1} 個月`;
+    repaintNodes(root, sim, state); repaintEdges(root, sim, state); refreshLoadSummary(root, sim, state);
+  }
+
+  function advanceWorkbenchMonth(root, sim, state) {
+    if (state.phase === 'event') return;
+    if (state.month >= sim.months) {
+      const score = Math.round(state.uptime * .4 + state.qoe * .35 + state.costEff * .25);
+      const grade = sim.grade(score);
+      state.summarySaved ||= saveProgress(sim.chapterId, { score, grade: grade.letter });
+      root.querySelector('[data-month-card]')?.remove();
+      root.querySelector('.sim-workbench-toolbar').insertAdjacentHTML('afterend', `<section class="sim-month-card" data-month-card><h2>年度總結 · ${esc(grade.letter)} · ${score} 分</h2><p>${esc(grade.text)}。工作區保留，可繼續觀察原有請求。</p><details><summary>逐月紀錄</summary><ul>${state.log.map(entry => logEntry(sim, entry)).join('')}</ul></details></section>`);
+      return;
+    }
+    root.querySelector('[data-month-card]')?.remove();
+    const overload = applyMonthOverload(sim, state);
+    if (overload) state.log.push({ month: state.month, title: '容量不足：節點超載', narrative: `「${overload.worst.node.label}」負載 ${Math.round(overload.worst.load.ratio * 100)}%。`, result: '本月容量不足，播放品質扣分。', ok: false, uptime: 0, qoe: -overload.penalty, relevantComponents: [], choiceSnapshot: snapshotChoices(sim, state), capacityIssue: true });
+    state.month++;
+    applyMonthCost(sim, state);
+    state.pendingEvent = sim.events.find(event => event.month === state.month) || null;
+    if (state.pendingEvent) {
+      state.phase = 'event';
+      state.pendingOutcome = state.pendingEvent.resolve(makeChoiceCtx(sim, state));
+      state.pendingChoiceSnapshot = snapshotChoices(sim, state);
+      showMonthCard(root, sim, state);
+    } else state.history.push({ month: state.month, uptime: state.uptime, qoe: state.qoe });
+    traceLine(root, `📅 推進至第 ${state.month} 月，背景人數與成本已更新；現有請求、封包與紀錄繼續保留。`, 'head');
+    refreshMonthHeader(root, sim, state);
+  }
+
+  function showMonthCard(root, sim, state) {
+    const event = state.pendingEvent;
+    if (!event || root.querySelector('[data-month-card]')) return;
+    state.pendingOutcome ||= event.resolve(makeChoiceCtx(sim, state));
+    state.pendingChoiceSnapshot ||= snapshotChoices(sim, state);
+    root.querySelector('.sim-workbench-toolbar').insertAdjacentHTML('afterend', `<section class="sim-month-card" data-month-card><strong>第 ${state.month} 月 · 教學事件</strong><h2>${esc(event.title)}</h2><p>${esc(event.narrative)}</p><small>以進入本月時的架構評估；這是課程情境，不會拔掉正在操作的機器。原有請求繼續執行。</small><div data-month-result></div><button type="button" class="button" data-month-resolve>查看評估結果</button></section>`);
+    const card = root.querySelector('[data-month-card]');
+    card.querySelector('[data-month-resolve]').onclick = eventClick => {
+      const outcome = state.pendingOutcome;
+      state.uptime = clamp(state.uptime + (outcome.uptime || 0));
+      state.qoe = clamp(state.qoe + (outcome.qoe || 0));
+      state.log.push({ month: state.month, title: event.title, narrative: event.narrative, result: outcome.log, ok: outcome.ok, uptime: outcome.uptime || 0, qoe: outcome.qoe || 0, relevantComponents: event.relevantComponents || [], choiceSnapshot: state.pendingChoiceSnapshot });
+      state.history.push({ month: state.month, uptime: state.uptime, qoe: state.qoe });
+      card.querySelector('[data-month-result]').textContent = `${outcome.log}（可用率 ${outcome.uptime || 0}，播放品質 ${outcome.qoe || 0}）`;
+      traceLine(root, `📅 第 ${state.month} 月教學評估：${outcome.log}`, outcome.ok ? 'ok' : 'bad');
+      state.pendingEvent = null; state.pendingOutcome = null; state.pendingChoiceSnapshot = null; state.phase = 'play';
+      eventClick.currentTarget.textContent = '收合事件';
+      eventClick.currentTarget.onclick = () => card.remove();
+      refreshMonthHeader(root, sim, state);
+    };
+    refreshMonthHeader(root, sim, state);
   }
 
   function renderEvent(root, sim, state) {
@@ -4924,7 +4989,7 @@
     document.title = `模擬關卡｜${sim.title}`;
     const state = newState(sim);
     if (chapterId === 'sd-book-14' && window.YouTubeModes) {
-      const keys = ['month', 'uptime', 'qoe', 'costEff', 'choice', 'usersServed', 'speed', 'extraInstances', 'instancePositions', 'showConnections', 'operationOrigin', 'regionWeight', 'nextRegionSeq', 'nextGroupSeq', 'badZone', 'log', 'history', 'phase', 'summarySaved'];
+      const keys = ['month', 'uptime', 'qoe', 'costEff', 'choice', 'usersServed', 'speed', 'extraInstances', 'instancePositions', 'showConnections', 'operationOrigin', 'regionWeight', 'nextRegionSeq', 'nextGroupSeq', 'badZone', 'log', 'history', 'phase', 'summarySaved', 'pendingOutcome', 'pendingChoiceSnapshot'];
       const saved = window.YouTubeModes.load();
       if (saved?.lesson) {
         keys.forEach(key => { if (saved.lesson[key] !== undefined) state[key] = saved.lesson[key]; });

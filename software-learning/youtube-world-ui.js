@@ -15,6 +15,7 @@
         let last = performance.now(), painted = 0, regionSignature = '', userSignature = '', machineSignature = '', videoSignature = '', inspectorSignature = '', requestPaint = 0;
         let pacing = new FrameStepper(), rateElapsed = 0, rateTicks = 0, actualSpeed = 0;
         let pressure = [];
+        let inspectorTab = 'user', operationFilter = 'all', lastBatch = null;
         let dragging = null;
         const savedMode = window.YouTubeModes?.load();
         if (savedMode?.world?.users?.length && savedMode.world.cache instanceof Set) {
@@ -60,6 +61,80 @@
         </section>`;
         const el = id => root.querySelector(`#yw-${id}`);
         const notice = text => { el('notice').textContent = text; };
+        // Keep the map, selection details and ledger together; settings remain available below.
+        const app = root.querySelector('.yw-app');
+        const toolbar = root.querySelector('.yw-toolbar');
+        const workspace = root.querySelector('.yw-workspace');
+        const inspector = root.querySelector('.yw-inspector');
+        const ledger = el('requests').closest('.yw-panel');
+        ledger.classList.add('yw-ledger');
+        const advanced = document.createElement('details');
+        advanced.className = 'yw-advanced';
+        advanced.innerHTML = '<summary>架構設定、環境與進階控制</summary>';
+        const designSection = el('design');
+        advanced.append(designSection, root.querySelector('.yw-options'), root.querySelector('.yw-build'));
+        advanced.append(el('seed').closest('label'), root.querySelector('[data-action="reset"]'));
+        const videos = el('videos').closest('.yw-panel');
+        const videoDetails = document.createElement('details');
+        videoDetails.className = 'yw-advanced'; videoDetails.innerHTML = '<summary>影片、分塊與轉碼紀錄</summary>'; videoDetails.append(videos);
+        const incidents = el('events').closest('.yw-panel');
+        const incidentDetails = document.createElement('details');
+        incidentDetails.className = 'yw-advanced'; incidentDetails.innerHTML = '<summary>事故與恢復時間軸</summary>'; incidentDetails.append(incidents);
+        app.append(advanced, videoDetails, incidentDetails);
+        const quick = document.createElement('div'); quick.className = 'yw-quick-actions';
+        quick.append(el('group-region').closest('label'), el('add-count').closest('label'), root.querySelector('[data-action="add-users"]'));
+        for (const action of ['watch','upload','search']) quick.append(root.querySelector(`[data-action="${action}"]`));
+        toolbar.after(quick);
+        root.querySelector('.yw-heading p').textContent = '選機器看容量，選請求看路徑；拖曳分隔線調整圖面與紀錄。';
+        root.querySelector('.yw-capacity > p:last-child').remove();
+        const userPanel = inspector.querySelector('.yw-panel'); userPanel.dataset.inspectorPane = 'user';
+        el('machine-panel').dataset.inspectorPane = 'machine';
+        const requestPanel = document.createElement('section'); requestPanel.className = 'yw-panel'; requestPanel.dataset.inspectorPane = 'request';
+        requestPanel.innerHTML = '<h2>選中請求</h2><p>點下方 Request ID，這裡會列出每次失敗與重試路徑。</p>';
+        requestPanel.append(el('request-detail')); inspector.append(requestPanel);
+        const tabs = document.createElement('div'); tabs.className = 'yw-inspector-tabs'; tabs.setAttribute('role','tablist');
+        tabs.innerHTML = [['user','觀眾'],['machine','機器'],['request','請求']].map(([id,label])=>`<button role="tab" data-inspector-tab="${id}">${label}</button>`).join('');
+        inspector.prepend(tabs);
+        const selectInspector = tab => {
+            inspectorTab = tab;
+            inspector.querySelectorAll('[data-inspector-pane]').forEach(panel=>{panel.hidden=panel.dataset.inspectorPane!==tab;});
+            tabs.querySelectorAll('button').forEach(button=>button.setAttribute('aria-selected',button.dataset.inspectorTab===tab));
+        };
+        tabs.onclick = event => { const tab=event.target.closest('[data-inspector-tab]');if(tab)selectInspector(tab.dataset.inspectorTab); };
+        selectInspector('user');
+        const apiControls = document.createElement('section'); apiControls.id='yw-api-controls'; apiControls.hidden=true;
+        apiControls.innerHTML = `<h3>API 容量實驗</h3><label>並行上限 <input id="yw-api-slots" type="number" min="1" max="64" value="2"></label><label>總吞吐 Mbps <input id="yw-api-rate" type="number" min="0.1" max="1000" step="0.1" value="2"></label><label>等待逾時 秒 <input id="yw-api-timeout" type="number" min="0.1" max="60" step="0.1" value="2"></label><button data-action="configure-api">套用到這台 API</button><label>查詢數量 <input id="yw-api-count" type="number" min="1" max="100" value="10"></label><button data-action="burst-api">同時送出查詢</button><p class="yw-muted">每筆模擬 0.5 MB 回應，同區健康 API 分流；等待超過設定時間會失敗並退避重試。調高容量或加機器，再比較同一批請求。</p><div id="yw-api-results" role="status"></div>`;
+        el('machine-detail').after(apiControls);
+        const machineHelp=el('machine-panel').querySelector(':scope > .yw-muted');
+        const help=document.createElement('details');help.innerHTML='<summary>故障與重試規則</summary>';if(machineHelp){machineHelp.before(help);help.append(machineHelp);}
+        const operationSelect=document.createElement('label'); operationSelect.innerHTML='<span>操作</span><select id="yw-operation-filter"><option value="all">全部</option><option value="watch">觀看</option><option value="upload">上傳</option><option value="search">查詢</option></select>';
+        ledger.querySelector('.yw-section-title').append(operationSelect);
+        el('request-filter').insertAdjacentHTML('beforeend','<option value="batch">最近 API 壓測</option>');
+        const labButton=document.createElement('button');labButton.dataset.action='api-lab';labButton.textContent='API 壓力測試';quick.append(labButton);
+        function resizeHandle(axis, container, before, property, initial, min, max) {
+            const handle=document.createElement('div');handle.className=`yw-resize yw-resize-${axis}`;handle.tabIndex=0;handle.setAttribute('role','separator');
+            handle.setAttribute('aria-label',axis==='x'?'調整圖面與檢視器寬度':'調整 LOG 高度');handle.setAttribute('aria-orientation',axis==='x'?'vertical':'horizontal');
+            handle.setAttribute('aria-valuemin',min);handle.setAttribute('aria-valuemax',max);
+            let value=initial,start=null;
+            const key=`youtube-world-layout:${property}`;
+            try { const saved=Number(localStorage.getItem(key));if(saved>=min&&saved<=max)value=saved; }catch{}
+            const apply=next=>{value=Math.max(min,Math.min(max,next));app.style.setProperty(property,axis==='x'?`${value}%`:`${value}px`);handle.setAttribute('aria-valuenow',Math.round(value));};
+            const save=()=>{try{localStorage.setItem(key,value);}catch{}};
+            handle.onpointerdown=event=>{if(event.button!==0)return;event.preventDefault();start={x:event.clientX,y:event.clientY,value};handle.setPointerCapture(event.pointerId);};
+            handle.onpointermove=event=>{if(!start)return;apply(start.value+(axis==='x'?-(event.clientX-start.x)/workspace.clientWidth*100:event.clientY-start.y));};
+            handle.onpointerup=()=>{start=null;save();};handle.onpointercancel=()=>{start=null;save();};handle.onlostpointercapture=()=>{start=null;};
+            handle.onkeydown=event=>{const delta=axis==='x'?{ArrowLeft:2,ArrowRight:-2}[event.key]:{ArrowUp:-24,ArrowDown:24}[event.key];if(delta!=null){event.preventDefault();apply(value+delta);save();}};
+            handle.ondblclick=()=>{apply(initial);save();};container.insertBefore(handle,before);apply(value);
+        }
+        resizeHandle('x',workspace,inspector,'--inspector-width',34,28,58);
+        resizeHandle('y',app,ledger,'--ledger-height',260,140,700);
+        new ResizeObserver(()=>app.style.setProperty('--toolbar-height',`${toolbar.offsetHeight}px`)).observe(toolbar);
+        const originalMachineClick = id => {
+            selectedMachine=id;selectInspector('machine');
+            const m=world.machines.find(machine=>machine.id===id);
+            if(m?.kind==='api'){el('api-slots').value=m.slots;el('api-rate').value=m.capacity;el('api-timeout').value=m.queueTimeout??12;}
+        };
+        window.__worldWorkbench = { get world(){return world;}, get paused(){return paused;}, paint:()=>paint(true) };
         // 把世界正在套用的那份架構攤開來講清楚：哪一項、選了什麼、在這個世界裡代表什麼。
         // 沒有來自課程模式的設定時，也要明說現在跑的是預設架構，而不是留白讓人猜。
         function renderDesign() {
@@ -73,7 +148,7 @@
             }).join('');
             el('design').innerHTML = `<div class="yw-design-head">
                 <div><h2>套用中的架構</h2><p>${fromLesson
-                    ? '這些是你在「架構設計」那 12 個月裡做的決策，這個世界完全照著跑。改了決策再回來，按「同種子重新開始」就會套用新的架構。'
+                    ? '這些是你在「架構設計」那 12 個月裡做的決策，已套用下列初始配置；世界中的故障與實驗設定另外保留。改了決策再回來，按「同種子重新開始」就會套用新的架構。'
                     : '你還沒在「架構設計」做過決策，所以這個世界跑的是預設架構。去那邊選完再回來，這裡就會換成你的版本。'}</p></div>
                 <div class="yw-design-actions">
                     <a class="yw-design-link" href="system-design-simulator.html?chapter=sd-book-14&mode=lesson">${fromLesson ? '回去調整架構 ↗' : '去做架構決策 ↗'}</a>
@@ -124,17 +199,25 @@
             }
             world.machines.forEach(m=>{
                 const button = root.querySelector(`[data-machine="${m.id}"]`);
+                button.classList.toggle('is-route',!!selectedRequest && world.requests.find(r=>r.id===selectedRequest)?.machines.includes(m.id));
                 button.classList.toggle('is-bottleneck',pressure[0]?.machineIds.includes(m.id) || false);
                 button.classList.toggle('is-down',!m.up); button.classList.toggle('is-selected',selectedMachine===m.id);
                 button.setAttribute('aria-pressed',selectedMachine===m.id);
-                button.querySelector('small').textContent = (pressure[0]?.machineIds.includes(m.id) ? '瓶頸 · ' : '') + (!m.up ? '故障' : m.kind==='cdn' && !world.options.cdn ? '未啟用' : `${m.active}/${m.slots} 工作中 · 等待 ${m.queued}`);
+                button.querySelector('small').textContent = (pressure[0]?.machineIds.includes(m.id) ? '瓶頸 · ' : '') + (!m.up ? '故障' : m.kind==='cdn' && !world.options.cdn ? '未啟用' : `處理 ${m.active}／${m.slots} · 排隊 ${m.queued} 筆`);
             });
             const m = world.machines.find(m=>m.id===selectedMachine);
             root.querySelector('.yw-inspector').classList.toggle('has-machine',!!m);
             root.querySelector('[data-action="toggle-machine"]').disabled = !m;
             root.querySelector('[data-action="add-machine"]').disabled = !m;
+            el('api-controls').hidden = m?.kind !== 'api';
+            if (lastBatch) {
+                const batch=world.requests.filter(request=>request.batch===lastBatch);
+                el('api-results').textContent=`${lastBatch} · ${batch.filter(r=>r.status==='running').length} 處理 · ${batch.filter(r=>r.status==='queued').length} 排隊 · ${batch.filter(r=>r.status==='retry').length} 等待重試 · ${batch.filter(r=>r.status==='completed').length} 完成 · ${batch.filter(r=>r.status==='failed').length} 最終失敗 · ${batch.reduce((n,r)=>n+(r.retries||0),0)} 次失敗嘗試`;
+            }
             if (m) {
-                el('machine-detail').innerHTML = `<strong>${esc(TYPES[m.kind])} ${esc(m.id)}</strong><p>${esc(world.regions.find(r=>r.id===m.region).name)} · ${m.up?'運作中':world.time<m.detectedAt?'故障，健康檢查尚未移除':'故障，已移出分流'}</p><p>工作 ${m.active}/${m.slots} · 排隊 ${m.queued}<br>吞吐 ${m.throughput.toFixed(1)} / ${m.capacity} ${m.kind==='worker'?'工作量/秒':'Mbps'}</p>`;
+                const waiting = world.activeRequests().filter(r=>r.status!=='running' && r.retryAt<=world.time && r.reason.startsWith(TYPES[m.kind]+' 容量滿') && (m.region==='us' && !['api','stream','cdn'].includes(m.kind) || r.region===m.region));
+                const oldest = Math.max(0,...waiting.map(r=>world.time-(r.waitSince??r.createdAt)));
+                el('machine-detail').innerHTML = `<strong>${esc(TYPES[m.kind])} ${esc(m.id)}</strong><p>${esc(world.regions.find(r=>r.id===m.region).name)} · ${m.up?'運作中':world.time<m.detectedAt?'故障，健康檢查尚未移除':'故障，已移出分流'}</p><p>處理中 ${m.active}/${m.slots} · 排隊 ${m.queued} · 最久等待 ${oldest.toFixed(1)} 秒<br>吞吐 ${m.throughput.toFixed(1)} / ${m.capacity} ${m.kind==='worker'?'工作量/秒':'Mbps'}</p>`;
                 root.querySelector('[data-action="toggle-machine"]').textContent = m.up ? '關閉這台機器' : '恢復這台機器';
             }
         }
@@ -160,10 +243,10 @@
             el('sampling').textContent = world.users.length>100 ? `畫面抽樣 100 人；指標計算全部 ${world.users.length} 人` : '所有使用者均在世界中';
         }
         function drawRoute() {
-            const u = selected(), r = world.requests.find(r => r.id === u.pending) || world.activeRequests().find(r => r.userId === u.id && r.kind !== 'transcode');
+            const u = selected(), r = world.requests.find(r => r.id === selectedRequest) || world.requests.find(r => r.id === u.pending) || world.activeRequests().find(r => r.userId === u.id && r.kind !== 'transcode');
             const svg = el('links'), box = svg.parentElement.getBoundingClientRect();
             svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
-            const source = root.querySelector(`[data-user="${u.id}"]`);
+            const source = r?.loadTest ? root.querySelector(`[data-region="${r.region}"] .yw-region-title`) : root.querySelector(`[data-user="${r?.userId || u.id}"]`);
             const machines = (r?.machines || []).map(id => root.querySelector(`[data-machine="${id}"]`)).filter(Boolean);
             const nodes = r?.kind === 'segment' ? [...machines].reverse().concat(source) : [source, ...machines];
             if (!r || !machines.length || !source) { svg.innerHTML = ''; el('route').textContent = r ? '路徑等待分配：' + r.reason : '目前沒有進行中的觀眾請求'; return; }
@@ -175,7 +258,7 @@
             let distance = lengths.reduce((a,b)=>a+b,0)*progress, point=points[0];
             for(let i=0;i<lengths.length;i++){if(distance<=lengths[i]){const f=lengths[i]?distance/lengths[i]:0;point={x:points[i].x+(points[i+1].x-points[i].x)*f,y:points[i].y+(points[i+1].y-points[i].y)*f};break;}distance-=lengths[i];}
             svg.innerHTML = `<polyline points="${pointsText}" fill="none" stroke="${color}" stroke-width="2" opacity=".55" stroke-dasharray="5 5"/><circle cx="${point.x}" cy="${point.y}" r="5" fill="${color}" stroke="#142234" stroke-width="2"/>`;
-            el('route').textContent = `${r.id} · ${r.kind === 'segment' ? (r.cacheHit ? 'CDN 命中' : '回源') : kindName(r.kind)}：${(r.kind === 'segment' ? world.resources(r).slice().reverse().map(m => TYPES[m.kind] + ' #' + m.id.split('-')[1]).concat(u.name) : [u.name, ...world.resources(r).map(m => TYPES[m.kind] + ' #' + m.id.split('-')[1])]).join(' → ')}。線上的圓點依此請求進度前進。`;
+            el('route').textContent = `${r.id} · ${r.kind === 'segment' ? (r.cacheHit ? 'CDN 命中' : '回源') : kindName(r.kind)}：${(r.kind === 'segment' ? world.resources(r).slice().reverse().map(m => TYPES[m.kind] + ' #' + m.id.split('-')[1]).concat(u.name) : [r.loadTest?'壓測客戶端':world.user(r.userId)?.name||u.name, ...world.resources(r).map(m => TYPES[m.kind] + ' #' + m.id.split('-')[1])]).join(' → ')}。線上的圓點依此請求進度前進。`;
         }
         function drawVideos() {
             const recent=world.videos.slice(-12).reverse();
@@ -184,17 +267,19 @@
             if (el('videos').dataset.html!==html) { const focused = el('videos').contains(document.activeElement) ? document.activeElement.dataset : null; const watchId=focused?.watch,retryId=focused?.retryUpload; el('videos').innerHTML=html; el('videos').dataset.html=html; if(watchId)root.querySelector(`[data-watch="${watchId}"]`)?.focus({preventScroll:true}); if(retryId)root.querySelector(`[data-retry-upload="${retryId}"]`)?.focus({preventScroll:true}); }
         }
         function filteredRequests() {
-            return world.requests.filter(r=>requestFilter==='all'||requestFilter==='user'&&r.userId===selectedUser||requestFilter==='machine'&&(r.machines.includes(selectedMachine)||r.history.some(h=>h.text.includes(selectedMachine||'__none__')))||requestFilter==='failed'&&(r.status==='failed'||r.status==='retry'));
+            const operation = r=>r.kind==='segment'?'watch':r.kind==='search'?'search':'upload';
+            return world.requests.filter(r=>operationFilter==='all'||operation(r)===operationFilter).filter(r=>requestFilter==='all'||requestFilter==='user'&&r.userId===selectedUser||requestFilter==='machine'&&(r.machines.includes(selectedMachine)||r.history.some(h=>h.text.includes(selectedMachine||'__none__')))||requestFilter==='batch'&&r.batch===lastBatch||requestFilter==='failed'&&(r.status==='failed'||r.status==='retry'));
         }
         function drawRequests() {
             const rows=filteredRequests(); requestPage=Math.min(requestPage,Math.max(0,Math.ceil(rows.length/20)-1));
             el('request-page').textContent=`${requestPage+1}/${Math.max(1,Math.ceil(rows.length/20))} 頁 · ${rows.length} 筆`;
-            if (!el('requests').contains(document.activeElement)) el('requests').innerHTML=rows.slice(requestPage*20,requestPage*20+20).map(r=>`<tr><td><button data-request="${r.id}">${r.id}</button></td><td>${clock(r.createdAt)}</td><td>${r.userId?`#${r.userId}`:'後端'}<br>${esc(r.videoId)}</td><td>${kindName(r.kind)}</td><td>${stateName(r.status)}</td><td>${Math.round((r.size-r.remaining)/r.size*100)}%</td><td>${esc(r.reason)}<br><small>${esc(r.machines.join(' → '))}</small></td></tr>`).join('')||'<tr><td colspan="7">沒有符合條件的請求</td></tr>';
+            if (!el('requests').contains(document.activeElement)) el('requests').innerHTML=rows.slice(requestPage*20,requestPage*20+20).map(r=>`<tr class="yw-request-${r.status}"><td><button data-request="${r.id}">${r.id}</button></td><td>${clock(r.createdAt)}</td><td>${r.loadTest?'壓測客戶端':r.userId?`#${r.userId}`:'後端'}<br>${esc(r.videoId)}</td><td>${kindName(r.kind)}</td><td>${stateName(r.status)}</td><td>${Math.round((r.size-r.remaining)/r.size*100)}%</td><td>${esc(r.reason)}<br><small>${esc(r.machines.join(' → '))}</small></td></tr>`).join('')||'<tr><td colspan="7">沒有符合條件的請求</td></tr>';
             const r=world.requests.find(r=>r.id===selectedRequest);
-            el('request-detail').innerHTML=r?`<h3>${r.id} · ${kindName(r.kind)}</h3><p>使用者 #${r.userId??'後端'} · ${esc(r.videoId)} · ${esc(r.quality||r.jobId||'')} ${r.part!=null?'分塊 '+(r.part+1):''}</p><ol>${r.history.map(h=>`<li>${clock(h.at)} ${esc(h.text)}</li>`).join('')}</ol>`:selectedRequest?'<p>此請求已超過保留範圍。</p>':'';
+            el('request-detail').innerHTML=r?`<h3>${r.id} · ${kindName(r.kind)}</h3><p>${r.loadTest?'獨立壓測客戶端':r.userId!=null?'使用者 #'+r.userId:'後端'} · ${esc(r.videoId)} · ${esc(r.quality||r.jobId||'')} ${r.part!=null?'分塊 '+(r.part+1):''}</p><ol>${r.history.map(h=>`<li>${clock(h.at)} ${esc(h.text)}</li>`).join('')}</ol>`:selectedRequest?'<p>此請求已超過保留範圍。</p>':'';
         }
         function drawCapacity() {
             const top = pressure[0];
+            root.querySelector('.yw-capacity').classList.toggle('is-clear',!top);
             el('bottleneck').textContent = top ? `目前瓶頸：${TYPES[top.kind]} · ${world.regions.find(r => r.id === top.region).name}` : '目前沒有機器容量排隊';
             el('capacity-detail').textContent = top
                 ? `依最近一個 tick 的同類同區佇列排序：等待 ${top.waiting} 筆，工作槽 ${top.active}/${top.slots}，健康機器 ${top.healthy} 台。${top.kind === 'storage' ? '未命中 CDN 的觀看回源與上傳分塊共用物件儲存；只加前端不會增加這裡的工作槽。' : ''}${top.healthy ? '可選取機器加一台，再比較變化。' : '先恢復故障機器，或加一台分流。'}${pressure[1] ? `其他排隊：${TYPES[pressure[1].kind]}（${world.regions.find(r => r.id === pressure[1].region).name}）${pressure[1].waiting} 筆。` : ''}`
@@ -232,18 +317,19 @@
             const u=selected(),id=e.target.id;
             if (e.target.dataset.option) world.options[e.target.dataset.option]=e.target.checked;
             if (id==='yw-speed') { collectTime(performance.now()); speed=Number(e.target.value); rateElapsed=rateTicks=actualSpeed=0; }
-            if (id==='yw-user-select') selectedUser=Number(e.target.value);
+            if (id==='yw-user-select') {selectedUser=Number(e.target.value);selectedRequest=null;selectInspector('user');}
             if (id==='yw-user-region') world.moveUser(u.id,e.target.value,u.x,u.y);
             if (id==='yw-user-route') u.route=e.target.value;
             if (id==='yw-network') { u.network=e.target.value; if (u.zone) notice('目前身在弱網區；移出後才使用手選網路（離線優先）。'); }
+            if (id==='yw-operation-filter') {operationFilter=e.target.value;requestPage=0;}
             if (id==='yw-request-filter') { requestFilter=e.target.value;requestPage=0; }
             paint(true);
         });
         root.addEventListener('click',e=>{
             const b=e.target.closest('button'); if(!b)return;
-            if (b.dataset.user) { if (b.dataset.dragged) { delete b.dataset.dragged;return; } selectedUser=Number(b.dataset.user); }
-            if (b.dataset.machine) selectedMachine=b.dataset.machine;
-            if (b.dataset.request) selectedRequest=b.dataset.request;
+            if (b.dataset.user) { if (b.dataset.dragged) { delete b.dataset.dragged;return; } selectedUser=Number(b.dataset.user);selectedRequest=null;selectInspector('user'); }
+            if (b.dataset.machine) originalMachineClick(b.dataset.machine);
+            if (b.dataset.request) { selectedRequest=b.dataset.request;selectInspector('request'); }
             if (b.dataset.watch) world.watch(selectedUser,b.dataset.watch);
             if (b.dataset.retryUpload) world.retryUpload(b.dataset.retryUpload);
             const u=selected(),m=world.machines.find(m=>m.id===selectedMachine);
@@ -252,18 +338,21 @@
                 case 'step': collectTime(performance.now());paused=true;pacing.singleStep(dt=>world.step(dt));rateElapsed=rateTicks=actualSpeed=0;break;
                 case 'use-default-design': window.YouTubeModes?.clearDesign();design=null;world=new World(Number(el('seed').value),1,null);renderDesign();selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;pacing=new FrameStepper();last=performance.now();rateElapsed=rateTicks=actualSpeed=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});notice('已改用預設架構並重置世界，暫停中。');break;
                 case 'reset': design=window.YouTubeModes?.loadDesign()||null;world=new World(Number(el('seed').value),1,design);renderDesign();selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;pacing=new FrameStepper();last=performance.now();rateElapsed=rateTicks=actualSpeed=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});el('machine-detail').textContent='點選機器查看';notice('已用同種子重置世界，暫停中。');break;
-                case 'my-user': selectedUser=1;selectedMachine=null;break;
-                case 'clear-machine': selectedMachine=null;break;
+                case 'my-user': selectedUser=1;selectedMachine=null;selectedRequest=null;selectInspector('user');break;
+                case 'clear-machine': selectedMachine=null;selectInspector('user');break;
                 case 'weak': world.moveUser(u.id,u.region,.78,.75);break;
                 case 'good': world.moveUser(u.id,u.region,.25,.3);break;
                 case 'search': world.search(u.id);break;
                 case 'watch': world.watch(u.id,el('watch-video').value);break;
                 case 'upload': notice(world.upload(u.id)?'已建立上傳；在影片生命週期查看每一塊與轉碼任務。':'此人正在上傳，或進行中影片已達上限。');break;
                 case 'add-users': world.addUsers(Math.max(1,Math.min(10,Number(el('add-count').value)||1)),el('group-region').value);notice(`世界共 ${world.users.length} 人（上限 500），包含我的角色。請看容量觀察；上限不代表目前機器撐得住。`);break;
-                case 'inspect-bottleneck': if(pressure[0]){selectedMachine=pressure[0].machineIds[0];root.querySelector('.yw-inspector').classList.add('has-machine');el('machine-panel').scrollIntoView({block:'center'});}break;
+                case 'inspect-bottleneck': if(pressure[0]){originalMachineClick(pressure[0].machineIds[0]);root.querySelector('.yw-inspector').classList.add('has-machine');el('machine-panel').scrollIntoView({block:'center'});}break;
                 case 'add-region': notice(world.addRegion(el('region-name').value)?'服務據點已建立；人口位置不變，可調整服務路由。':'請輸入不重複名稱，最多 6 個據點。');break;
                 case 'toggle-machine': if(m)world.setMachine(m.id,!m.up);break;
                 case 'add-machine': if(m)notice(world.addMachine(m.kind,m.region)?'已新增同區機器，共用佇列開始分流。':'同類機器每區最多 8 台。');break;
+                case 'api-lab': {const api=world.machines.find(machine=>machine.kind==='api'&&machine.region===el('group-region').value);if(api){originalMachineClick(api.id);el('api-slots').value=2;el('api-rate').value=2;el('api-timeout').value=2;}break;}
+                case 'configure-api': notice(m&&world.configureApi(m.id,{slots:Number(el('api-slots').value),capacity:Number(el('api-rate').value),queueTimeout:Number(el('api-timeout').value)})?'容量已套用；現有與新請求共用這台 API。':'請填入有效容量：並行 1–64、吞吐 0.1–1000 Mbps、逾時 0.1–60 秒。');break;
+                case 'burst-api': {if(!m||m.kind!=='api')break;const requests=world.burstApi(m.region,Number(el('api-count').value));if(requests.length){lastBatch=requests[0].batch;requestFilter='batch';el('request-filter').value='batch';operationFilter='search';el('operation-filter').value='search';requestPage=0;notice(`已送出 ${requests.length} 筆獨立查詢；${paused?'目前暫停，按繼續或單步觀察。':'觀察下方 LOG 與這台機器的排隊。'}`);}else notice('查詢數量請填 1–100。');break;}
                 case 'prev': requestPage=Math.max(0,requestPage-1);break;
                 case 'next': requestPage++;break;
             }
@@ -300,6 +389,8 @@
         }
         el('speed').value = speed;
         root.querySelectorAll('[data-option]').forEach(c => { c.checked = world.options[c.dataset.option]; });
-        renderDesign();paint(true);requestAnimationFrame(frame);
+        renderDesign();paint(true);
+        if(new URLSearchParams(location.search).get('lab')==='api')root.querySelector('[data-action="api-lab"]').click();
+        requestAnimationFrame(frame);
     };
 })();

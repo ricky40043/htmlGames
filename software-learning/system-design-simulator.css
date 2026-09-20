@@ -675,3 +675,7 @@ body:has(.sim-workbench) .topbar{position:static}
 }
 .sim-layout-controls{margin:0 0 0 auto}
 .sim-workbench-map{top:calc(var(--workbench-toolbar-height,170px) + 10px)}
+.sim-month-card{margin:10px 0;padding:12px 16px;border:1px solid #8b79c9;border-radius:10px;background:#201d32;font-size:.82rem}
+.sim-month-card h2{font-size:1.05rem;margin:5px 0}.sim-month-card p{margin:6px 0}.sim-month-card small{display:block;color:#c0b9d8}
+.sim-month-card [data-month-result]{margin:8px 0;color:#e1d8ff}.sim-month-card .button{padding:7px 12px;font-size:.8rem}
+.sim-layout-controls a{color:#acd6ff}

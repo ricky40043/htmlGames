@@ -213,6 +213,21 @@
             this.requests = this.requests.filter(q => !['completed', 'failed', 'cancelled'].includes(q.status) || retained++ < 500);
             return r;
         }
+        configureApi(machineId, settings) {
+            const machine = this.machines.find(m => m.id === machineId && m.kind === 'api');
+            if (!machine) return false;
+            const slots = Number(settings.slots), capacity = Number(settings.capacity), queueTimeout = Number(settings.queueTimeout);
+            if (![slots, capacity, queueTimeout].every(Number.isFinite) || slots < 1 || slots > 64 || capacity < .1 || capacity > 1000 || queueTimeout < .1 || queueTimeout > 60) return false;
+            machine.slots = Math.floor(slots); machine.capacity = capacity; machine.queueTimeout = queueTimeout;
+            this.incident(`API ${machine.id}：並行 ${machine.slots} 筆、${capacity} Mbps、等待逾時 ${queueTimeout} 秒`);
+            return true;
+        }
+        burstApi(region, count, sizeMB = .5) {
+            if (!this.regions.some(r => r.id === region) || !Number.isInteger(count) || count < 1 || count > 100 || !Number.isFinite(sizeMB) || sizeMB <= 0 || sizeMB > 10) return [];
+            const batch = `API-${this.seq.request + 1}`;
+            // Independent clients share real regional API/cache capacity without replacing a viewer's session.
+            return Array.from({ length: count }, () => this.request('search', null, { region, size: sizeMB, loadTest: true, batch }));
+        }
         resourceKinds(r) {
             if (r.kind === 'segment') {
                 const key = `${r.region}:${r.videoId}:${r.quality}:${r.segment}`;
@@ -252,7 +267,8 @@
                 if (!m) {
                     pool.forEach(m => m.queued++);
                     r.reason = pool.length ? `${TYPES[kind]} 容量滿，等待佇列` : `${TYPES[kind]} 無健康機器`;
-                    if (this.time - (r.waitSince ?? r.createdAt) >= 12) this.failAttempt(r, r.reason);
+                    const deadline = kind === 'api' && pool.length ? Math.min(...pool.map(machine => machine.queueTimeout ?? 12)) : 12;
+                    if (this.time - (r.waitSince ?? r.createdAt) >= deadline) this.failAttempt(r, `${r.reason}，等待超過 ${deadline} 秒`);
                     return;
                 }
                 picks.push(m);
