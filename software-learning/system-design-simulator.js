@@ -2526,7 +2526,7 @@
         // own node on the diagram, in a region, draggable to another one, and counted in that
         // region's load like any other audience.
         if (sim.mutableTopology && topo.regionIds?.length) {
-          const pick = state.operationOrigin && state.operationOrigin !== 'random' ? state.operationOrigin : topo.regionIds[0];
+          const pick = chooseOperationRegion(sim, state);
           const node = addUserGroup(sim, state, pick, batch);
           if (node) {
             traceLine(root, `湧入 ${numFmt(batch)} 位新使用者，成為「${node.label}」這個獨立節點，放在「${esc(topo.regionLabel?.[pick] || pick)}」，可以直接把它拖到別的地區。`, 'head');
