@@ -173,6 +173,37 @@
             }
             this.metrics.arrived += n;
         }
+        addAudienceGroup(count, region, label = '') {
+            if (!Number.isInteger(count) || count < 1 || !this.regions.some(r => r.id === region)) return [];
+            const before = this.seq.user;
+            this.addUsers(count, region);
+            const added = this.users.filter(u => u.id > before);
+            added.forEach(u => { u.cohortId = `audience-${before + 1}`; u.cohortLabel = label || `新增觀眾 #${before + 1}`; });
+            return added.map(u => u.id);
+        }
+        audienceGroups() {
+            const groups = new Map();
+            this.users.forEach(u => {
+                const cohort = u.cohortId || (u.id === 1 ? 'myself' : 'existing');
+                const network = this.network(u).mbps === 0 ? 'offline' : this.network(u).mbps <= 1.2 ? 'weak' : 'normal';
+                const key = `${cohort}:${u.region}:${network}`;
+                if (!groups.has(key)) groups.set(key, { key, cohort, region: u.region, network, label: u.cohortLabel || (u.id === 1 ? '我的角色' : '原有觀眾'), ids: [] });
+                groups.get(key).ids.push(u.id);
+            });
+            return [...groups.values()];
+        }
+        moveAudienceMembers(key, count, weak) {
+            const group = this.audienceGroups().find(g => g.key === key);
+            if (!group || !Number.isInteger(count) || count < 1 || count > group.ids.length) return [];
+            const ids = group.ids.slice().sort((a, b) => a - b).slice(0, count);
+            ids.forEach(id => {
+                const u = this.user(id);
+                this.moveUser(id, group.region, weak ? .78 : .25, weak ? .75 : .3);
+                if (!weak && ['weak', 'severe', 'offline'].includes(u.network)) u.network = 'good';
+            });
+            this.incident(`${group.label}：${ids.length} 人${weak ? '移入弱網區' : '回到正常網路'}，保留原觀眾與請求`);
+            return ids;
+        }
         user(id) { return this.users.find(u => u.id === Number(id)); }
         video(id) { return this.videos.find(v => v.id === id); }
         network(u) { return NETWORKS[u.zone && u.network !== 'offline' ? 'severe' : u.network]; }

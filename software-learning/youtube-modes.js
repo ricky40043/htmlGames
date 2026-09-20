@@ -3,7 +3,7 @@
     'use strict';
     const params = new URLSearchParams(location.search);
     if ((params.get('chapter') || 'sd-book-14') !== 'sd-book-14') return;
-    const isLesson = params.get('mode') === 'lesson';
+    const isLesson = params.get('mode') === 'legacy';
     const mode = isLesson ? 'architecture' : 'operations';
     const key = `youtube-mode-session-v1:${mode}`;
     // Both live views share one snapshot. The monthly strategy course stays separate.
@@ -11,11 +11,11 @@
     const nav = document.createElement('nav');
     nav.className = 'youtube-mode-nav';
     nav.setAttribute('aria-label', 'YouTube 模擬頁面切換');
-    nav.innerHTML = `<div class="youtube-mode-links"><a data-world-view="architecture" href="system-design-simulator.html?chapter=sd-book-14">架構與傳輸</a><a data-world-view="people" href="system-design-simulator.html?chapter=sd-book-14&mode=world">觀眾與機器</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson" ${isLesson ? 'aria-current="page"' : ''}>12 月策略課程</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">重新模擬會清除即時世界與課程進度，回到初始狀態。</p><p>${isLesson ? '這是獨立的月份策略練習；課程情境與評分不代表即時世界的人數或請求。即時觀察請使用上方兩種視圖。' : '兩張圖是同一個世界：人數、機器、CDN、請求與時間完全共用。切換視圖不會重新開始。'}</p><span class="youtube-mode-notice" role="status"></span>`;
+    nav.innerHTML = `<div class="youtube-mode-links"><a data-world-view="architecture" href="system-design-simulator.html?chapter=sd-book-14">架構與傳輸</a><a data-world-view="people" href="system-design-simulator.html?chapter=sd-book-14&mode=world">觀眾與機器</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson" ${isLesson ? 'aria-current="page"' : ''} data-world-course>月份課程</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">重新模擬會清除即時世界與課程進度，回到初始狀態。</p><p>${isLesson ? '這是獨立的月份策略練習；課程情境與評分不代表即時世界的人數或請求。即時觀察請使用上方兩種視圖。' : '月份課程、架構與觀眾共用同一個世界；加人、分組、故障與請求都在這裡繼續。'}</p><span class="youtube-mode-notice" role="status"></span>`;
     document.querySelector('.sim-shell').prepend(nav);
     const notice = message => { nav.querySelector('.youtube-mode-notice').textContent = message; };
     let capture = null;
-    let switchView = null;
+    let switchView = null, openCourse = null;
     const markView = view => nav.querySelectorAll('[data-world-view]').forEach(link => {
         if (!isLesson && link.dataset.worldView === view) link.setAttribute('aria-current', 'page');
         else link.removeAttribute('aria-current');
@@ -73,10 +73,11 @@
         }
         location.reload();
     };
-    window.YouTubeModes = { resetSession, bindView: fn => { switchView = fn; }, markView, register: fn => { capture = fn; }, load, notice, saveDesign, loadDesign, clearDesign };
+    window.YouTubeModes = { resetSession, bindCourse: fn => { openCourse = fn; }, bindView: fn => { switchView = fn; }, markView, register: fn => { capture = fn; }, load, notice, saveDesign, loadDesign, clearDesign };
     nav.addEventListener('click', event => {
         const link = event.target.closest('a');
         if (!link) return;
+        if (link.hasAttribute('data-world-course') && openCourse) {event.preventDefault();openCourse();return;}
         if (link.dataset.worldView && switchView) {
             event.preventDefault();
             switchView(link.dataset.worldView);

@@ -1380,16 +1380,6 @@
     };
     for (const value of [50, 75, 175, 200, 250, 300]) zoom.add(new Option(`${value}%`, String(value)));
     zoom.onchange = () => setZoom(zoom.value);
-    scroll.addEventListener('wheel', event => {
-      if (!event.deltaY) return;
-      event.preventDefault();
-      const current = svg.getBoundingClientRect().width / scroll.clientWidth * 100;
-      const next = Math.max(50, Math.min(300, Math.round((current + (event.deltaY < 0 ? 10 : -10)) / 10) * 10));
-      let custom = zoom.querySelector('[data-custom-zoom]');
-      if (!custom) { custom = new Option(); custom.dataset.customZoom = ''; zoom.add(custom); }
-      custom.value = String(next); custom.textContent = `${next}%`; zoom.value = String(next);
-      setZoom(next, event);
-    }, { passive: false });
     zoom.onchange();
     let pan = null;
     scroll.classList.add('sim-map-pannable');
@@ -1412,7 +1402,7 @@
       if (scroll.hasPointerCapture(event.pointerId)) scroll.releasePointerCapture(event.pointerId);
     };
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => scroll.addEventListener(type, stopPan));
-    if (hint) hint.textContent = '按住空白處拖曳整張圖 · 滾輪縮放 · 選「符合寬度」還原';
+    if (hint) hint.textContent = '按住空白處拖曳整張圖 · 選「符合寬度」還原';
     const collapse = (nodes, title, parent) => {
       const details = document.createElement('details'); details.className = 'sim-simple-details';
       details.innerHTML = `<summary>${title}</summary>`;
@@ -5033,7 +5023,7 @@
       renderSandbox(root, sandboxState);
       return;
     }
-    if (chapterId === 'sd-book-14' && params.get('mode') !== 'lesson' && window.mountYouTubeWorld) {
+    if (chapterId === 'sd-book-14' && params.get('mode') !== 'legacy' && window.mountYouTubeWorld) {
       window.mountYouTubeWorld(root);
       return;
     }
