@@ -5106,6 +5106,10 @@
       renderSandbox(root, sandboxState);
       return;
     }
+    if (chapterId === 'sd-book-14' && params.get('mode') === 'world' && window.mountYouTubeWorld) {
+      window.mountYouTubeWorld(root);
+      return;
+    }
     const sim = window.SYSTEM_DESIGN_SIM?.[chapterId];
     if (!sim) {
       const available = Object.keys(window.SYSTEM_DESIGN_SIM || {});

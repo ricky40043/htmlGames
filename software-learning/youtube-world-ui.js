@@ -16,10 +16,7 @@
         let pacing = new FrameStepper(), rateElapsed = 0, rateTicks = 0, actualSpeed = 0;
         let pressure = [];
         let inspectorTab = 'user', operationFilter = 'all', lastBatch = null;
-        let selectedGroup = null;
-        const courseScenario = window.SYSTEM_DESIGN_SIM['sd-book-14'];
-        const courseModel = () => new window.YouTubeWorldCourse(world, courseScenario);
-        let view = new URLSearchParams(location.search).get('mode') === 'world' ? 'people' : 'architecture';
+
         let dragging = null;
         const savedMode = window.YouTubeModes?.load();
         if (savedMode?.world?.users?.length && savedMode.world.cache instanceof Set) {
@@ -94,9 +91,6 @@
         root.querySelector('.yw-capacity > p:last-child').remove();
         const userPanel = inspector.querySelector('.yw-panel'); userPanel.dataset.inspectorPane = 'user';
         el('machine-panel').dataset.inspectorPane = 'machine';
-        const groupPanel=document.createElement('section');groupPanel.id='yw-group-panel';groupPanel.hidden=true;
-        groupPanel.innerHTML='<h3 id="yw-group-title"></h3><p>保留同一批觀眾。選好人數，可按按鈕或拖群組到斜線區。</p><label>移動人數 <input id="yw-group-count" type="number" min="1" value="5"></label><div class="yw-button-row"><button data-action="group-weak">移入弱網區</button><button data-action="group-good">移回正常區</button></div><label>追蹤成員 <select id="yw-group-member"></select></label>';
-        userPanel.prepend(groupPanel);
         const requestPanel = document.createElement('section'); requestPanel.className = 'yw-panel'; requestPanel.dataset.inspectorPane = 'request';
         requestPanel.innerHTML = '<h2>選中請求</h2><p>點下方 Request ID，這裡會列出每次失敗與重試路徑。</p>';
         requestPanel.append(el('request-detail')); inspector.append(requestPanel);
@@ -158,53 +152,6 @@
         };
         window.__worldWorkbench = { get world(){return world;}, get paused(){return paused;}, paint:()=>paint(true) };
         const topology = root.querySelector('.yw-topology');
-        const selectGroup = key => {
-            const group=world.audienceGroups().find(g=>g.key===key);if(!group)return;
-            if(selectedGroup!==key)el('group-count').value=Math.min(5,group.ids.length);
-            selectedGroup=key;selectedUser=group.ids[0];selectedRequest=null;selectInspector('user');paint(true);
-        };
-        const moveGroup = (key, weak) => {
-            const ids=world.moveAudienceMembers(key,Number(el('group-count').value),weak);
-            if(ids.length){selectedUser=ids[0];selectedGroup=world.audienceGroups().find(g=>g.ids.includes(ids[0])).key;notice(`已移動 ${ids.length} 人，觀眾群組依網路狀態拆分／合併；原請求繼續。`);}else notice('請輸入這個群組內的有效人數。');
-            paint(true);
-        };
-        const diagram = new window.YouTubeWorldDiagram(root.querySelector('.yw-main'), {
-            group: selectGroup, moveGroup,
-            machine: id => { originalMachineClick(id); paint(true); },
-            user: id => { selectedUser=id; selectedRequest=null; selectInspector('user'); paint(true); }
-        });
-        const setView = (next, updateUrl = true) => {
-            view = next;
-            topology.hidden = view !== 'people';
-            diagram.element.hidden = view !== 'architecture';
-            root.querySelector('.yw-legend').hidden = view !== 'people';
-            window.YouTubeModes?.markView(view);
-            if (updateUrl) {
-                const url = new URL(location.href);
-                if (view === 'people') url.searchParams.set('mode', 'world'); else url.searchParams.delete('mode');
-                history.pushState(null, '', url);
-            }
-            paint(true);
-        };
-        window.YouTubeModes?.bindView(next => { if (next !== view) setView(next); });
-        addEventListener('popstate', () => setView(new URLSearchParams(location.search).get('mode') === 'world' ? 'people' : 'architecture', false));
-        const coursePanel=document.createElement('section');coursePanel.id='yw-course';coursePanel.className='yw-course';
-        coursePanel.innerHTML='<div class="yw-section-title"><strong id="yw-month"></strong><button data-action="advance-month">推進月份</button></div><p id="yw-month-note"></p><div id="yw-month-event"></div><details><summary>架構決策與課程評估</summary><p>決策即時套用在同一個世界。增加備援會加機；切換政策不刪除既有機器、不重設請求。課程評分是策略預估，實際影響請看機器與 LOG。</p><div id="yw-course-design"></div><div id="yw-course-history"></div></details>';
-        toolbar.before(coursePanel);
-        el('course-design').innerHTML=courseScenario.components.map(c=>`<label>${esc(c.shortName||c.name)} <select data-course-design="${c.id}">${c.options.map(o=>option(o.id,o.label)).join('')}</select></label>`).join('');
-        function drawCourse() {
-            const c=courseModel().world.course;
-            el('month').textContent=`第 ${c.month} / 12 月 · 圖上 ${world.users.length} 人`;
-            const button=root.querySelector('[data-action="advance-month"]');button.disabled=!!c.pending||c.month>=12;button.textContent=c.pending?'先查看本月評估':c.month>=12?'本年度已完成':`推進到第 ${c.month+1} 月`;
-            el('month-note').textContent='月份只推進課程，不快轉或清除現有傳輸。需求每增 5,000 人換算新增約 1 位模擬觀眾（上限 500）；圖上人數是實際模擬人數。';
-            const record=c.pending||c.records.at(-1);
-            const eventMarkup=record?.event?`<strong>${esc(record.title)}</strong><p>${record.machines.length?`已在同一世界關閉：${record.machines.map(esc).join('、')}。繼續世界觀察逾時、接手與重試。`:'本月是費用檢視，不關閉機器。'}</p>${c.pending?'<button data-action="resolve-month">查看策略評估</button>':`<p>策略評估：${esc(record.outcome.log)}</p>`}`:'';
-            if(el('month-event').dataset.markup!==eventMarkup){el('month-event').innerHTML=eventMarkup;el('month-event').dataset.markup=eventMarkup;}
-            root.querySelectorAll('[data-course-design]').forEach(select=>{select.value=world.design[select.dataset.courseDesign];select.disabled=!!c.pending;});
-            const score=Math.round(c.uptime*.4+c.qoe*.35+c.cost*.25);
-            el('course-history').textContent=`策略評估：可用率 ${c.uptime}、播放品質 ${c.qoe}、成本效率 ${c.cost.toFixed(1)}${c.month===12?' · 年度 '+courseScenario.grade(score).letter+' / '+score+' 分':''}。課程需求估計 ${courseScenario.viewersAtMonth(c.month).toLocaleString()} 人；已推進 ${c.records.length} 個月。`;
-        }
-        window.YouTubeModes?.bindCourse(() => {setView('architecture');coursePanel.scrollIntoView({block:'start'});});
         // 把世界正在套用的那份架構攤開來講清楚：哪一項、選了什麼、在這個世界裡代表什麼。
         // 沒有來自課程模式的設定時，也要明說現在跑的是預設架構，而不是留白讓人猜。
         function renderDesign() {
@@ -362,16 +309,10 @@
             last = now;
         }
         function paint(force = false) {
-            drawCourse();
-            const groups=world.audienceGroups();
-            const group=groups.find(g=>g.key===selectedGroup);
-            el('group-panel').hidden=!group;
-            if(group){el('group-title').textContent=`${group.label} · ${{normal:'正常',weak:'弱網',offline:'離線'}[group.network]} ${group.ids.length} 人`;el('group-count').max=group.ids.length;const members=group.ids.map(id=>option(id,`${world.user(id).name} #${id}`)).join('');if(el('group-member').dataset.members!==members){el('group-member').innerHTML=members;el('group-member').dataset.members=members;}el('group-member').value=selectedUser;}
             pressure = world.capacityPressure();
             drawCapacity();
             syncSelectors(); syncInspector(force); drawMachines(); drawUsers();
-            if (view === 'people') drawRoute();
-            else el('route').textContent = diagram.paint(world, { userId: selectedUser, machineId: selectedMachine, requestId: selectedRequest });
+            drawRoute();
             const s=world.summary(),u=selected();
             el('clock').textContent=clock(world.time)+'.'+Math.round((world.time%1)*10);
             el('metrics').innerHTML=[['活躍使用者',s.users+' 人'],['緩衝／等待',s.buffering+' 人'],['請求佇列',s.queue+' 筆'],['再緩衝比例',s.rebuffer.toFixed(1)+'%'],['完成／失敗嘗試',`${s.completed} / ${s.failed}`],['跨區傳輸',s.crossRegionMB.toFixed(1)+' MB']].map(([label,value])=>`<div><span>${label}</span><strong>${value}</strong></div>`).join('');
@@ -394,8 +335,6 @@
             const u=selected(),id=e.target.id;
             if (e.target.dataset.option) world.options[e.target.dataset.option]=e.target.checked;
             if (id==='yw-speed') { collectTime(performance.now()); speed=Number(e.target.value); rateElapsed=rateTicks=actualSpeed=0; }
-            if (e.target.dataset.courseDesign) { courseModel().setDesign(e.target.dataset.courseDesign,e.target.value);window.YouTubeModes?.saveDesign(world.design);root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});renderDesign(); }
-            if (id==='yw-group-member') {selectedUser=Number(e.target.value);selectedRequest=null;}
             if (id==='yw-user-select') {selectedUser=Number(e.target.value);selectedRequest=null;selectInspector('user');}
             if (id==='yw-user-region') world.moveUser(u.id,e.target.value,u.x,u.y);
             if (id==='yw-user-route') u.route=e.target.value;
@@ -413,10 +352,6 @@
             if (b.dataset.retryUpload) world.retryUpload(b.dataset.retryUpload);
             const u=selected(),m=world.machines.find(m=>m.id===selectedMachine);
             switch(b.dataset.action) {
-                case 'group-weak': moveGroup(selectedGroup,true);break;
-                case 'group-good': moveGroup(selectedGroup,false);break;
-                case 'advance-month': courseModel().advance();break;
-                case 'resolve-month': courseModel().resolve();break;
                 case 'pause': collectTime(performance.now());paused=!paused;rateElapsed=rateTicks=actualSpeed=0;break;
                 case 'step': collectTime(performance.now());paused=true;pacing.singleStep(dt=>world.step(dt));rateElapsed=rateTicks=actualSpeed=0;break;
                 case 'use-default-design': window.YouTubeModes?.clearDesign();design=null;world=new World(Number(el('seed').value),1,null);renderDesign();selectedUser=1;selectedMachine=null;selectedRequest=null;requestPage=0;paused=true;pacing=new FrameStepper();last=performance.now();rateElapsed=rateTicks=actualSpeed=0;regionSignature='';videoSignature='';inspectorSignature='';root.querySelectorAll('[data-option]').forEach(c=>{c.checked=world.options[c.dataset.option];});notice('已改用預設架構並重置世界，暫停中。');break;
@@ -428,7 +363,7 @@
                 case 'search': world.search(u.id);break;
                 case 'watch': world.watch(u.id,el('watch-video').value);break;
                 case 'upload': notice(world.upload(u.id)?'已建立上傳；在影片生命週期查看每一塊與轉碼任務。':'此人正在上傳，或進行中影片已達上限。');break;
-                case 'add-users': world.addAudienceGroup(Math.max(1,Math.min(10,Number(el('add-count').value)||1)),el('group-region').value);notice(`世界共 ${world.users.length} 人（上限 500），包含我的角色。請看容量觀察；上限不代表目前機器撐得住。`);break;
+                case 'add-users': world.addUsers(Math.max(1,Math.min(10,Number(el('add-count').value)||1)),el('group-region').value);notice(`世界共 ${world.users.length} 人（上限 500），包含我的角色。請看容量觀察；上限不代表目前機器撐得住。`);break;
                 case 'inspect-bottleneck': if(pressure[0]){originalMachineClick(pressure[0].machineIds[0]);root.querySelector('.yw-inspector').classList.add('has-machine');el('machine-panel').scrollIntoView({block:'center'});}break;
                 case 'add-region': notice(world.addRegion(el('region-name').value)?'服務據點已建立；人口位置不變，可調整服務路由。':'請輸入不重複名稱，最多 6 個據點。');break;
                 case 'toggle-machine': if(m)world.setMachine(m.id,!m.up);break;
@@ -472,9 +407,8 @@
         }
         el('speed').value = speed;
         root.querySelectorAll('[data-option]').forEach(c => { c.checked = world.options[c.dataset.option]; });
-        courseModel();renderDesign();selectInspector(selectedRequest ? 'request' : selectedMachine ? 'machine' : 'user');setView(view, false);
+        renderDesign();selectInspector(selectedRequest ? 'request' : selectedMachine ? 'machine' : 'user');paint(true);
         if(new URLSearchParams(location.search).get('lab')==='api')root.querySelector('[data-action="api-lab"]').click();
-        if(new URLSearchParams(location.search).get('mode')==='lesson')coursePanel.scrollIntoView({block:'start'});
         requestAnimationFrame(frame);
     };
 })();
