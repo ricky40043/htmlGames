@@ -1419,7 +1419,7 @@
       nodes.filter(Boolean).forEach(node => details.append(node)); parent.append(details); return details;
     };
     const controls = toolbar.querySelector('.sim-topo-controls');
-    collapse([...controls.querySelectorAll('button:not(.sim-add-users):not([data-kind="watch"])'), toolbar.querySelector('.sim-speed-controls'), originControls.querySelector('[data-restore-machines]')], '更多操作：上傳、查詢與模擬設定', toolbar);
+    collapse([...controls.querySelectorAll('button:not(.sim-add-users):not([data-kind="watch"]):not([data-kind="upload"])'), toolbar.querySelector('.sim-layout-controls'), originControls.querySelector('[data-restore-machines]')], '更多操作：查詢與模擬設定', toolbar);
     collapse([side.querySelector('.sim-trace'), side.querySelector('.sim-runtime-summary'), side.querySelector('[data-resize="rows"]')], '查看 LOG 與請求紀錄', side);
     const meters = root.querySelector('.sim-meters');
     if (meters) { const details = collapse([meters], '查看課程評分數值', root.querySelector('.sim-dashboard-head').parentElement); toolbar.before(details); }
