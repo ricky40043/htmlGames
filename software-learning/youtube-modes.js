@@ -11,7 +11,7 @@
     const nav = document.createElement('nav');
     nav.className = 'youtube-mode-nav';
     nav.setAttribute('aria-label', 'YouTube 模擬頁面切換');
-    nav.innerHTML = `<div class="youtube-mode-links"><a href="system-design-simulator.html?chapter=sd-book-14" ${mode === 'architecture' ? 'aria-current="page"' : ''}>架構設計</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=world" ${mode === 'operations' ? 'aria-current="page"' : ''}>實際運作</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">重新模擬會清除兩個模式的月份、請求紀錄與機器設定，回到初始狀態。</p><p>架構策略與課程、人群播放與日誌，兩套完整功能均保留。<span>你在架構設計做的決策會套用到實際運作；兩邊的執行進度仍各自保存。</span></p><span class="youtube-mode-notice" role="status"></span>`;
+    nav.innerHTML = `<div class="youtube-mode-links"><a href="system-design-simulator.html?chapter=sd-book-14" ${mode === 'architecture' ? 'aria-current="page"' : ''}>架構設計</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=world" ${mode === 'operations' ? 'aria-current="page"' : ''}>實際運作</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">重新模擬會清除兩個模式的月份、請求紀錄與機器設定，回到初始狀態。</p><p>架構策略與課程、人群播放與日誌，兩套完整功能均保留。<span>你在架構設計做的決策會套用到實際運作；兩邊的人數與執行進度分開，不會互相同步。</span></p><span class="youtube-mode-notice" role="status"></span>`;
     document.querySelector('.sim-shell').prepend(nav);
     const notice = message => { nav.querySelector('.youtube-mode-notice').textContent = message; };
     let capture = null;

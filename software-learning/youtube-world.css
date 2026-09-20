@@ -72,3 +72,4 @@
 body.youtube-world-page .yw-toolbar{top:0}
 body.youtube-world-page .yw-inspector{max-height:500px}
 @media(max-width:760px){body.youtube-world-page .yw-inspector{max-height:440px}}
+.yw-simple-details{margin:8px 0;padding:8px 10px;border:1px solid var(--yw-border);border-radius:9px;background:#131c2c}.yw-simple-details>summary{cursor:pointer;color:#bdccdf;font-size:12px}.yw-simple-details[open]>summary{margin-bottom:8px}.yw-simple-details>button,.yw-simple-details>label{margin:4px}.yw-simple-details>label{display:inline-flex}.yw-inspector .yw-simple-details>label{display:grid}.yw-simple-details #yw-pacing{display:block;font-size:12px}.yw-simple-details .yw-ledger{border:0}

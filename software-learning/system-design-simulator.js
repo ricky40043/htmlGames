@@ -1360,13 +1360,49 @@
     wrap.append(settings);
     wireWorkbenchResize(wrap, grid, map, side, activity);
     refreshOperationPanels(root, sim, state);
+    map.classList.add('sim-map-simple');
+    map.querySelector('.sim-map-heading').insertAdjacentHTML('beforeend', '<label><input type="checkbox" data-map-detail> 顯示容量與架構細節</label>');
+    map.querySelector('[data-map-detail]').onchange = event => map.classList.toggle('sim-map-simple', !event.target.checked);
     const zoom = map.querySelector('[data-map-zoom]');
-    zoom.onchange = () => {
-      const fit = zoom.value === 'fit';
-      scroll.querySelector('svg').style.width = fit ? '100%' : `${zoom.value}%`;
-      scroll.querySelector('svg').style.minWidth = fit ? '0' : `${10 * Number(zoom.value)}px`;
+    const svg = scroll.querySelector('svg');
+    const setZoom = (value, anchor) => {
+      const before = svg.getBoundingClientRect();
+      const box = scroll.getBoundingClientRect();
+      const x = anchor ? anchor.clientX - box.left : scroll.clientWidth / 2;
+      const y = anchor ? anchor.clientY - box.top : scroll.clientHeight / 2;
+      const u = (scroll.scrollLeft + x) / before.width;
+      const v = (scroll.scrollTop + y) / before.height;
+      svg.style.width = value === 'fit' ? '100%' : `${value}%`;
+      svg.style.minWidth = '0';
+      const after = svg.getBoundingClientRect();
+      scroll.scrollLeft = u * after.width - x;
+      scroll.scrollTop = v * after.height - y;
     };
+    for (const value of [50, 75, 175, 200, 250, 300]) zoom.add(new Option(`${value}%`, String(value)));
+    zoom.onchange = () => setZoom(zoom.value);
+    scroll.addEventListener('wheel', event => {
+      if (!event.deltaY) return;
+      event.preventDefault();
+      const current = svg.getBoundingClientRect().width / scroll.clientWidth * 100;
+      const next = Math.max(50, Math.min(300, Math.round((current + (event.deltaY < 0 ? 10 : -10)) / 10) * 10));
+      let custom = zoom.querySelector('[data-custom-zoom]');
+      if (!custom) { custom = new Option(); custom.dataset.customZoom = ''; zoom.add(custom); }
+      custom.value = String(next); custom.textContent = `${next}%`; zoom.value = String(next);
+      setZoom(next, event);
+    }, { passive: false });
     zoom.onchange();
+    if (hint) hint.textContent = '滑鼠滾輪縮放 · 放大後用捲軸移動 · 選「符合寬度」還原';
+    const collapse = (nodes, title, parent) => {
+      const details = document.createElement('details'); details.className = 'sim-simple-details';
+      details.innerHTML = `<summary>${title}</summary>`;
+      nodes.filter(Boolean).forEach(node => details.append(node)); parent.append(details); return details;
+    };
+    const controls = toolbar.querySelector('.sim-topo-controls');
+    collapse([...controls.querySelectorAll('button:not(.sim-add-users):not([data-kind="watch"])'), toolbar.querySelector('.sim-speed-controls'), originControls.querySelector('[data-restore-machines]')], '更多操作：上傳、查詢與模擬設定', toolbar);
+    collapse([side.querySelector('.sim-trace'), side.querySelector('.sim-runtime-summary'), side.querySelector('[data-resize="rows"]')], '查看 LOG 與請求紀錄', side);
+    const meters = root.querySelector('.sim-meters');
+    if (meters) { const details = collapse([meters], '查看課程評分數值', root.querySelector('.sim-dashboard-head').parentElement); toolbar.before(details); }
+
   }
 
   function wireWorkbenchResize(wrap, grid, map, side, activity) {

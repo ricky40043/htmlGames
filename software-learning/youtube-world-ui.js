@@ -128,6 +128,18 @@
         }
         resizeHandle('x',workspace,inspector,'--inspector-width',34,28,58);
         resizeHandle('y',app,ledger,'--ledger-height',260,140,700);
+        const fold = (nodes, title, before) => {
+            const details=document.createElement('details');details.className='yw-simple-details';
+            details.innerHTML=`<summary>${title}</summary>`;before.before(details);
+            nodes.filter(Boolean).forEach(node=>details.append(node));return details;
+        };
+        fold([root.querySelector('.yw-resize-y'),ledger], '查看 LOG：觀看、上傳、查詢', ledger);
+        fold([el('metrics')], '查看整體數值', el('metrics'));
+        const extraActions=document.createElement('details');extraActions.className='yw-simple-details';extraActions.innerHTML='<summary>更多操作與時間控制</summary>';quick.after(extraActions);
+        for(const action of ['watch','upload','search','api-lab','step'])extraActions.append(root.querySelector(`[data-action="${action}"]`));
+        extraActions.append(el('speed').closest('label'),el('pacing'));
+        fold([el('user-stats'),el('route'),...userPanel.querySelectorAll(':scope > label'),...userPanel.querySelectorAll(':scope > .yw-button-row'),userPanel.querySelector(':scope > .yw-muted')], '查看網路數值與觀眾設定', el('user-stats'));
+        root.querySelector('.yw-heading p').textContent='先新增觀眾，再點選圖上的人或機器。新增的人會在此圖出現，並共用這些機器的容量。';
         new ResizeObserver(()=>app.style.setProperty('--toolbar-height',`${toolbar.offsetHeight}px`)).observe(toolbar);
         const originalMachineClick = id => {
             selectedMachine=id;selectInspector('machine');
