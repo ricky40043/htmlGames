@@ -7,7 +7,7 @@
     const stateName = s => ({ queued: '排隊', running: '進行中', retry: '等待重試', completed: '完成', failed: '失敗', cancelled: '已取消', ready: '可播放', creating: '建立中', uploading: '上傳中', processing: '轉碼中', acked: '已確認', pending: '待處理', sending: '傳送中' })[s] || s;
     window.mountYouTubeWorld = root => {
         document.body.classList.add('youtube-world-page');
-        document.title = 'YouTube 系統設計遊樂園';
+        document.title = '即時流量與故障模擬｜YouTube 系統設計';
         // 架構設計模式選了什麼，這裡就照著開機器。沒玩過課程模式時 design 為 null，
         // 世界模型會退回自己的預設值，行為與以前相同。
         let design = window.YouTubeModes?.loadDesign() || null;
@@ -34,20 +34,20 @@
         window.YouTubeModes?.register(() => ({ world, selectedUser, selectedMachine, selectedRequest, speed, pending: pacing.pending }));
         const option = (id, label) => `<option value="${esc(id)}">${esc(label)}</option>`;
         root.innerHTML = `<section class="yw-app">
-            <div class="yw-heading"><div><span class="yw-eyebrow">CHAPTER 14 / LIVE WORLD</span><h1>YouTube 系統設計遊樂園</h1><p>全場預設只有我的角色 1 人，每次可新增 1～10 人。點一個人追蹤體驗，點一台機器查看與處理故障。</p><strong id="yw-shared-month"></strong></div><a href="system-design-simulator.html?chapter=sd-book-14">12 月課程與完整架構 ↗</a></div>
+            <div class="yw-heading"><div><span class="yw-eyebrow">CHAPTER 14 / LIVE WORLD</span><h1>即時流量與故障模擬</h1><p>每個圓點都是一位觀眾；觀眾 #1（我）是目前追蹤對象。把圓點拖進斜線區，就會立刻套用弱網。</p><strong id="yw-shared-month"></strong></div><a href="system-design-simulator.html?chapter=sd-book-14">12 月課程與完整架構 ↗</a></div>
             <section class="yw-design" id="yw-design" aria-label="套用中的架構設計"></section>
             <div class="yw-toolbar" aria-label="世界控制"><button data-action="pause">暫停世界</button><button data-action="step">單步 0.1 秒</button><label>速度 <select id="yw-speed">${[1,5,20].map(n=>option(n,n+'x')).join('')}</select></label><strong id="yw-clock">00:00</strong><span id="yw-pacing">1x = 真實時間</span><label>種子 <input id="yw-seed" type="number" value="14" min="1" max="4294967295"></label><button data-action="reset">同種子重新開始</button><span id="yw-notice" role="status"></span></div>
             <div class="yw-metrics" id="yw-metrics"></div>
             <section class="yw-capacity" aria-label="容量觀察"><strong id="yw-bottleneck"></strong><p id="yw-capacity-detail"></p><button data-action="inspect-bottleneck">查看瓶頸機器</button><p>500 人是操作上限，不是預設容量保證。只加前端可能讓更多請求擠向共用後端；加機後請觀察等待數與再緩衝是否改善。</p></section>
             <div class="yw-workspace"><div class="yw-main">
-                <div class="yw-build"><label>人群所在地 <select id="yw-group-region"></select></label><label>新增人數 <select id="yw-add-count">${Array.from({length:10},(_,i)=>`<option value="${i+1}">${i+1} 人</option>`).join('')}</select></label><button data-action="add-users">新增使用者</button><label>新據點名稱 <input id="yw-region-name" maxlength="24" placeholder="例如：新加坡"></label><button data-action="add-region">建立服務據點</button></div>
+                <div class="yw-build"><label>新增觀眾到 <select id="yw-group-region"></select></label><label>新增人數 <select id="yw-add-count">${Array.from({length:10},(_,i)=>`<option value="${i+1}">${i+1} 人</option>`).join('')}</select></label><button data-action="add-users">新增觀眾</button><label>新據點名稱 <input id="yw-region-name" maxlength="24" placeholder="例如：新加坡"></label><button data-action="add-region">建立服務據點</button></div>
                 <div class="yw-options">${[['cdn','啟用 CDN 快取'],['arrivals','持續進出與使用'],['wander','觀眾隨機走動'],['autoFaults','定期隨機故障'],['autoRepair','25 秒後自動修復'],['resumable','保留已確認上傳塊'],['directUpload','预簽 URL 直接上傳']].map(([id,label])=>`<label><input type="checkbox" data-option="${id}" ${world.options[id]?'checked':''}>${label.replace('预','預')}</label>`).join('')}</div>
                 <div class="yw-legend"><span>● 播放</span><span>◌ 緩衝／等待</span><span>↑ 上傳／轉碼</span><span>斜線區：最後一哩嚴重弱網</span><span id="yw-sampling"></span></div>
                 <div class="yw-topology"><svg id="yw-links" class="yw-links" aria-hidden="true"></svg><div id="yw-regions" class="yw-regions"></div>
                 <section class="yw-backend"><h2>共用後端 · 美國</h2><p>上傳 → 原檔 → 檢查 → 各畫質／縮圖 → Metadata 發布。機器狀態作用於同一世界。物件儲存、Metadata DB、轉碼 Worker 與快取也能加機：點選下方機器，再按「同區加一台」。</p><div id="yw-backend-machines" class="yw-machine-list"></div></section></div>
                 <section class="yw-panel"><div class="yw-section-title"><h2>影片與上傳生命週期</h2><button data-action="upload">讓選中的人上傳 96 MB</button></div><p class="yw-muted">教材用 multipart 模型：裝置分成 6 塊、同時傳 2 塊；確認後才保留。傳輸分塊與播放片段是不同單位。</p><div id="yw-videos"></div></section>
             </div><aside class="yw-inspector" aria-label="選中物件檢視器">
-                <section class="yw-panel"><div class="yw-section-title"><h2>觀眾體驗</h2><button data-action="my-user">找我的角色</button></div>
+                <section class="yw-panel"><div class="yw-section-title"><h2>觀眾體驗</h2><button data-action="my-user">找到觀眾 #1（我）</button></div>
                     <label>追蹤使用者 <select id="yw-user-select"></select></label>
                     <div class="yw-player" id="yw-player"><div class="yw-scene"><span class="yw-sun"></span><span class="yw-mountain"></span><span class="yw-road"></span><span id="yw-spinner">◌</span></div><div class="yw-player-caption"><strong id="yw-player-state"></strong><span id="yw-position"></span></div></div>
                     <div id="yw-user-stats" class="yw-detail"></div><div class="yw-buffer"><div id="yw-buffer-fill"></div></div>
@@ -144,7 +144,7 @@
         el('speed').closest('label').firstChild.textContent='播放速度 ';
         quick.append(el('speed').closest('label'));
         fold([el('user-stats'),el('route'),...userPanel.querySelectorAll(':scope > label'),...userPanel.querySelectorAll(':scope > .yw-button-row'),userPanel.querySelector(':scope > .yw-muted')], '查看網路數值與觀眾設定', el('user-stats'));
-        root.querySelector('.yw-heading p').textContent='先新增觀眾，再點選圖上的人或機器。新增的人會在此圖出現，並共用這些機器的容量。';
+        root.querySelector('.yw-heading p').textContent='每個圓點都是一位觀眾；觀眾 #1（我）是目前追蹤對象。把圓點拖進斜線區，就會立刻套用弱網。';
         new ResizeObserver(()=>app.style.setProperty('--toolbar-height',`${toolbar.offsetHeight}px`)).observe(toolbar);
         const originalMachineClick = id => {
             selectedMachine=id;selectInspector('machine');
@@ -187,7 +187,7 @@
             }
             const us = world.users.map(u=>u.id).join(',');
             if (us !== userSignature) {
-                el('user-select').innerHTML = world.users.map(u=>option(u.id,`${u.name} #${u.id}`)).join('');
+                el('user-select').innerHTML = world.users.map(u=>option(u.id,u.name)).join('');
                 userSignature = us;
             }
             const vs = world.videos.filter(v=>v.status==='ready').map(v=>v.id).join(',');
@@ -246,7 +246,12 @@
             const ids = new Set(visible.map(u=>String(u.id)));
             root.querySelectorAll('[data-user]').forEach(b=>{ if (!ids.has(b.dataset.user)) b.remove(); });
             world.regions.forEach(r=>{
-                root.querySelector(`[data-region-count="${r.id}"]`).textContent = `${world.users.filter(u=>u.region===r.id).length} 人 · 已服務 ${r.served.size} 位`;
+                const people = world.users.filter(u=>u.region===r.id);
+                const weak = people.filter(u=>u.zone).length;
+                root.querySelector(`[data-region-count="${r.id}"]`).textContent = `${people.length} 人 · 弱網 ${weak} 人 · 已服務 ${r.served.size} 位`;
+                const zone = root.querySelector(`[data-crowd="${r.id}"] .yw-weak-zone`);
+                zone.textContent = `嚴重弱網 · 0.3 Mbps · ${weak} 人`;
+                zone.classList.toggle('has-users', weak > 0);
             });
             visible.forEach(u=>{
                 let b = root.querySelector(`[data-user="${u.id}"]`);
@@ -254,9 +259,9 @@
                 if (!b) { b = document.createElement('button'); b.className='yw-person'; b.dataset.user=u.id; crowd.appendChild(b); }
                 if (b.parentElement!==crowd && dragging?.id!==u.id) crowd.appendChild(b);
                 if (dragging?.id!==u.id) { b.style.left=`${u.x*100}%`; b.style.top=`${u.y*100}%`; }
-                b.textContent = u.id===1?'我':u.mode==='upload'?'↑':u.mode==='search'?'?':u.buffer<=0?'◌':'●';
-                b.classList.toggle('is-waiting',u.mode==='watch'&&u.buffer<=0); b.classList.toggle('is-selected',u.id===selectedUser);
-                b.setAttribute('aria-label',`${u.name}，${u.status}，${u.quality}`); b.title=`${u.name} · ${u.status}`;
+                b.textContent = u.id===1?'#1':u.mode==='upload'?'↑':u.mode==='search'?'?':u.buffer<=0?'◌':'●';
+                b.classList.toggle('is-waiting',u.mode==='watch'&&u.buffer<=0); b.classList.toggle('is-selected',u.id===selectedUser); b.classList.toggle('is-weak',u.zone);
+                b.setAttribute('aria-label',`${u.name}，${u.zone?'弱網區，':''}${u.status}，${u.quality}`); b.title=`${u.name} · ${u.zone?'弱網 · ':''}${u.status}`;
             });
             el('sampling').textContent = world.users.length>100 ? `畫面抽樣 100 人；指標計算全部 ${world.users.length} 人` : '所有使用者均在世界中';
         }
@@ -365,7 +370,7 @@
                 case 'search': world.search(u.id);break;
                 case 'watch': world.watch(u.id,el('watch-video').value);break;
                 case 'upload': notice(world.upload(u.id)?'已建立上傳；在影片生命週期查看每一塊與轉碼任務。':'此人正在上傳，或進行中影片已達上限。');break;
-                case 'add-users': {const count=Math.max(1,Math.min(10,Number(el('add-count').value)||1));world.addAudienceGroup(count,el('group-region').value,`新增觀眾 #${world.seq.user + 1}`);notice(`世界共 ${world.users.length} 人（上限 500），包含我的角色。這一批會在月份課程顯示為同一群組。`);break;}
+                case 'add-users': {const count=Math.max(1,Math.min(10,Number(el('add-count').value)||1));world.addAudienceGroup(count,el('group-region').value,`觀眾群組 #${world.seq.user + 1}`);notice(`目前共 ${world.users.length} 位觀眾；其中觀眾 #1（我）是追蹤對象。這一批會在月份課程顯示為同一群組。`);break;}
                 case 'inspect-bottleneck': if(pressure[0]){originalMachineClick(pressure[0].machineIds[0]);root.querySelector('.yw-inspector').classList.add('has-machine');el('machine-panel').scrollIntoView({block:'center'});}break;
                 case 'add-region': notice(world.addRegion(el('region-name').value)?'服務據點已建立；人口位置不變，可調整服務路由。':'請輸入不重複名稱，最多 6 個據點。');break;
                 case 'toggle-machine': if(m)world.setMachine(m.id,!m.up);break;

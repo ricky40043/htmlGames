@@ -641,7 +641,7 @@
     // One line BELOW the node label, not two pixels under it — at +16 against the label's +14
     // the two strings printed on top of each other and rendered the users node unreadable.
     const headText = n.kind === 'user'
-      ? (n.headcount ? `${numFmt(n.headcount)} 人 · ${audienceWeak(state, n) ? '弱網 0.4 Mbps' : '正常網路'}` : `新增觀眾 ${numFmt(topoOf(sim, state).nodes.filter(g => g.headcount && g.regionKey === n.regionKey).reduce((sum, g) => sum + g.headcount, 0))} 人`)
+      ? (n.headcount ? `${numFmt(n.headcount)} 人 · ${audienceWeak(state, n) ? '弱網 0.4 Mbps' : '正常網路'}` : `共 ${numFmt(topoOf(sim, state).nodes.filter(g => g.headcount && g.regionKey === n.regionKey).reduce((sum, g) => sum + g.headcount, 0))} 位觀眾（入口）`)
       : '';
     const badge = headText ? `<text class="sim-topo-badge" x="${uiX}" y="${n.y + labelOffset + 30}">${esc(headText)}</text>` : '';
     const store = storeForNode(sim, n.id);
@@ -809,11 +809,11 @@
         <text class="sim-drag-zone-label" x="${z.x + 10}" y="${z.y + 22}">${esc(cs.zone.label)}</text>
         <rect class="sim-drag-zone-handle" data-zone-handle x="${z.x + zw - 9}" y="${z.y + zh - 9}" width="18" height="18" rx="4"><title>拖曳這個角可以縮放訊號不良區</title></rect>
       </g>
-      <g class="sim-drag-viewer${dv.inZone ? ' in-zone' : ''}${playback?.playing ? ' watching' : ''}${playback?.playing && playback.buffer <= 0 ? ' buffering' : ''}" data-drag-viewer tabindex="0" role="button" aria-label="拖曳測試觀眾到別的地區或訊號不良區，或按 Enter 切換">
+      <g class="sim-drag-viewer${dv.inZone ? ' in-zone' : ''}${playback?.playing ? ' watching' : ''}${playback?.playing && playback.buffer <= 0 ? ' buffering' : ''}" data-drag-viewer tabindex="0" role="button" aria-label="播放追蹤點，不計入觀眾人數；可拖到別的地區或訊號不良區">
         <circle cx="${dv.x}" cy="${dv.y}" r="14"/>
-        <text class="sim-drag-viewer-emoji" x="${dv.x}" y="${dv.y + 5}">🙋</text>
+        <text class="sim-drag-viewer-emoji" x="${dv.x}" y="${dv.y + 5}">📺</text>
         <text class="sim-drag-viewer-quality q-${esc(qId || '')}" x="${dv.x}" y="${dv.y + 30}">${esc(qLabel)}</text>
-        <text class="sim-drag-viewer-region" x="${dv.x}" y="${dv.y + 44}">${esc(regionName ? `由${regionName}服務` : '')}</text>
+        <text class="sim-drag-viewer-region" x="${dv.x}" y="${dv.y + 44}">${esc(regionName ? `播放來源：${regionName}` : '')}</text>
         <g class="sim-viewer-playback${playback?.playing ? ' active' : ''}${playback?.playing && playback.buffer <= 0 ? ' buffering' : ''}" data-viewer-playback transform="translate(${dv.x + 20} ${dv.y - 55})" aria-hidden="true">
           <path d="M0 42 L-8 50 L4 47"/>
           <rect width="116" height="47" rx="8"/>
@@ -984,6 +984,7 @@
       node.members ||= Array.from({ length: node.headcount }, (_, index) => `${node.cohort}:${index + 1}`);
       while (node.members.length < node.headcount) node.members.push(`${node.cohort}:${node.members.length + 1}`);
       node.members = node.members.slice(0, node.headcount);
+      if (node.members.includes('world-user-1') && node.label === '我的角色') node.label = '觀眾 #1（我）';
       node.members.forEach((member, index) => {
         const key = String(member);
         wanted.add(key);
@@ -1001,8 +1002,8 @@
         world.moveUser(
           user.id,
           worldRegionForLesson(state, world, node.regionKey),
-          weak ? .66 + (index % 4) * .075 : .22 + (index % 6) * .06,
-          weak ? .64 + (Math.floor(index / 4) % 3) * .1 : .2 + (Math.floor(index / 6) % 4) * .08
+          weak ? .68 + (index % 3) * .1 : .22 + (index % 6) * .06,
+          weak ? .78 + (Math.floor(index / 3) % 2) * .1 : .2 + (Math.floor(index / 6) % 4) * .08
         );
         if (!weak && ['weak', 'severe', 'offline'].includes(user.network)) user.network = 'good';
       });
@@ -1553,7 +1554,7 @@
     grid.className = 'sim-workbench-grid';
     const map = document.createElement('section');
     map.className = 'sim-workbench-map';
-    map.innerHTML = `<div class="sim-map-heading"><strong>月份課程 · 完整架構</strong><label>縮放 <select data-map-zoom aria-label="架構圖縮放"><option value="fit">符合寬度</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label></div>`;
+    map.innerHTML = `<div class="sim-map-heading"><strong>月份課程 · 完整架構</strong><label>縮放 <select data-map-zoom aria-label="架構圖縮放"><option value="fit">符合寬度</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select></label></div><p class="sim-audience-key"><b>人數只看標有「幾人」的觀眾群組。</b>「觀眾請求入口」只是線路起點；📺 是播放追蹤動畫，兩者都不另外算人數。</p>`;
     const scroll = wrap.querySelector('.sim-topo-scroll');
     map.append(scroll, wrap.querySelector('.sim-payload-legend'));
     const hint = wrap.querySelector('.sim-topo-scroll-hint');
@@ -3625,7 +3626,7 @@
     return `<section class="sim-abrlab">
       <h2>🎬 ${esc(cs.label || 'CDN 與美國來源站播放體驗')}</h2>
       <p class="sim-abrlab-desc">${esc(cs.desc || '同一部影片每段只有 5 秒。比較從本地 CDN 命中與跨海回美國來源站時，下載時間如何消耗緩衝、造成轉圈圈，並觸發播放器自動降低解析度。')}</p>
-      <div class="sim-abr-session-link"><span>🙋</span><strong>上方測試觀眾的即時播放器</strong><b>綠色影片球抵達小人 → 才增加 5 秒緩衝 → 畫面繼續移動</b></div>
+      <div class="sim-abr-session-link"><span>📺</span><strong>上方播放追蹤點的即時播放器（不另算人數）</strong><b>綠色影片球抵達追蹤點 → 才增加 5 秒緩衝 → 畫面繼續移動</b></div>
       <div class="sim-video-player idle" data-abr-player>
         <div class="sim-video-stage">
           <div class="sim-video-scene">
@@ -3772,7 +3773,7 @@
       if (viewerTitle) viewerTitle.textContent = st.finished ? '✓ 播放完成' : stalled ? '⏳ 轉圈圈' : st.playing ? `▶ ${fmtTime(st.playhead)}` : '已停止播放';
       if (viewerMeta) viewerMeta.textContent = `${st.failure ? '斷線待重試' : profile.weak ? `弱網 ${profile.lastMile.toFixed(1)}M` : profile.short} · 緩衝 ${st.buffer.toFixed(1)} 秒`;
       const regionText = root.querySelector('.sim-drag-viewer-region');
-      if (regionText) regionText.textContent = st.failure ? '斷線待重試' : `由${topoOf(sim, state).regionLabel?.[st.servingRegion || state.dragViewer?.regionId] || '台灣'}服務`;
+      if (regionText) regionText.textContent = st.failure ? '斷線待重試' : `播放來源：${topoOf(sim, state).regionLabel?.[st.servingRegion || state.dragViewer?.regionId] || '台灣'}`;
       viewerProgress?.setAttribute('width', String(clamp((st.playhead / totalDuration) * 92)));
       if (viewerQuality) {
         viewerQuality.textContent = currentQuality.label;
@@ -4141,8 +4142,8 @@
         // happens: the segment already in flight was fetched under the old conditions and still
         // plays at its original quality. Real players behave the same way.
         scopedTrace(root, state.dragViewer.inZone
-          ? `🙋 ${lex(sim, 'testViewer')}走進${lex(sim, 'zoneName')}——最後一哩頻寬立即下降，正在傳的球也會變慢；緩衝用完會轉圈。畫質要等 ABR 改抓的片段真正播放時才變。`
-          : `🙋 ${lex(sim, 'testViewer')}離開${lex(sim, 'zoneName')}——同樣要等下一段收到之後，${lex(sim, 'quality')}才會開始往回爬。`, state.dragViewer.inZone ? 'bad' : 'ok');
+          ? `📺 ${lex(sim, 'testViewer')}走進${lex(sim, 'zoneName')}——最後一哩頻寬立即下降，正在傳的球也會變慢；緩衝用完會轉圈。畫質要等 ABR 改抓的片段真正播放時才變。`
+          : `📺 ${lex(sim, 'testViewer')}離開${lex(sim, 'zoneName')}——同樣要等下一段收到之後，${lex(sim, 'quality')}才會開始往回爬。`, state.dragViewer.inZone ? 'bad' : 'ok');
       }
       state.refreshAbrNetwork?.();
     };
@@ -4165,9 +4166,9 @@
       const hit = regionIdAtPoint(topo, x, y);
       if (hit && hit !== state.dragViewer.regionId) {
         state.dragViewer.regionId = hit;
-        if (regionText) regionText.textContent = `由${topo.regionLabel?.[hit] || hit}服務`;
+        if (regionText) regionText.textContent = `播放來源：${topo.regionLabel?.[hit] || hit}`;
         state.dragViewer.lastPathKind = null;
-        scopedTrace(root, `🙋 ${esc(lex(sim, 'testViewer'))}移動到「${esc(topo.regionLabel?.[hit] || hit)}」，改由這一區的節點服務。`, 'head');
+        scopedTrace(root, `📺 ${esc(lex(sim, 'testViewer'))}移動到「${esc(topo.regionLabel?.[hit] || hit)}」，改由這一區的節點服務。`, 'head');
       }
       refreshZoneFlag();
     };
@@ -4278,8 +4279,8 @@
       state.dragViewer.wander = !state.dragViewer.wander;
       syncWanderBtn();
       scopedTrace(root, state.dragViewer.wander
-        ? `🚶 ${lex(sim, 'testViewer')}開始隨機走動，會自己走進走出${lex(sim, 'zoneName')}。`
-        : `🚶 ${lex(sim, 'testViewer')}停下來了。`, '');
+        ? `📺 ${lex(sim, 'testViewer')}開始隨機移動，會自己進出${lex(sim, 'zoneName')}。`
+        : `📺 ${lex(sim, 'testViewer')}停下來了。`, '');
     });
     syncWanderBtn();
 
@@ -4367,9 +4368,9 @@
       const pathKind = servedFromOrigin ? (hasEdgeCache ? 'miss' : 'noCdn') : 'edge';
       if (pathKind !== dv.lastPathKind) {
         dv.lastPathKind = pathKind;
-        if (pathKind === 'edge') scopedTrace(root, `🙋 這段${esc(lex(sim, 'segment'))}在「${esc(regionName)}」的${esc(lex(sim, 'edgeNode'))}命中，直接從${esc(lex(sim, 'edgeShort'))}送出，完全沒有碰到後面的${esc(lex(sim, 'originNode'))}。`, 'ok');
-        else if (pathKind === 'miss') scopedTrace(root, `🙋 ${esc(lex(sim, 'edgeShort'))}沒有這${esc(lex(sim, 'itemMeasure'))}${esc(lex(sim, 'item'))}，這段回源到「${esc(regionName)}」的${esc(lex(sim, 'originNode'))}，再經${esc(lex(sim, 'edgeShort'))}送出。`, '');
-        else scopedTrace(root, `🙋 目前沒有建 CDN，每一段都直接從「${esc(regionName)}」的串流伺服器送出。`, '');
+        if (pathKind === 'edge') scopedTrace(root, `📺 這段${esc(lex(sim, 'segment'))}在「${esc(regionName)}」的${esc(lex(sim, 'edgeNode'))}命中，直接從${esc(lex(sim, 'edgeShort'))}送出，完全沒有碰到後面的${esc(lex(sim, 'originNode'))}。`, 'ok');
+        else if (pathKind === 'miss') scopedTrace(root, `📺 ${esc(lex(sim, 'edgeShort'))}沒有這${esc(lex(sim, 'itemMeasure'))}${esc(lex(sim, 'item'))}，這段回源到「${esc(regionName)}」的${esc(lex(sim, 'originNode'))}，再經${esc(lex(sim, 'edgeShort'))}送出。`, '');
+        else scopedTrace(root, `📺 目前沒有建 CDN，每一段都直接從「${esc(regionName)}」的串流伺服器送出。`, '');
       }
 
     // Runs when the segment we just sent has completed its round trip back to the viewer.
@@ -4381,7 +4382,7 @@
           dv.qualityId = ladder[sentIdx].id;
           qualityText.textContent = ladder[sentIdx].label;
           qualityText.setAttribute('class', `sim-drag-viewer-quality q-${ladder[sentIdx].id}`);
-          scopedTrace(root, `🙋 這一段（${ladder[sentIdx].label}）送達了，畫面現在才${wentDown ? '降成' : '變成'}「${ladder[sentIdx].label}」。`, wentDown ? 'bad' : 'ok');
+          scopedTrace(root, `📺 這一段（${ladder[sentIdx].label}）送達了，畫面現在才${wentDown ? '降成' : '變成'}「${ladder[sentIdx].label}」。`, wentDown ? 'bad' : 'ok');
         }
         // 2. Only now, having measured how this segment actually travelled, decide what to ask
         //    for NEXT. That request goes out on the next tick and will not be visible on screen
@@ -4405,7 +4406,7 @@
         else nextIdx = curIdx;
         if (nextIdx !== curIdx) {
           dv.fetchQualityId = ladder[nextIdx].id;
-          scopedTrace(root, `🙋 量測到的頻寬是 ${measured.toFixed(1)} Mbps，所以「下一段」改抓「${ladder[nextIdx].label}」——畫面要等那一段真的收到才會變。`, nextIdx < curIdx ? 'bad' : '');
+          scopedTrace(root, `📺 量測到的頻寬是 ${measured.toFixed(1)} Mbps，所以「下一段」改抓「${ladder[nextIdx].label}」——畫面要等那一段真的收到才會變。`, nextIdx < curIdx ? 'bad' : '');
         }
         if (overloadFactor < 1 && !dv.warnedOverload) {
           dv.warnedOverload = true;
@@ -4426,8 +4427,8 @@
         },
         // A segment lost because its machine was pulled is a stall, not an arrival: nothing is
         // measured, so the quality for the next segment is left exactly where it was.
-        onLost: () => { if (!isCurrent()) return; scopedTrace(root, `🙋 這一段${lex(sim, 'segment')}沒有送達（負責的機器中途被拔掉），${lex(sim, 'client')}會卡住重新請求。`, 'bad'); settle(); },
-        onBlocked: () => { if (!isCurrent()) return; scopedTrace(root, `🙋 ${lex(sim, 'testViewer')}完全收不到${lex(sim, 'item')}：這一區沒有任何一台機器可以服務他。`, 'bad'); settle(); }
+        onLost: () => { if (!isCurrent()) return; scopedTrace(root, `📺 這一段${lex(sim, 'segment')}沒有送達（負責的機器中途被拔掉），${lex(sim, 'client')}會卡住重新請求。`, 'bad'); settle(); },
+        onBlocked: () => { if (!isCurrent()) return; scopedTrace(root, `📺 ${lex(sim, 'testViewer')}完全收不到${lex(sim, 'item')}：這一區沒有任何一台機器可提供播放來源。`, 'bad'); settle(); }
       });
       if (!handle) settle();
     };
@@ -5422,11 +5423,16 @@
       state.sharedPending = peer?.pending ?? saved?.sharedPending ?? 0;
       if (incomingWorld) {
         syncLessonFromWorld(sim, state, state.sharedWorld);
-        if (peer) window.YouTubeModes.notice('已接手觀眾與機器的同一個世界；人數、弱網、機器、Request 與時間都已同步。');
+        if (peer) window.YouTubeModes.notice('已接手即時流量與故障頁的同一個世界；人數、弱網、機器、Request 與時間都已同步。');
       } else if (topoOf(sim, state).nodes.some(node => node.headcount)) syncWorldFromLesson(sim, state);
       else syncLessonFromWorld(sim, state, state.sharedWorld);
       window.YouTubeModes.register(() => {
         state.sharedWorld.courseMonth = state.month;
+        // Capture the final group positions at the exact moment the user switches views.
+        // This closes the gap between pointerup and navigation without touching machine health,
+        // which may have changed independently in the deterministic World clock.
+        syncWorldRegionsFromLesson(state, state.sharedWorld);
+        syncWorldAudienceFromLesson(sim, state, state.sharedWorld);
         return {
           lesson: Object.fromEntries(keys.map(key => [key, state[key]])),
           topo: state.topo,

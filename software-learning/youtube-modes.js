@@ -12,7 +12,7 @@
     const nav = document.createElement('nav');
     nav.className = 'youtube-mode-nav';
     nav.setAttribute('aria-label', 'YouTube 模擬頁面切換');
-    nav.innerHTML = `<div class="youtube-mode-links"><a href="system-design-simulator.html?chapter=sd-book-14" ${isLesson ? 'aria-current="page"' : ''}>月份課程與完整架構</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=world" ${!isLesson ? 'aria-current="page"' : ''}>觀眾與機器</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">兩個畫面共用同一批觀眾、機器、Request、月份與模擬時間；切到「觀眾與機器」時會先暫停，按「繼續世界」才接著跑。重新模擬會清除全部進度。</p><span class="youtube-mode-notice" role="status"></span>`;
+    nav.innerHTML = `<div class="youtube-mode-links"><a href="system-design-simulator.html?chapter=sd-book-14" ${isLesson ? 'aria-current="page"' : ''}>月份課程與完整架構</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=world" ${!isLesson ? 'aria-current="page"' : ''}>即時流量與故障</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">兩個畫面共用同一批觀眾、機器、Request、月份與模擬時間；切到「即時流量與故障」時會先暫停，按「繼續世界」才接著跑。重新模擬會清除全部進度。</p><span class="youtube-mode-notice" role="status"></span>`;
     document.querySelector('.sim-shell').prepend(nav);
     const notice = message => { nav.querySelector('.youtube-mode-notice').textContent = message; };
     let capture = null;

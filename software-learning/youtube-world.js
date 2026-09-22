@@ -141,7 +141,11 @@
             world.requests ||= [];
             world.videos ||= [];
             world.courseMonth = Math.max(0, Math.min(12, Number(saved.courseMonth) || 0));
-            world.users.forEach(user => { user.sharedKey ||= `world-user-${user.id}`; });
+            world.users.forEach(user => {
+                user.sharedKey ||= `world-user-${user.id}`;
+                user.name = user.id === 1 ? '觀眾 #1（我）' : `觀眾 #${user.id}`;
+                if (user.id === 1 && (!user.cohortLabel || user.cohortLabel === '我的角色')) user.cohortLabel = '觀眾 #1（我）';
+            });
             world.machines.forEach(machine => { if (!machine.up && machine.repairAt == null) machine.repairAt = Infinity; });
             return world;
         }
@@ -185,7 +189,7 @@
                 const id = ++this.seq.user;
                 const r = region || this.regions[Math.floor(this.random() * this.regions.length)].id;
                 const localIndex = this.users.filter(u => u.region === r).length;
-                this.users.push({ id, name: id === 1 ? '我的角色' : `觀眾 ${id}`, region: r, route: 'auto', network: 'good', x: 0.08 + (localIndex % 8) * 0.115, y: 0.12 + (Math.floor(localIndex / 8) % 5) * 0.085, zone: false, mode: 'watch', videoId: this.videos[id % 3].id, buffer: 5, position: 0, quality: '360p', nextQuality: '360p', measured: 1.5, lastDownload: 0, status: '播放中', reason: '', pending: null, actionAt: this.time + 30 + this.random() * 130, leaveAt: this.time + 180 + this.random() * 300, moveAt: this.time + 8 + this.random() * 15, readySegments: [{ quality: '360p', seconds: 5 }], nextSegment: 1 });
+                this.users.push({ id, name: id === 1 ? '觀眾 #1（我）' : `觀眾 #${id}`, region: r, route: 'auto', network: 'good', x: 0.08 + (localIndex % 8) * 0.115, y: 0.12 + (Math.floor(localIndex / 8) % 5) * 0.085, zone: false, mode: 'watch', videoId: this.videos[id % 3].id, buffer: 5, position: 0, quality: '360p', nextQuality: '360p', measured: 1.5, lastDownload: 0, status: '播放中', reason: '', pending: null, actionAt: this.time + 30 + this.random() * 130, leaveAt: this.time + 180 + this.random() * 300, moveAt: this.time + 8 + this.random() * 15, readySegments: [{ quality: '360p', seconds: 5 }], nextSegment: 1 });
             }
             this.metrics.arrived += n;
         }
@@ -203,7 +207,7 @@
                 const cohort = u.cohortId || (u.id === 1 ? 'myself' : 'existing');
                 const network = this.network(u).mbps === 0 ? 'offline' : this.network(u).mbps <= 1.2 ? 'weak' : 'normal';
                 const key = `${cohort}:${u.region}:${network}`;
-                if (!groups.has(key)) groups.set(key, { key, cohort, region: u.region, network, label: u.cohortLabel || (u.id === 1 ? '我的角色' : '原有觀眾'), ids: [] });
+                if (!groups.has(key)) groups.set(key, { key, cohort, region: u.region, network, label: u.cohortLabel || (u.id === 1 ? '觀眾 #1（我）' : '原有觀眾'), ids: [] });
                 groups.get(key).ids.push(u.id);
             });
             return [...groups.values()];

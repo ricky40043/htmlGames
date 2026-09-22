@@ -27,7 +27,7 @@
   // `regionKey` on the pool nodes is what ties a machine to its region for load accounting.
   // ---------------------------------------------------------------------------------------
   const regionNode = (r, label, yUpper, yCenter, yLower) => [
-    { id: `users_${r}`, kind: 'user', label: `觀眾（${label}）`, region: label, regionKey: r, x: 90, y: yCenter, arriveLabel: '使用者裝置收到回應' },
+    { id: `users_${r}`, kind: 'user', label: `觀眾請求入口（${label}）`, region: label, regionKey: r, x: 90, y: yCenter, arriveLabel: '觀眾裝置收到回應' },
     { id: `clientChunker_${r}`, kind: 'fixed', label: `上傳分塊器（${label}）`, region: label, regionKey: r, x: 280, y: yLower, size: 'small', arriveLabel: '瀏覽器串流讀取原始影片，切成可重試的小封包並計算 checksum' },
     { id: `cdn_${r}`, kind: 'component', componentId: 'cdnTier', label: `CDN（${label}）`, region: label, regionKey: r, x: 280, y: yUpper, arriveLabel: '檢查這部影片有沒有在這個地區的邊緣節點命中' },
     { id: `loadBalancer_${r}`, kind: 'fixed', label: `Load Balancer（${label}）`, region: label, regionKey: r, x: 480, y: yCenter, arriveLabel: '健康檢查後依路徑把請求導向 API 或串流伺服器群組' },
@@ -76,10 +76,15 @@
       '**直接比較觀眾的播放感受**：播放器比較器會先放入一段 5 秒影片，再同時下載下一段。從台灣 CDN 抓 720p 能一直維持播放；跨海回美國抓同一段會先把緩衝耗光、出現轉圈圈，接著 ABR 自動改抓球更小、下載更快的低解析度版本。',
       '**影片不是一整顆送出去**：瀏覽器會先用上傳分塊器串流讀取原始影片，切成可獨立重試的小封包並計算 checksum。模擬上傳時會看到一列粉紅色影片封包依序送出；紫色是 Metadata，黃色才是一般 API 請求。',
       '**100 人隨機操作模式**：啟動後會自動混合觀看影片、搜尋與上傳，100 個操作各自走真實路由、分配到不同伺服器，並留下 Request 與資料寫入紀錄；可隨時按停止。',
-      '**測試觀眾（🙋）**：他站在哪個地區的框裡就由那一區服務，可以拖到別區，也可以按「讓觀眾隨機走動」讓他自己亂走。訊號不良區可以拖、也可以拉右下角縮放。注意畫質**不會馬上變**——正在傳的那一段會照原畫質播完，要等下一段收到之後才會降或升，跟真實播放器一樣。',
+      '**播放追蹤點（📺）**：這是用來觀察畫質、緩衝與服務來源的動畫，不是另一位觀眾，也不會增加人數。可以拖到別區或讓它隨機移動。訊號不良區也能拖曳、縮放；正在傳的片段會先播完，下一段才依 ABR 降低或提高畫質。',
       '拓樸圖上每個地區各有自己獨立的 CDN、Load Balancer——後面又分成兩條路：搜尋／上架影片打「API 伺服器」，觀看影片走「串流伺服器」，兩者是分開的伺服器群組，不會互相影響。後端則完整保留教材的原始儲存、轉碼、已轉碼儲存、完成事件佇列／處理器、Metadata DB／快取；跨海過去在動畫上會明顯變慢。'
     ],
     months: 12,
+    lexicon: {
+      testViewer: '播放追蹤點',
+      wanderIdle: '📺 讓播放追蹤點隨機移動',
+      wanderActive: '📺 播放追蹤點移動中（點一下停止）'
+    },
     viewersLabel: '目前尖峰同時觀看人數估計',
     demoLabels: { watch: '▶ 模擬觀眾看一部影片', upload: '⬆ 模擬上傳一部影片', search: '🔍 模擬搜尋影片' },
     concurrentViewersLabel: '👥 模擬 10 人同時觀看同一部影片',
