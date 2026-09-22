@@ -19,21 +19,22 @@
 
         let dragging = null;
         const savedMode = window.YouTubeModes?.load();
-        if (savedMode?.world?.users?.length && savedMode.world.cache instanceof Set) {
-            world = Object.assign(new World(savedMode.world.seed, 0), savedMode.world);
-            world.machines.forEach(m => { if (!m.up && m.repairAt === null) m.repairAt = Infinity; });
-            selectedUser = world.user(savedMode.selectedUser)?.id || 1;
-            selectedMachine = savedMode.selectedMachine || null;
-            selectedRequest = savedMode.selectedRequest || null;
-            speed = savedMode.speed || 1;
-            pacing = new FrameStepper(savedMode.pending || 0);
+        const peerMode = window.YouTubeModes?.loadPeer();
+        const incomingWorld = peerMode?.sharedWorld || peerMode?.world || savedMode?.world;
+        if (incomingWorld?.users?.length) {
+            world = World.hydrate(incomingWorld, design);
+            selectedUser = world.user(savedMode?.selectedUser)?.id || world.users[0]?.id || 1;
+            selectedMachine = savedMode?.selectedMachine || null;
+            selectedRequest = savedMode?.selectedRequest || null;
+            speed = savedMode?.speed || 1;
+            pacing = new FrameStepper(peerMode?.sharedPending ?? savedMode?.pending ?? 0);
             paused = true;
-            window.YouTubeModes.notice('已恢復實際運作進度，暫停中；按「繼續世界」接著觀察。');
+            window.YouTubeModes.notice(peerMode ? '已接手月份課程的同一個世界，暫停中；人數、機器與 Request 都已同步。' : '已恢復實際運作進度，暫停中；按「繼續世界」接著觀察。');
         }
         window.YouTubeModes?.register(() => ({ world, selectedUser, selectedMachine, selectedRequest, speed, pending: pacing.pending }));
         const option = (id, label) => `<option value="${esc(id)}">${esc(label)}</option>`;
         root.innerHTML = `<section class="yw-app">
-            <div class="yw-heading"><div><span class="yw-eyebrow">CHAPTER 14 / LIVE WORLD</span><h1>YouTube 系統設計遊樂園</h1><p>全場預設只有我的角色 1 人，每次可新增 1～10 人。點一個人追蹤體驗，點一台機器查看與處理故障。</p></div><a href="system-design-simulator.html?chapter=sd-book-14&mode=lesson">12 月課程關卡 ↗</a></div>
+            <div class="yw-heading"><div><span class="yw-eyebrow">CHAPTER 14 / LIVE WORLD</span><h1>YouTube 系統設計遊樂園</h1><p>全場預設只有我的角色 1 人，每次可新增 1～10 人。點一個人追蹤體驗，點一台機器查看與處理故障。</p><strong id="yw-shared-month"></strong></div><a href="system-design-simulator.html?chapter=sd-book-14">12 月課程與完整架構 ↗</a></div>
             <section class="yw-design" id="yw-design" aria-label="套用中的架構設計"></section>
             <div class="yw-toolbar" aria-label="世界控制"><button data-action="pause">暫停世界</button><button data-action="step">單步 0.1 秒</button><label>速度 <select id="yw-speed">${[1,5,20].map(n=>option(n,n+'x')).join('')}</select></label><strong id="yw-clock">00:00</strong><span id="yw-pacing">1x = 真實時間</span><label>種子 <input id="yw-seed" type="number" value="14" min="1" max="4294967295"></label><button data-action="reset">同種子重新開始</button><span id="yw-notice" role="status"></span></div>
             <div class="yw-metrics" id="yw-metrics"></div>
@@ -315,6 +316,7 @@
             drawRoute();
             const s=world.summary(),u=selected();
             el('clock').textContent=clock(world.time)+'.'+Math.round((world.time%1)*10);
+            el('shared-month').textContent=`共用課程進度：第 ${world.courseMonth || 0} / 12 月`;
             el('metrics').innerHTML=[['活躍使用者',s.users+' 人'],['緩衝／等待',s.buffering+' 人'],['請求佇列',s.queue+' 筆'],['再緩衝比例',s.rebuffer.toFixed(1)+'%'],['完成／失敗嘗試',`${s.completed} / ${s.failed}`],['跨區傳輸',s.crossRegionMB.toFixed(1)+' MB']].map(([label,value])=>`<div><span>${label}</span><strong>${value}</strong></div>`).join('');
             el('player-state').textContent=`${u.name} · ${u.status} · ${u.quality}`;
             el('position').textContent=clock(u.position);
@@ -363,7 +365,7 @@
                 case 'search': world.search(u.id);break;
                 case 'watch': world.watch(u.id,el('watch-video').value);break;
                 case 'upload': notice(world.upload(u.id)?'已建立上傳；在影片生命週期查看每一塊與轉碼任務。':'此人正在上傳，或進行中影片已達上限。');break;
-                case 'add-users': world.addUsers(Math.max(1,Math.min(10,Number(el('add-count').value)||1)),el('group-region').value);notice(`世界共 ${world.users.length} 人（上限 500），包含我的角色。請看容量觀察；上限不代表目前機器撐得住。`);break;
+                case 'add-users': {const count=Math.max(1,Math.min(10,Number(el('add-count').value)||1));world.addAudienceGroup(count,el('group-region').value,`新增觀眾 #${world.seq.user + 1}`);notice(`世界共 ${world.users.length} 人（上限 500），包含我的角色。這一批會在月份課程顯示為同一群組。`);break;}
                 case 'inspect-bottleneck': if(pressure[0]){originalMachineClick(pressure[0].machineIds[0]);root.querySelector('.yw-inspector').classList.add('has-machine');el('machine-panel').scrollIntoView({block:'center'});}break;
                 case 'add-region': notice(world.addRegion(el('region-name').value)?'服務據點已建立；人口位置不變，可調整服務路由。':'請輸入不重複名稱，最多 6 個據點。');break;
                 case 'toggle-machine': if(m)world.setMachine(m.id,!m.up);break;

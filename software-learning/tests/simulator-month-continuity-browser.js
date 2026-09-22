@@ -11,6 +11,7 @@
     const firstLine=trace.firstElementChild;
     document.querySelector('.sim-advance').click();
     check(state.month===2&&!!document.querySelector('[data-month-card]'),'month event appears inline');
+    check(state.sharedWorld&&!state.sharedWorld.machines.find(machine=>machine.kind==='db').up,'month event disables the real shared DB machine');
     check(svg===document.querySelector('svg.sim-topo')&&workbench===document.querySelector('.sim-workbench'),'advance preserves original live map and workbench DOM');
     check(firstLine.isConnected&&trace===document.querySelector('.sim-trace-body'),'existing log survives month advance');
     check(state.operationRequests.upload===request,'same upload remains selected');
@@ -19,8 +20,11 @@
     const count=state.log.length;
     document.querySelector('[data-month-resolve]').click();
     check(state.log.length===count&&!document.querySelector('[data-month-card]'),'closing event does not grade twice');
+    document.querySelector('[data-restore-machines]').click();
+    await wait(120);
+    document.querySelector('[data-retry-upload]')?.click();
     for(let i=0;i<500&&request.status!=='completed';i++)await wait(30);
-    check(request.status==='completed'&&request.payload.video_id===videoId,'in-flight upload completes across event without replacement');
+    check(request.status==='completed'&&request.payload.video_id===videoId,'same upload completes after shared DB recovery without replacement');
     document.querySelector('.sim-advance').click();
     check(state.month===3&&svg===document.querySelector('svg.sim-topo'),'month without event also keeps live map');
     document.querySelector('.sim-advance').click();

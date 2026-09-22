@@ -129,6 +129,22 @@
             for (let i = 0; i < 3; i++) this.videos.push({ id: `video-${++this.seq.video}`, title: ['系統設計入門', '世界旅行', '城市日常'][i], status: 'ready', renditions: LADDER.map(q => q.id), views: 0, jobs: [], chunks: [] });
             this.addUsers(population);
         }
+        static hydrate(saved, design = null) {
+            if (!saved || typeof saved !== 'object') return new World(14, 1, design);
+            const asSet = value => value instanceof Set ? value : new Set(Array.isArray(value) ? value : Array.isArray(value?.__youtubeSet) ? value.__youtubeSet : []);
+            const world = Object.assign(new World(saved.seed || 14, 0, design || saved.design), saved);
+            world.cache = asSet(saved.cache);
+            world.regions = (saved.regions || []).map(region => ({ ...region, served: asSet(region.served) }));
+            world.incidents = (saved.incidents || []).map(incident => ({ ...incident, affected: asSet(incident.affected) }));
+            world.users ||= [];
+            world.machines ||= [];
+            world.requests ||= [];
+            world.videos ||= [];
+            world.courseMonth = Math.max(0, Math.min(12, Number(saved.courseMonth) || 0));
+            world.users.forEach(user => { user.sharedKey ||= `world-user-${user.id}`; });
+            world.machines.forEach(machine => { if (!machine.up && machine.repairAt == null) machine.repairAt = Infinity; });
+            return world;
+        }
         random() {
             this.randomState = (1664525 * this.randomState + 1013904223) >>> 0;
             return this.randomState / 4294967296;
@@ -453,7 +469,11 @@
         tickUsers(dt) {
             this.users.slice().forEach(u => {
                 if (this.options.arrivals && u.id !== 1 && u.mode !== 'upload' && !this.videos.some(v => v.owner === u.id && !['ready', 'failed'].includes(v.status)) && this.time >= u.leaveAt) {
-                    this.cancelUserRequest(u); this.users = this.users.filter(x => x !== u); this.metrics.departed++; this.addUsers(1, u.region); return;
+                    this.cancelUserRequest(u); this.users = this.users.filter(x => x !== u); this.metrics.departed++; this.addUsers(1, u.region);
+                    const replacement = this.users[this.users.length - 1];
+                    if (u.cohortId) { replacement.cohortId = u.cohortId; replacement.cohortLabel = u.cohortLabel; }
+                    if (u.sharedKey) replacement.sharedKey = u.sharedKey;
+                    return;
                 }
                 if (this.options.wander && this.time >= u.moveAt) {
                     this.moveUser(u.id, u.region, 0.08 + this.random() * 0.84, 0.1 + this.random() * 0.8);

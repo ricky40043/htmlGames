@@ -928,6 +928,267 @@
     repaintNodes(root,sim,state); repaintEdges(root,sim,state); refreshLoadSummary(root,sim,state);
   }
 
+  const sharedMachineSpec = node => {
+    if (/^streamServer_/.test(node.id)) return { kind: 'stream', region: node.regionKey };
+    if (/^apiServer_/.test(node.id)) return { kind: 'api', region: node.regionKey };
+    if (/^cdn_/.test(node.id)) return { kind: 'cdn', region: node.regionKey };
+    if (node.id === 'storage') return { kind: 'storage', region: 'us' };
+    if (node.id === 'metadataDB') return { kind: 'db', region: 'us' };
+    if (node.id === 'transcodeArch') return { kind: 'worker', region: 'us' };
+    if (node.id === 'metadataCache') return { kind: 'cache', region: 'us' };
+    return null;
+  };
+
+  function worldRegionForLesson(state, world, lessonRegion) {
+    const topo = state.topo;
+    const name = topo.regionLabel?.[lessonRegion];
+    return world.regions.find(region => region.id === lessonRegion || region.name === name)?.id || lessonRegion;
+  }
+
+  function lessonRegionForWorld(sim, state, world, worldRegion) {
+    const topo = topoOf(sim, state);
+    if (topo.regionIds.includes(worldRegion)) return worldRegion;
+    const name = world.regions.find(region => region.id === worldRegion)?.name;
+    const existing = topo.regionIds.find(id => topo.regionLabel[id] === name);
+    if (existing) return existing;
+    return addRegion(sim, state, name)?.key || topo.regionIds[0];
+  }
+
+  function syncWorldRegionsFromLesson(state, world) {
+    const topo = state.topo;
+    const names = new Set(topo.regionIds.map(id => topo.regionLabel[id]));
+    topo.regionIds.forEach(id => {
+      const name = topo.regionLabel[id];
+      if (!world.regions.some(region => region.id === id || region.name === name)) world.addRegion(name);
+    });
+    world.regions.slice().forEach(region => {
+      if (names.has(region.name)) return;
+      const fallback = world.regions.find(item => names.has(item.name));
+      world.users.filter(user => user.region === region.id).forEach(user => world.moveUser(user.id, fallback?.id || 'tw', .25, .3));
+      world.machines = world.machines.filter(machine => machine.region !== region.id);
+      world.regions = world.regions.filter(item => item !== region);
+    });
+  }
+
+  function sharedWorldFrom(saved, design) {
+    const World = window.YouTubeWorld?.World;
+    return World ? World.hydrate(saved, design) : null;
+  }
+
+  function syncWorldAudienceFromLesson(sim, state, world) {
+    if (!world) return;
+    const groups = topoOf(sim, state).nodes.filter(node => node.headcount);
+    const wanted = new Set();
+    groups.forEach(node => {
+      node.cohort ||= node.id;
+      node.members ||= Array.from({ length: node.headcount }, (_, index) => `${node.cohort}:${index + 1}`);
+      while (node.members.length < node.headcount) node.members.push(`${node.cohort}:${node.members.length + 1}`);
+      node.members = node.members.slice(0, node.headcount);
+      node.members.forEach((member, index) => {
+        const key = String(member);
+        wanted.add(key);
+        let user = world.users.find(item => item.sharedKey === key);
+        if (!user) {
+          world.addUsers(1, worldRegionForLesson(state, world, node.regionKey));
+          user = world.users.at(-1);
+          user.sharedKey = key;
+        }
+        user.cohortId = node.cohort;
+        user.cohortLabel = node.label;
+        user.courseX = node.x;
+        user.courseY = node.y;
+        const weak = audienceWeak(state, node);
+        world.moveUser(
+          user.id,
+          worldRegionForLesson(state, world, node.regionKey),
+          weak ? .66 + (index % 4) * .075 : .22 + (index % 6) * .06,
+          weak ? .64 + (Math.floor(index / 4) % 3) * .1 : .2 + (Math.floor(index / 6) % 4) * .08
+        );
+        if (!weak && ['weak', 'severe', 'offline'].includes(user.network)) user.network = 'good';
+      });
+    });
+    world.users.slice().forEach(user => {
+      user.sharedKey ||= `world-user-${user.id}`;
+      if (!wanted.has(user.sharedKey)) {
+        world.cancelUserRequest(user);
+        world.users = world.users.filter(item => item !== user);
+      }
+    });
+  }
+
+  function syncLessonAudienceFromWorld(sim, state, world) {
+    if (!world) return;
+    const topo = topoOf(sim, state);
+    const removed = new Set(topo.nodes.filter(node => node.headcount).map(node => node.id));
+    topo.nodes = topo.nodes.filter(node => !node.headcount);
+    topo.edges = topo.edges.filter(edge => !removed.has(edge.from) && !removed.has(edge.to));
+    const regionRows = new Map();
+    world.audienceGroups().forEach(group => {
+      const users = group.ids.map(id => world.user(id)).filter(Boolean);
+      if (!users.length) return;
+      const courseRegion = lessonRegionForWorld(sim, state, world, group.region);
+      const node = addUserGroup(sim, state, courseRegion, users.length);
+      if (!node) return;
+      const row = regionRows.get(courseRegion) || 0;
+      regionRows.set(courseRegion, row + 1);
+      node.cohort = group.cohort;
+      node.label = group.label;
+      node.members = users.map(user => user.sharedKey ||= `world-user-${user.id}`);
+      node.headcount = node.members.length;
+      node.weak = group.network !== 'normal';
+      if (node.weak && state.badZone) {
+        node.x = state.badZone.x + 45 + (row % 2) * 95;
+        node.y = state.badZone.y + 50 + Math.floor(row / 2) * 65;
+      } else {
+        const anchor = findNode(topo, `users_${courseRegion}`);
+        node.x = users[0].courseX ?? anchor.x + 36 + (row % 3) * 62;
+        node.y = users[0].courseY ?? anchor.y + 70 + Math.floor(row / 3) * 55;
+      }
+    });
+    state.usersServed = world.users.length;
+  }
+
+  function desiredLessonMachineCount(sim, state, node) {
+    if (node.id === 'metadataCache') return ({ off: 1, replica2: 2, replica3Quorum: 3 })[currentOptionId(sim, 'cacheReplica', state)] || 1;
+    return instanceCount(sim, state, node);
+  }
+
+  function syncWorldMachinesFromLesson(sim, state, world) {
+    if (!world) return;
+    topoOf(sim, state).nodes.forEach(node => {
+      const spec = sharedMachineSpec(node);
+      if (!spec) return;
+      const desired = desiredLessonMachineCount(sim, state, node);
+      spec.region = worldRegionForLesson(state, world, spec.region);
+      let machines = world.machines.filter(machine => machine.kind === spec.kind && machine.region === spec.region);
+      while (machines.length < desired) {
+        const machine = world.addMachine(spec.kind, spec.region);
+        if (!machine) break;
+        machines.push(machine);
+      }
+      while (machines.length > desired) {
+        const machine = machines.pop();
+        world.activeRequests().filter(request => request.machines.includes(machine.id)).forEach(request => world.failAttempt(request, `${window.YouTubeWorld.TYPES[machine.kind]} ${machine.id} 已從架構移除`));
+        world.machines = world.machines.filter(item => item !== machine);
+      }
+      machines.forEach((machine, index) => {
+        const up = !state.instanceDown?.[instanceKey(node.id, index)];
+        if (machine.up !== up) world.setMachine(machine.id, up);
+      });
+    });
+  }
+
+  function syncLessonMachinesFromWorld(sim, state, world) {
+    if (!world) return;
+    state.instanceDown ||= {};
+    topoOf(sim, state).nodes.forEach(node => {
+      const spec = sharedMachineSpec(node);
+      if (!spec) return;
+      spec.region = worldRegionForLesson(state, world, spec.region);
+      const machines = world.machines.filter(machine => machine.kind === spec.kind && machine.region === spec.region);
+      Object.keys(state.instanceDown).filter(key => key.startsWith(`${node.id}::`)).forEach(key => delete state.instanceDown[key]);
+      if (node.pool) {
+        const base = baseInstances(sim, state, node);
+        state.extraInstances[node.id] = Math.max(0, machines.length - base);
+      }
+      const visible = desiredLessonMachineCount(sim, state, node);
+      for (let index = 0; index < visible; index++) setInstanceDown(state, node.id, index, machines[index]?.up === false || !machines[index]);
+    });
+  }
+
+  function syncWorldFromLesson(sim, state) {
+    const world = state.sharedWorld;
+    if (!world) return null;
+    world.courseMonth = state.month;
+    world.design = window.YouTubeWorld.normalizeDesign(designOf(sim, state));
+    world.applyDesignOptions();
+    syncWorldRegionsFromLesson(state, world);
+    syncWorldAudienceFromLesson(sim, state, world);
+    syncWorldMachinesFromLesson(sim, state, world);
+    return world;
+  }
+
+  function syncLessonFromWorld(sim, state, world) {
+    if (!world) return;
+    state.month = Math.max(0, Math.min(12, Number(world.courseMonth) || 0));
+    state.choice = { ...state.choice, ...world.design };
+    syncLessonAudienceFromWorld(sim, state, world);
+    syncLessonMachinesFromWorld(sim, state, world);
+  }
+
+  function mirrorWorldOperation(state, kind, regionId, payload) {
+    const world = state.sharedWorld;
+    if (!world) return;
+    const worldRegion = worldRegionForLesson(state, world, regionId);
+    let user = world.users.find(item => item.region === worldRegion) || world.users[0];
+    if (!user) {
+      world.addAudienceGroup(1, worldRegion || 'tw', '課程操作觀眾');
+      user = world.users.at(-1);
+    }
+    if (kind === 'upload') world.upload(user.id, Number(payload?.sizeMB) || 96);
+    else if (kind === 'search') world.search(user.id);
+    else world.watch(user.id, world.videos.find(video => video.status === 'ready')?.id);
+  }
+
+  function applySharedMonthEvent(state, event) {
+    const world = state.sharedWorld;
+    if (!world || !event) return [];
+    const kinds = ({ dbMasterDown: ['db'], apiServerDown: ['api'], streamServerDown: ['stream'], workerStuck: ['worker'], cacheNodeDown: ['cache'], finale: ['api', 'cache', 'worker'] })[event.id] || [];
+    return kinds.flatMap(kind => {
+      const machine = world.machines.find(item => item.kind === kind && item.up);
+      if (!machine) return [];
+      world.setMachine(machine.id, false);
+      return [machine.id];
+    });
+  }
+
+  function sharedWorldStatus(world) {
+    if (!world) return '';
+    const active = world.activeRequests();
+    const rows = active.slice(-5).reverse().map(request => {
+      const percent = request.size ? Math.round((request.sent || 0) / request.size * 100) : 0;
+      return `<li><b>${esc(request.id)}</b> · ${esc(request.kind)} · ${esc(request.status)} · ${percent}%</li>`;
+    }).join('');
+    return `<strong>共用世界：第 ${world.courseMonth || 0} 月 · ${world.users.length} 人 · ${world.machines.filter(machine => machine.up).length}/${world.machines.length} 台運作</strong><span>模擬時間 ${world.time.toFixed(1)} 秒 · Request 進行中 ${active.length} · 完成 ${world.metrics.completed} · 失敗嘗試 ${world.metrics.failed}</span>${rows ? `<ul>${rows}</ul>` : '<small>目前沒有進行中的 Request。</small>'}`;
+  }
+
+  function startSharedWorldClock(root, state) {
+    if (!state.sharedWorld || !window.YouTubeWorld?.FrameStepper) return;
+    const pacing = new window.YouTubeWorld.FrameStepper(state.sharedPending || 0);
+    let last = performance.now(), painted = 0, audienceSignature = '', machineSignature = '';
+    const frame = now => {
+      if (!root.isConnected) return;
+      const elapsed = Math.max(0, (now - last) / 1000);
+      last = now;
+      if (!document.hidden) pacing.advance(elapsed, state.speed || 1, dt => state.sharedWorld.step(dt));
+      state.sharedPending = pacing.pending;
+      if (now - painted > 300) {
+        const sim = window.SYSTEM_DESIGN_SIM['sd-book-14'];
+        state.sharedWorld.courseMonth = state.month;
+        const nextAudience = state.sharedWorld.audienceGroups().map(group => `${group.key}:${group.ids.join(',')}`).join('|');
+        const nextMachines = state.sharedWorld.machines.map(machine => `${machine.id}:${machine.up}`).join('|');
+        if (audienceSignature && audienceSignature !== nextAudience) {
+          syncLessonAudienceFromWorld(sim, state, state.sharedWorld);
+          if (root.querySelector('svg.sim-topo')) syncAudienceNodes(root, sim, state);
+          state.refreshCohorts?.();
+        }
+        if (machineSignature && machineSignature !== nextMachines) {
+          syncLessonMachinesFromWorld(sim, state, state.sharedWorld);
+          repaintNodes(root, sim, state);
+          repaintEdges(root, sim, state);
+          refreshLoadSummary(root, sim, state);
+        }
+        audienceSignature = nextAudience;
+        machineSignature = nextMachines;
+        const status = root.querySelector('[data-shared-world-status]');
+        if (status) status.innerHTML = sharedWorldStatus(state.sharedWorld);
+        painted = now;
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+
   function wireCourseAudience(root, sim, state) {
     if(sim.chapterId !== 'sd-book-14') return;
     const panel=document.createElement('div'); panel.className='sim-cohort-controls';
@@ -948,6 +1209,7 @@
       const target=moveCourseAudience(sim,state,state.selectedCohort,Number(panel.querySelector('input').value),weak);
       if(!target){panel.querySelector('[data-cohort-summary]').textContent='請輸入群組人數範圍內的整數。';return;}
       state.selectedCohort=target.id;syncAudienceNodes(root,sim,state);state.refreshCohorts();
+      syncWorldFromLesson(sim, state);
       traceLine(root,`觀眾分組：${target.label} ${target.headcount} 人${weak?'進入弱網，傳輸限制為 0.4 Mbps':'回到正常網路'}；保留觀眾身份與已送出的傳輸。`,'head','watch');
     };
     panel.querySelector('[data-cohort-weak]').onclick=()=>move(true);panel.querySelector('[data-cohort-good]').onclick=()=>move(false);
@@ -1284,6 +1546,7 @@
     originControls.querySelector('[data-restore-machines]').onclick = () => {
       Object.keys(state.instanceDown).forEach(key => { const [id, idx] = key.split('::'); setInstanceDown(state, id, Number(idx), false); });
       repaintNodes(root, sim, state); repaintEdges(root, sim, state); refreshLoadSummary(root, sim, state);
+      syncWorldFromLesson(sim, state);
       traceLine(root, '🔌 已恢復所有已建置機器的連線。未建置的功能仍維持原架構設定；失敗請求可重新送出。', 'ok');
     };
     const grid = document.createElement('div');
@@ -2130,6 +2393,7 @@
       region: regionLabel || regionId || ''
     });
     if (!request) return;
+    if (sim.chapterId === 'sd-book-14' && !restoredRequest) mirrorWorldOperation(state, kind, regionId, payload);
     if (sim.chapterId === 'sd-book-14') {
       state.operationRequests ||= {};
       state.operationRequests[kind] = request;
@@ -2535,6 +2799,7 @@
             // rather than from the region's generic users icon.
             syncAudienceNodes(root, sim, state);
             state.selectedCohort = node.id; state.refreshCohorts?.();
+            syncWorldFromLesson(sim, state);
             const freshSvg = root.querySelector('svg.sim-topo');
             burstUsers(topoOf(sim, state), freshSvg, node);
             spawnAmbientViewers(root, sim, state, freshSvg, batch, pick, node);
@@ -2555,6 +2820,7 @@
         if (!res) return;
         if (res.error) { traceLine(root, `⚠️ ${res.error}`, 'bad'); return; }
         traceLine(root, `🏗️ 新增地區「${esc(res.name)}」：已照藍圖生出它自己的${esc(lex(sim, 'regionParts'))}，總${esc(lex(sim, 'viewer'))}人數重新分配到所有地區。`, 'ok');
+        syncWorldFromLesson(sim, state);
         onStructureChange();
       });
       root.querySelectorAll('[data-region-remove]').forEach(b => {
@@ -2562,6 +2828,7 @@
           const res = removeRegion(sim, state, b.dataset.regionRemove);
           if (res.error) { traceLine(root, `⚠️ ${res.error}`, 'bad'); return; }
           traceLine(root, `🏗️ 移除地區「${esc(res.name)}」，它的${esc(lex(sim, 'viewer'))}被重新分配到其他地區。`, '');
+          syncWorldFromLesson(sim, state);
           onStructureChange();
         });
       });
@@ -2572,6 +2839,7 @@
         if (!node) return;
         state.usersServed = (state.usersServed || 0) + n;
         traceLine(root, `🏗️ 新增「${node.label}」（${numFmt(n)} 人）到「${esc(topoOf(sim, state).regionLabel?.[pick] || pick)}」，可以直接拖到別的地區。`, 'ok');
+        syncWorldFromLesson(sim, state);
         onStructureChange();
       });
     }
@@ -2684,6 +2952,7 @@
           const target = moveCourseAudience(sim, state, dragNode.id, count, weak, destination);
           if(target) state.selectedCohort=target.id;
           syncAudienceNodes(root, sim, state); state.refreshCohorts?.();
+          syncWorldFromLesson(sim, state);
         }
         if (moved) state._suppressNodeClick = dragNode.id;
         svgEl.querySelector(`[data-node="${dragNode.id}"]`)?.classList.remove('dragging');
@@ -4223,6 +4492,7 @@
         <p class="sim-viewers">${esc(sim.viewersLabel || '目前尖峰同時使用人數估計')}：<strong>${numFmt(viewers)}</strong>　·　每月營運成本指數：<strong data-cost-readout>${weeklyCostPenalty(sim, state)}</strong></p>
       </header>
       <div data-load-summary>${overloadBannerHtml(sim, state)}</div>
+      ${sim.chapterId === 'sd-book-14' ? `<section class="sim-shared-world" data-shared-world-status>${sharedWorldStatus(state.sharedWorld)}</section>` : ''}
       <div class="sim-meters">
         ${meterRow(lab.uptime, state.uptime, state.uptime >= 80 ? 'good' : state.uptime >= 50 ? 'warn' : 'bad')}
         ${meterRow(lab.qoe, state.qoe, state.qoe >= 80 ? 'good' : state.qoe >= 50 ? 'warn' : 'bad')}
@@ -4258,6 +4528,7 @@
       // clearing the marker here makes it re-announce right after you flip a capability, which
       // is exactly the moment you want to see "…now it comes from the CDN instead" in the log.
       if (state.dragViewer) state.dragViewer.lastPathKind = null;
+      syncWorldFromLesson(sim, state);
     }, (nodeId, delta) => {
       const node = findNode(topoOf(sim, state), nodeId);
       if (!node) return;
@@ -4279,6 +4550,7 @@
       repaintNodes(root, sim, state);
       repaintEdges(root, sim, state);
       refreshLoadSummary(root, sim, state);
+      syncWorldFromLesson(sim, state);
       const load = nodeLoad(sim, state, node);
       traceLine(root, `「${node.label}」${delta > 0 ? '加開' : '收掉'}一台機器，現在共 ${base + nextExtra} 台${
         load ? `，負載變成 ${Math.round(load.ratio * 100)}%` : ''
@@ -4294,6 +4566,7 @@
       repaintNodes(root, sim, state);
       repaintEdges(root, sim, state);
       refreshLoadSummary(root, sim, state);
+      syncWorldFromLesson(sim, state);
       // 單台節點沒有 #1、#2 的編號，寫出來只會讓人以為它還有第二台。
       const who = node.pool ? `「${node.label}」#${idx + 1}` : `「${node.label}」`;
       if (nowDown) {
@@ -4392,12 +4665,15 @@
     const overload = applyMonthOverload(sim, state);
     if (overload) state.log.push({ month: state.month, title: '容量不足：節點超載', narrative: `「${overload.worst.node.label}」負載 ${Math.round(overload.worst.load.ratio * 100)}%。`, result: '本月容量不足，播放品質扣分。', ok: false, uptime: 0, qoe: -overload.penalty, relevantComponents: [], choiceSnapshot: snapshotChoices(sim, state), capacityIssue: true });
     state.month++;
+    if (state.sharedWorld) state.sharedWorld.courseMonth = state.month;
     applyMonthCost(sim, state);
     state.pendingEvent = sim.events.find(event => event.month === state.month) || null;
     if (state.pendingEvent) {
       state.phase = 'event';
       state.pendingOutcome = state.pendingEvent.resolve(makeChoiceCtx(sim, state));
       state.pendingChoiceSnapshot = snapshotChoices(sim, state);
+      state.sharedEventMachines = applySharedMonthEvent(state, state.pendingEvent);
+      syncLessonMachinesFromWorld(sim, state, state.sharedWorld);
       showMonthCard(root, sim, state);
     } else state.history.push({ month: state.month, uptime: state.uptime, qoe: state.qoe });
     traceLine(root, `📅 推進至第 ${state.month} 月，背景人數與成本已更新；現有請求、封包與紀錄繼續保留。`, 'head');
@@ -4409,7 +4685,7 @@
     if (!event || root.querySelector('[data-month-card]')) return;
     state.pendingOutcome ||= event.resolve(makeChoiceCtx(sim, state));
     state.pendingChoiceSnapshot ||= snapshotChoices(sim, state);
-    root.querySelector('.sim-workbench-toolbar').insertAdjacentHTML('afterend', `<section class="sim-month-card" data-month-card><strong>第 ${state.month} 月 · 教學事件</strong><h2>${esc(event.title)}</h2><p>${esc(event.narrative)}</p><small>以進入本月時的架構評估；這是課程情境，不會拔掉正在操作的機器。原有請求繼續執行。</small><div data-month-result></div><button type="button" class="button" data-month-resolve>查看評估結果</button></section>`);
+    root.querySelector('.sim-workbench-toolbar').insertAdjacentHTML('afterend', `<section class="sim-month-card" data-month-card><strong>第 ${state.month} 月 · 教學事件</strong><h2>${esc(event.title)}</h2><p>${esc(event.narrative)}</p><small>事件已作用於共用世界${state.sharedEventMachines?.length ? `：${state.sharedEventMachines.map(esc).join('、')} 已故障` : ''}；正在傳輸的 Request 會依同一套路由、逾時與重試規則處理。</small><div data-month-result></div><button type="button" class="button" data-month-resolve>查看評估結果</button></section>`);
     const card = root.querySelector('[data-month-card]');
     card.querySelector('[data-month-resolve]').onclick = eventClick => {
       const outcome = state.pendingOutcome;
@@ -5119,8 +5395,9 @@
     document.title = `模擬關卡｜${sim.title}`;
     const state = newState(sim);
     if (chapterId === 'sd-book-14' && window.YouTubeModes) {
-      const keys = ['month', 'uptime', 'qoe', 'costEff', 'choice', 'usersServed', 'speed', 'extraInstances', 'instancePositions', 'showConnections', 'operationOrigin', 'regionWeight', 'nextRegionSeq', 'nextGroupSeq', 'badZone', 'log', 'history', 'phase', 'summarySaved', 'pendingOutcome', 'pendingChoiceSnapshot'];
+      const keys = ['month', 'uptime', 'qoe', 'costEff', 'choice', 'usersServed', 'speed', 'extraInstances', 'instancePositions', 'instanceDown', 'showConnections', 'operationOrigin', 'regionWeight', 'nextRegionSeq', 'nextGroupSeq', 'badZone', 'log', 'history', 'phase', 'summarySaved', 'pendingOutcome', 'pendingChoiceSnapshot', 'sharedEventMachines'];
       const saved = window.YouTubeModes.load();
+      const peer = window.YouTubeModes.loadPeer();
       if (saved?.lesson) {
         keys.forEach(key => { if (saved.lesson[key] !== undefined) state[key] = saved.lesson[key]; });
         if (saved.topo) state.topo = { ...state.topo, ...saved.topo };
@@ -5138,16 +5415,28 @@
           state.pendingEvent = sim.events.find(event => event.month === state.month);
           if (!state.pendingEvent || state.log.some(entry => entry.month === state.month && entry.title === state.pendingEvent.title)) state.phase = 'play';
         }
-        state.instanceDown = {};
-        window.YouTubeModes.notice('已恢復課程進度、架構設定與資料；所有已建置機器已恢復連線。');
+        window.YouTubeModes.notice('已恢復課程進度、架構設定與資料。');
       }
-      window.YouTubeModes.register(() => ({
-        lesson: Object.fromEntries(keys.map(key => [key, state[key]])),
-        topo: state.topo,
-        dragViewer: state.dragViewer,
-        runtime: state.runtime,
-        design: designOf(sim, state)
-      }));
+      const incomingWorld = peer?.world || peer?.sharedWorld || saved?.sharedWorld;
+      state.sharedWorld = sharedWorldFrom(incomingWorld, designOf(sim, state));
+      state.sharedPending = peer?.pending ?? saved?.sharedPending ?? 0;
+      if (incomingWorld) {
+        syncLessonFromWorld(sim, state, state.sharedWorld);
+        if (peer) window.YouTubeModes.notice('已接手觀眾與機器的同一個世界；人數、弱網、機器、Request 與時間都已同步。');
+      } else if (topoOf(sim, state).nodes.some(node => node.headcount)) syncWorldFromLesson(sim, state);
+      else syncLessonFromWorld(sim, state, state.sharedWorld);
+      window.YouTubeModes.register(() => {
+        state.sharedWorld.courseMonth = state.month;
+        return {
+          lesson: Object.fromEntries(keys.map(key => [key, state[key]])),
+          topo: state.topo,
+          dragViewer: state.dragViewer,
+          runtime: state.runtime,
+          design: designOf(sim, state),
+          sharedWorld: state.sharedWorld,
+          sharedPending: state.sharedPending
+        };
+      });
       // 進頁時先寫一次，讓「還沒改過任何決策就直接去看實際運作」也拿得到目前的架構。
       window.YouTubeModes.saveDesign(designOf(sim, state));
     }
@@ -5155,12 +5444,13 @@
     // screen is actually rendering (jsdom has no way to read it back out of the SVG).
     window.__simTestHooks.stateRef = () => state;
     render(root, sim, state);
+    if (chapterId === 'sd-book-14') startSharedWorldClock(root, state);
   }
 
   // Exposed only for the automated test harness (jsdom can't fast-forward real timers, so the
   // pure geometry used by the token animation needs to be reachable and testable in isolation).
   window.__simTestHooks = {
-    addUserGroup, moveCourseAudience, audienceWeak, pointAlongPath, waypointsFor, clusterPositions, hopWeights,
+    addUserGroup, moveCourseAudience, audienceWeak, syncWorldFromLesson, syncLessonFromWorld, sharedWorldStatus, pointAlongPath, waypointsFor, clusterPositions, hopWeights,
     instanceCount, nodeLoad, overloadedNodes, weeklyCostPenalty, regionIdAtPoint, nodeIsPresent,
     newState, setInstanceDown, routeStillAlive, playbackProfile, resolveServicePath, spawnToken, spawnRequest, wireAbrLab,
     routeFor, distanceWeights, pathDurationMs, regionShare, instanceIsDown, aliveInstanceIndexes, nodeCanServe, topoOf

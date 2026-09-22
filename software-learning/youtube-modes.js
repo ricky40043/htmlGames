@@ -6,12 +6,13 @@
     const isLesson = params.get('mode') !== 'world';
     const mode = isLesson ? 'architecture' : 'operations';
     const key = `youtube-mode-session-v1:${mode}`;
-    // Both live views share one snapshot. The monthly strategy course stays separate.
+    const peerMode = isLesson ? 'operations' : 'architecture';
+    const activeModeKey = 'youtube-mode-last-source-v2';
     const designKey = 'youtube-architecture-v1';
     const nav = document.createElement('nav');
     nav.className = 'youtube-mode-nav';
     nav.setAttribute('aria-label', 'YouTube 模擬頁面切換');
-    nav.innerHTML = `<div class="youtube-mode-links"><a href="system-design-simulator.html?chapter=sd-book-14" ${isLesson ? 'aria-current="page"' : ''}>月份課程與完整架構</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=world" ${!isLesson ? 'aria-current="page"' : ''}>觀眾與機器</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">月份課程保留完整架構；觀眾與機器保留即時模擬。兩個模式各自保存進度，共用架構策略設定。重新模擬會清除兩邊進度。</p><span class="youtube-mode-notice" role="status"></span>`;
+    nav.innerHTML = `<div class="youtube-mode-links"><a href="system-design-simulator.html?chapter=sd-book-14" ${isLesson ? 'aria-current="page"' : ''}>月份課程與完整架構</a><a href="system-design-simulator.html?chapter=sd-book-14&mode=world" ${!isLesson ? 'aria-current="page"' : ''}>觀眾與機器</a><button type="button" class="youtube-restart" aria-describedby="youtube-restart-hint">↻ 重新模擬</button></div><p id="youtube-restart-hint">兩個畫面共用同一批觀眾、機器、Request、月份與模擬時間；切到「觀眾與機器」時會先暫停，按「繼續世界」才接著跑。重新模擬會清除全部進度。</p><span class="youtube-mode-notice" role="status"></span>`;
     document.querySelector('.sim-shell').prepend(nav);
     const notice = message => { nav.querySelector('.youtube-mode-notice').textContent = message; };
     let capture = null;
@@ -30,12 +31,24 @@
         catch { return; }
         try { sessionStorage.setItem(key, JSON.stringify({ version: 1, saved: snapshot }, replacer)); }
         catch { notice('瀏覽器無法保存這次進度，切換後可能需要重新開始。'); }
+        try { sessionStorage.setItem(activeModeKey, mode); } catch { /* 切換仍可繼續，只是不做跨模式接手。 */ }
         if (snapshot && snapshot.design) saveDesign(snapshot.design);
     }
     function load() {
         try {
             const data = JSON.parse(sessionStorage.getItem(key), reviver);
             return data?.version === 1 ? data.saved : null;
+        } catch { return null; }
+    }
+    function loadMode(name) {
+        try {
+            const data = JSON.parse(sessionStorage.getItem(`youtube-mode-session-v1:${name}`), reviver);
+            return data?.version === 1 ? data.saved : null;
+        } catch { return null; }
+    }
+    function loadPeer() {
+        try {
+            return sessionStorage.getItem(activeModeKey) === peerMode ? loadMode(peerMode) : null;
         } catch { return null; }
     }
     function saveDesign(design) {
@@ -65,6 +78,7 @@
         try {
             sessionStorage.removeItem('youtube-mode-session-v1:architecture');
             sessionStorage.removeItem('youtube-mode-session-v1:operations');
+            sessionStorage.removeItem(activeModeKey);
             sessionStorage.removeItem(designKey);
         } catch {
             capture = previousCapture;
@@ -73,7 +87,7 @@
         }
         location.reload();
     };
-    window.YouTubeModes = { resetSession, bindCourse: fn => { openCourse = fn; }, bindView: fn => { switchView = fn; }, markView, register: fn => { capture = fn; }, load, notice, saveDesign, loadDesign, clearDesign };
+    window.YouTubeModes = { mode, resetSession, bindCourse: fn => { openCourse = fn; }, bindView: fn => { switchView = fn; }, markView, register: fn => { capture = fn; }, load, loadMode, loadPeer, notice, saveDesign, loadDesign, clearDesign };
     nav.addEventListener('click', event => {
         const link = event.target.closest('a');
         if (!link) return;
