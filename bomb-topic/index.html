@@ -13,10 +13,13 @@
       background: #1a1a1a;
       color: #fff;
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     /* ── SCREENS ── */
@@ -25,23 +28,24 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 28px;
+      gap: 20px;
       width: 100%;
-      max-width: 600px;
-      padding: 40px 24px 80px;
+      max-width: 540px;
+      padding: 24px 20px 48px;
       min-height: 100vh;
+      min-height: 100dvh;
     }
     .screen.active { display: flex; }
 
     h1 {
-      font-size: 2.4rem;
-      letter-spacing: 3px;
+      font-size: 2.2rem;
+      letter-spacing: 2px;
     }
 
     /* ── BUTTON ── */
     .btn {
       padding: 14px 48px;
-      font-size: 1.6rem;
+      font-size: 1.5rem;
       font-weight: bold;
       background: linear-gradient(135deg, #c01a1a, #ff4444);
       color: #fff;
@@ -500,11 +504,6 @@
       grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
-    @media (max-width: 480px) {
-      .pack-grid {
-        grid-template-columns: 1fr;
-      }
-    }
     .pack-card {
       display: flex;
       align-items: center;
@@ -716,6 +715,96 @@
     @keyframes tip-glow {
       from { border-color: rgba(255, 185, 0, 0.25); }
       to   { border-color: rgba(255, 185, 0, 0.6); box-shadow: 0 0 12px rgba(255, 170, 0, 0.2); }
+    }
+
+    /* ── MOBILE RESPONSIVE OPTIMIZATION (手機版排版優化) ── */
+    @media (max-width: 600px) {
+      .screen {
+        padding: 16px 16px 36px;
+        gap: 12px;
+        justify-content: flex-start;
+      }
+      h1 {
+        font-size: 1.75rem;
+        letter-spacing: 1.5px;
+        margin-top: 2px;
+      }
+      .mobile-sound-tip {
+        padding: 5px 12px;
+        font-size: 0.78rem;
+        gap: 6px;
+      }
+      .mode-tabs {
+        max-width: 100%;
+        padding: 3px;
+      }
+      .mode-tab {
+        padding: 8px 10px;
+        font-size: 0.88rem;
+      }
+      .pack-panel {
+        padding: 10px 12px;
+        gap: 8px;
+        max-width: 100%;
+      }
+      .pack-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .pack-card {
+        padding: 8px 10px;
+        gap: 8px;
+        border-radius: 8px;
+      }
+      .pack-card input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+      }
+      .pack-name {
+        font-size: 0.82rem;
+      }
+      .pack-sub {
+        font-size: 0.68rem;
+      }
+      .pack-stats {
+        font-size: 0.75rem;
+      }
+      .custom-panel {
+        padding: 12px 14px;
+        gap: 10px;
+        max-width: 100%;
+      }
+      .custom-inputs-list {
+        max-height: 150px;
+      }
+      .time-config-wrapper {
+        gap: 6px;
+      }
+      .time-toggle-btn {
+        padding: 5px 14px;
+        font-size: 0.8rem;
+      }
+      .time-settings {
+        padding: 8px 14px;
+        font-size: 0.95rem;
+        gap: 8px;
+      }
+      .time-settings input[type="number"] {
+        width: 58px;
+        padding: 4px 6px;
+        font-size: 1.1rem;
+      }
+      .time-error {
+        min-height: 0;
+        font-size: 0.8rem;
+      }
+      .btn {
+        width: 100%;
+        max-width: 300px;
+        padding: 12px 24px;
+        font-size: 1.35rem;
+        border-radius: 12px;
+      }
     }
   </style>
 </head>
