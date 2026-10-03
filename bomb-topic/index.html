@@ -503,6 +503,24 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .pack-grid::-webkit-scrollbar {
+      width: 6px;
+    }
+    .pack-grid::-webkit-scrollbar-track {
+      background: #1e1e1e;
+      border-radius: 4px;
+    }
+    .pack-grid::-webkit-scrollbar-thumb {
+      background: #444;
+      border-radius: 4px;
+    }
+    .pack-grid::-webkit-scrollbar-thumb:hover {
+      background: #ff5555;
     }
     .pack-card {
       display: flex;
@@ -750,6 +768,8 @@
       .pack-grid {
         grid-template-columns: 1fr 1fr;
         gap: 8px;
+        max-height: 160px;
+        padding-right: 3px;
       }
       .pack-card {
         padding: 8px 10px;
