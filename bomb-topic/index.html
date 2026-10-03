@@ -534,6 +534,60 @@
       text-align: right;
     }
 
+    /* ── RUNNING ACTIONS (返回上一頁、換一題) ── */
+    .running-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      width: 100%;
+      max-width: 420px;
+      margin-top: 4px;
+      z-index: 10;
+    }
+    .run-action-btn {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 18px;
+      font-size: 1.05rem;
+      font-weight: bold;
+      border-radius: 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+      letter-spacing: 1px;
+    }
+    .run-action-btn:active {
+      transform: scale(0.96);
+    }
+    .run-btn-back {
+      background: rgba(45, 45, 45, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #ddd;
+      backdrop-filter: blur(8px);
+    }
+    .run-btn-back:hover {
+      background: rgba(65, 65, 65, 0.9);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+    .run-btn-skip {
+      background: rgba(255, 68, 68, 0.18);
+      border: 1px solid rgba(255, 90, 90, 0.45);
+      color: #ff9999;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 2px 10px rgba(255, 50, 50, 0.15);
+    }
+    .run-btn-skip:hover {
+      background: rgba(255, 68, 68, 0.32);
+      border-color: #ff6666;
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(255, 68, 68, 0.3);
+    }
+
     /* ── BOOM SCREEN ENHANCEMENTS ── */
     .boom-info {
       text-align: center;
@@ -679,6 +733,17 @@
       <span class="w-label">DANGER</span>
       <div class="w-dot"></div>
     </div>
+
+    <!-- 遊戲中操作按鍵：返回上一頁、換一題 -->
+    <div class="running-actions">
+      <button type="button" class="run-action-btn run-btn-back" onclick="resetGame()" title="結束此局並返回設定頁面">
+        <span>↩</span> 返回上一頁
+      </button>
+      <button type="button" class="run-action-btn run-btn-skip" onclick="skipToNextTopic()" title="重新抽取或跳至下一題">
+        <span>🔄</span> 換一題
+      </button>
+    </div>
+
     <div class="marquee-outer">
       <div class="marquee-inner" id="marquee-inner">
         ⚠&nbsp;&nbsp;計時中&nbsp;&nbsp;⚠&nbsp;&nbsp;小心炸彈&nbsp;&nbsp;⚠&nbsp;&nbsp;快點回答&nbsp;&nbsp;⚠&nbsp;&nbsp;計時中&nbsp;&nbsp;⚠&nbsp;&nbsp;小心炸彈&nbsp;&nbsp;⚠&nbsp;&nbsp;快點回答&nbsp;&nbsp;⚠&nbsp;&nbsp;計時中&nbsp;&nbsp;⚠&nbsp;&nbsp;小心炸彈&nbsp;&nbsp;⚠&nbsp;&nbsp;快點回答&nbsp;&nbsp;⚠&nbsp;&nbsp;計時中&nbsp;&nbsp;⚠&nbsp;&nbsp;小心炸彈&nbsp;&nbsp;⚠&nbsp;&nbsp;快點回答&nbsp;&nbsp;
@@ -1214,12 +1279,18 @@
         roundBadge.textContent = `自訂題目 第 ${currentRoundIndex + 1} / ${customQueue.length} 題`;
       } else {
         const pool = getActiveRandomPool();
-        const picked = pool[Math.floor(Math.random() * pool.length)];
+        let picked = pool[Math.floor(Math.random() * pool.length)];
+        // 如果有 2 題以上，避免連續抽中完全相同題目
+        if (pool.length > 1 && picked.text === currentActiveTopic) {
+          const alternatePool = pool.filter(p => p.text !== currentActiveTopic);
+          picked = alternatePool[Math.floor(Math.random() * alternatePool.length)];
+        }
         currentActiveTopic = picked.text;
         roundBadge.textContent = `🎲 ${picked.packTitle}`;
       }
 
-      document.getElementById("topic-display").textContent = currentActiveTopic;
+      const topicDisplay = document.getElementById("topic-display");
+      topicDisplay.textContent = currentActiveTopic;
 
       // 每次獨立隨機在指定秒數區間中抽取
       countdownTotal = Math.floor(Math.random() * (maxVal - minVal + 1)) + minVal;
@@ -1236,6 +1307,15 @@
       }, 1000);
 
       bombTimer = setTimeout(triggerBoom, countdownTotal * 1000);
+    }
+
+    function skipToNextTopic() {
+      if (currentTopicMode === "custom") {
+        if (customQueue.length > 1) {
+          currentRoundIndex = (currentRoundIndex + 1) % customQueue.length;
+        }
+      }
+      startTopicRound();
     }
 
     function triggerBoom() {
