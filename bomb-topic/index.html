@@ -55,15 +55,42 @@
     .btn:active { transform: scale(0.96); box-shadow: 0 2px 10px rgba(255,50,50,0.3); }
 
     /* ── TIME SETTINGS ── */
+    .time-config-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .time-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid #444;
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 0.85rem;
+      color: #888;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+    }
+    .time-toggle-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ccc;
+      border-color: #666;
+    }
     .time-settings {
       display: inline-flex;
       align-items: center;
       gap: 12px;
-      background: #2a2a2a;
+      background: #242424;
       border: 1px solid #444;
       border-radius: 14px;
-      padding: 14px 22px;
-      font-size: 1.1rem;
+      padding: 12px 20px;
+      font-size: 1.05rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      animation: panel-fade 0.2s ease-out;
     }
     .time-settings label { color: #aaa; font-size: 0.95rem; }
     .time-settings input[type="number"] {
@@ -71,7 +98,7 @@
       padding: 6px 8px;
       font-size: 1.25rem;
       text-align: center;
-      background: #3a3a3a;
+      background: #333;
       color: #fff;
       border: 1px solid #666;
       border-radius: 8px;
@@ -704,12 +731,18 @@
       </div>
     </div>
 
-    <div class="time-settings">
-      <label>倒數時間</label>
-      <input type="number" id="time-min" value="15" min="1" max="300" />
-      <span class="sep">～</span>
-      <input type="number" id="time-max" value="60" min="1" max="300" />
-      <label>秒</label>
+    <!-- 時間設定（預設收起保密，點開才顯示） -->
+    <div class="time-config-wrapper">
+      <button type="button" class="time-toggle-btn" id="time-toggle-btn" onclick="toggleTimeConfig()">
+        <span>⚙️</span> 時間設定（預設保密）
+      </button>
+      <div id="time-settings-panel" class="time-settings" style="display: none;">
+        <label>倒數時間</label>
+        <input type="number" id="time-min" value="15" min="1" max="300" />
+        <span class="sep">～</span>
+        <input type="number" id="time-max" value="45" min="1" max="300" />
+        <label>秒</label>
+      </div>
     </div>
     <div class="time-error" id="time-error"></div>
     <button class="btn" onclick="startGame()">開始遊戲</button>
@@ -913,6 +946,18 @@
         } else {
           renderCustomInputs();
         }
+      }
+    }
+
+    function toggleTimeConfig() {
+      const panel = document.getElementById("time-settings-panel");
+      const btn = document.getElementById("time-toggle-btn");
+      if (panel.style.display === "none") {
+        panel.style.display = "inline-flex";
+        btn.innerHTML = "<span>▲</span> 收起時間設定";
+      } else {
+        panel.style.display = "none";
+        btn.innerHTML = "<span>⚙️</span> 時間設定（預設保密）";
       }
     }
 
