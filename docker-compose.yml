@@ -4,3 +4,13 @@ services:
     ports:
       - "20600:80"
     restart: unless-stopped
+    depends_on:
+      - ktv-api
+    volumes:
+      - ./ktv/media:/usr/share/nginx/html/ktv/media
+
+  ktv-api:
+    build: ./ktv-api
+    restart: unless-stopped
+    volumes:
+      - ./ktv/media:/app/media

@@ -47,3 +47,6 @@ temp_*
 software-learning/Google Drive/
 *.HEIC
 *.heic
+
+# KTV runtime media is stored on the deployment host, not in Git.
+ktv/media/*.mp4

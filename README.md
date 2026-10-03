@@ -28,6 +28,7 @@
 ### 實用工具
 
 - 🕒 **全螢幕電子鐘** - 防休眠、可橫向顯示的電子鐘工具
+- 🎤 **KTV 猜歌控制台** - 主持人專用的 11 首歌曲播放、下載與提示片段控制台
 
 ### 多人連線遊戲
 
@@ -86,6 +87,9 @@ npm run dev
 ├── bopomofo-challenge/
 ├── word-chain/
 ├── fullscreen-clock/
+├── ktv/
+│   └── index.html
+├── ktv-api/
 ├── CascadeProjects/2048/
 ├── vercel.json
 └── package.json
