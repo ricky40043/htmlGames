@@ -418,6 +418,122 @@
       font-weight: bold;
     }
 
+    /* ── TOPIC PACKS SELECTION ── */
+    .pack-panel {
+      width: 100%;
+      max-width: 480px;
+      background: #242424;
+      border: 1px solid #3d3d3d;
+      border-radius: 16px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+      animation: panel-fade 0.25s ease-out;
+    }
+    .pack-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #333;
+      padding-bottom: 8px;
+    }
+    .pack-panel-title {
+      font-size: 0.95rem;
+      font-weight: bold;
+      color: #ff8888;
+      letter-spacing: 1px;
+    }
+    .pack-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pack-link-btn {
+      background: none;
+      border: none;
+      color: #aaa;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .pack-link-btn:hover {
+      color: #ff7777;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .pack-sep {
+      color: #555;
+      font-size: 0.8rem;
+    }
+    .pack-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 480px) {
+      .pack-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .pack-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #2b2b2b;
+      border: 1px solid #444;
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+    }
+    .pack-card:hover {
+      border-color: #666;
+      background: #333;
+    }
+    .pack-card.checked {
+      background: rgba(255, 68, 68, 0.12);
+      border-color: rgba(255, 80, 80, 0.6);
+      box-shadow: 0 0 10px rgba(255, 68, 68, 0.18);
+    }
+    .pack-card input[type="checkbox"] {
+      accent-color: #ff3333;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .pack-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+    .pack-name {
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: #eee;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .pack-card.checked .pack-name {
+      color: #fff;
+    }
+    .pack-sub {
+      font-size: 0.75rem;
+      color: #888;
+    }
+    .pack-stats {
+      font-size: 0.8rem;
+      color: #aaa;
+      text-align: right;
+    }
+
     /* ── BOOM SCREEN ENHANCEMENTS ── */
     .boom-info {
       text-align: center;
@@ -500,6 +616,22 @@
       <button type="button" class="mode-tab" id="tab-custom" onclick="setTopicMode('custom')">✍️ 自訂題目</button>
     </div>
 
+    <!-- 隨機題組選擇區塊 -->
+    <div id="random-packs-panel" class="pack-panel">
+      <div class="pack-panel-header">
+        <span class="pack-panel-title">📚 選擇隨機題組庫</span>
+        <div class="pack-actions">
+          <button type="button" class="pack-link-btn" onclick="toggleAllPacks(true)">全選</button>
+          <span class="pack-sep">|</span>
+          <button type="button" class="pack-link-btn" onclick="toggleAllPacks(false)">清空</button>
+        </div>
+      </div>
+      <div id="pack-grid" class="pack-grid">
+        <!-- JS 動態生成題組選項 -->
+      </div>
+      <div class="pack-stats" id="pack-selected-stats">已選擇 4 個題組（共 69 題）</div>
+    </div>
+
     <!-- 自訂題目區塊 -->
     <div id="custom-panel" class="custom-panel" style="display: none;">
       <div class="custom-panel-header">
@@ -578,66 +710,107 @@
   </div>
 
   <script>
-    const topics = [
-      "操場上可以看到的東西",
-      "宇宙中可能有的事物",
-      "廁所裡會突然冒出的驚嚇",
-      "夢境中可能遇到的怪事",
-      "平行世界的你會做的工作",
-      "叢林探險會遇到的驚嚇",
-      "時間旅行者會帶的裝備",
-      "如果恐龍還在會看到的場景",
-      "手機突然變成魔法神器的功能",
-      "平常不會說出口的內心OS",
-      "派對上最怕聽到的爆料",
-      "戶外露營可能遇到的神秘生物",
-      "科技展上讓人驚呼的發明",
-      "假裝成熟時會做的奇妙舉動",
-      "穿越到古代必備的現代物品",
-      "電影片場會發生的NG狀況",
-      "動物園裡動物的內心OS",
-      "美食家會挑剔的奇怪理由",
-      "劇場彩排時最怕出錯的橋段",
-      "如果恐怖片主角很理性的反應",
-      "超級英雄退休後會做的事",
-      "新年會許的絕妙願望",
-      "下雨天可以自嗨的活動",
-      "晴天爆汗也想玩的戶外活動",
-      "從老闆口中聽到會崩潰的句子",
-      "工作摸魚的最佳偽裝技巧",
-      "夜市攤販的奇怪招客方式",
-      "超商架上讓人困惑的物品",
-      "廚房裡會偷吃你食物的兇手",
-      "冰箱裡最不想看到的東西",
-      "睡前一定會做的放鬆儀式",
-      "旅行最怕忘記帶的必需品",
-      "登山包裡藏著的秘密物品",
-      "寵物店會賣的可愛又奇怪的東西",
-      "半夜肚子餓會做的特製料理",
-      "海邊野餐一定會帶的東西",
-      "如果你是忍者會用的武器",
-      "童年卡通角色長大後的職業",
-      "兒童主題樂園會看到的設施",
-      "當你變成一隻貓第一件事",
-      "超級市場結帳時最怕聽到的狀況",
-      "打開鞋櫃會掉出來的東西",
-      "電梯裡會遇到的尷尬情境",
-      "長輩聚會一定會問的問題",
-      "社群媒體上令人崩潰的貼文",
-      "戀愛中會做的超幼稚舉動",
-      "暗戀對象不小心看到會崩潰的東西",
-      "假日百貨公司會看到的景象",
-      "過年團圓飯一定會出現的菜",
-      "室友最常犯的地雷行為",
-      "下班前五分鐘的內心戲",
-      "健身教練會糾正的習慣",
-      "如果你中了樂透會先買的物品",
-      "朋友生日驚喜會準備的小道具",
-      "交通工具上最怕遇到的旅伴",
-      "博物館裡會看到的奇妙展品",
-      "夏天避暑會做的行程安排",
-      "冬天保暖最離奇的方法",
+    // ── Topic Packs (題組分類) ──
+    const TOPIC_PACKS = [
+      {
+        id: "campus",
+        title: "校園與地名篇",
+        icon: "🏫",
+        topics: [
+          "大學裡的學校建築或景點",
+          "大學選修課或通識課的名稱",
+          "台北捷運線上的站名",
+          "期末考會出現的崩潰科目"
+        ]
+      },
+      {
+        id: "food",
+        title: "飲食與生活篇",
+        icon: "🍜",
+        topics: [
+          "學校附近走路會到的餐廳小吃",
+          "麥當勞菜單上有的東西",
+          "超商御飯糰的口味",
+          "火鍋裡面會放的配料"
+        ]
+      },
+      {
+        id: "entertainment",
+        title: "娛樂與八卦篇",
+        icon: "🎬",
+        topics: [
+          "追蹤數超過50萬的台灣YouTuber",
+          "聽過的一首周杰倫的歌"
+        ]
+      },
+      {
+        id: "others",
+        title: "其他趣味題組",
+        icon: "🌀",
+        topics: [
+          "操場上可以看到的東西",
+          "宇宙中可能有的事物",
+          "廁所裡會突然冒出的驚嚇",
+          "夢境中可能遇到的怪事",
+          "平行世界的你會做的工作",
+          "叢林探險會遇到的驚嚇",
+          "時間旅行者會帶的裝備",
+          "如果恐龍還在會看到的場景",
+          "手機突然變成魔法神器的功能",
+          "平常不會說出口的內心OS",
+          "派對上最怕聽到的爆料",
+          "戶外露營可能遇到的神秘生物",
+          "科技展上讓人驚呼的發明",
+          "假裝成熟時會做的奇妙舉動",
+          "穿越到古代必備的現代物品",
+          "電影片場會發生的NG狀況",
+          "動物園裡動物的內心OS",
+          "美食家會挑剔的奇怪理由",
+          "劇場彩排時最怕出錯的橋段",
+          "如果恐怖片主角很理性的反應",
+          "超級英雄退休後會做的事",
+          "新年會許的絕妙願望",
+          "下雨天可以自嗨的活動",
+          "晴天爆汗也想玩的戶外活動",
+          "從老闆口中聽到會崩潰的句子",
+          "工作摸魚的最佳偽裝技巧",
+          "夜市攤販的奇怪招客方式",
+          "超商架上讓人困惑的物品",
+          "廚房裡會偷吃你食物的兇手",
+          "冰箱裡最不想看到的東西",
+          "睡前一定會做的放鬆儀式",
+          "旅行最怕忘記帶的必需品",
+          "登山包裡藏著的秘密物品",
+          "寵物店會賣的可愛又奇怪的東西",
+          "半夜肚子餓會做的特製料理",
+          "海邊野餐一定會帶的東西",
+          "如果你是忍者會用的武器",
+          "童年卡通角色長大後的職業",
+          "兒童主題樂園會看到的設施",
+          "當你變成一隻貓第一件事",
+          "超級市場結帳時最怕聽到的狀況",
+          "打開鞋櫃會掉出來的東西",
+          "電梯裡會遇到的尷尬情境",
+          "長輩聚會一定會問的問題",
+          "社群媒體上令人崩潰的貼文",
+          "戀愛中會做的超幼稚舉動",
+          "暗戀對象不小心看到會崩潰的東西",
+          "假日百貨公司會看到的景象",
+          "過年團圓飯一定會出現的菜",
+          "室友最常犯的地雷行為",
+          "下班前五分鐘的內心戲",
+          "健身教練會糾正的習慣",
+          "如果你中了樂透會先買的物品",
+          "朋友生日驚喜會準備的小道具",
+          "交通工具上最怕遇到的旅伴",
+          "博物館裡會看到的奇妙展品",
+          "夏天避暑會做的行程安排",
+          "冬天保暖最離奇的方法"
+        ]
+      }
     ];
+
+    let selectedPackIds = new Set(["campus", "food", "entertainment", "others"]);
 
     // ── Mode & Custom Topics State ──
     let currentTopicMode = 'random'; // 'random' | 'custom'
@@ -657,15 +830,18 @@
       currentTopicMode = mode;
       const tabRandom = document.getElementById("tab-random");
       const tabCustom = document.getElementById("tab-custom");
+      const randomPacksPanel = document.getElementById("random-packs-panel");
       const customPanel = document.getElementById("custom-panel");
 
       if (mode === "random") {
         tabRandom.classList.add("active");
         tabCustom.classList.remove("active");
+        randomPacksPanel.style.display = "flex";
         customPanel.style.display = "none";
       } else {
         tabCustom.classList.add("active");
         tabRandom.classList.remove("active");
+        randomPacksPanel.style.display = "none";
         customPanel.style.display = "flex";
         if (customTopicsList.length === 0) {
           fillDefaultTopics();
@@ -673,6 +849,94 @@
           renderCustomInputs();
         }
       }
+    }
+
+    // ── Random Pack Selection Logic ──
+    function renderPackCards() {
+      const container = document.getElementById("pack-grid");
+      if (!container) return;
+      container.innerHTML = "";
+
+      TOPIC_PACKS.forEach(pack => {
+        const isChecked = selectedPackIds.has(pack.id);
+        const card = document.createElement("div");
+        card.className = `pack-card ${isChecked ? 'checked' : ''}`;
+        card.onclick = (e) => {
+          if (e.target.tagName !== "INPUT") {
+            togglePack(pack.id);
+          }
+        };
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = isChecked;
+        checkbox.onchange = () => togglePack(pack.id);
+
+        const info = document.createElement("div");
+        info.className = "pack-info";
+
+        const name = document.createElement("span");
+        name.className = "pack-name";
+        name.textContent = `${pack.icon} ${pack.title}`;
+
+        const sub = document.createElement("span");
+        sub.className = "pack-sub";
+        sub.textContent = `${pack.topics.length} 道題目`;
+
+        info.appendChild(name);
+        info.appendChild(sub);
+
+        card.appendChild(checkbox);
+        card.appendChild(info);
+        container.appendChild(card);
+      });
+
+      updatePackStats();
+    }
+
+    function togglePack(id) {
+      if (selectedPackIds.has(id)) {
+        selectedPackIds.delete(id);
+      } else {
+        selectedPackIds.add(id);
+      }
+      renderPackCards();
+    }
+
+    function toggleAllPacks(checkAll) {
+      if (checkAll) {
+        selectedPackIds = new Set(TOPIC_PACKS.map(p => p.id));
+      } else {
+        selectedPackIds.clear();
+      }
+      renderPackCards();
+    }
+
+    function updatePackStats() {
+      const statsEl = document.getElementById("pack-selected-stats");
+      if (!statsEl) return;
+      const countPacks = selectedPackIds.size;
+      let countTopics = 0;
+      TOPIC_PACKS.forEach(p => {
+        if (selectedPackIds.has(p.id)) countTopics += p.topics.length;
+      });
+      statsEl.textContent = `已選擇 ${countPacks} 個題組（共 ${countTopics} 題可抽）`;
+    }
+
+    function getActiveRandomPool() {
+      const pool = [];
+      TOPIC_PACKS.forEach(pack => {
+        if (selectedPackIds.has(pack.id)) {
+          pack.topics.forEach(t => {
+            pool.push({
+              packTitle: pack.title,
+              packIcon: pack.icon,
+              text: t
+            });
+          });
+        }
+      });
+      return pool;
     }
 
     function renderCustomInputs() {
@@ -732,7 +996,6 @@
 
     function removeCustomInput(index) {
       if (customTopicsList.length <= 1) {
-        // 如果只有一題，清空內容而不刪除
         customTopicsList[0] = "";
         renderCustomInputs();
         return;
@@ -922,6 +1185,11 @@
         }
         currentRoundIndex = 0;
       } else {
+        const pool = getActiveRandomPool();
+        if (pool.length === 0) {
+          errorEl.textContent = "請至少勾選一個題組庫！";
+          return;
+        }
         customQueue = [];
         currentRoundIndex = 0;
       }
@@ -945,8 +1213,10 @@
         currentActiveTopic = customQueue[currentRoundIndex];
         roundBadge.textContent = `自訂題目 第 ${currentRoundIndex + 1} / ${customQueue.length} 題`;
       } else {
-        currentActiveTopic = topics[Math.floor(Math.random() * topics.length)];
-        roundBadge.textContent = "🎲 隨機題目";
+        const pool = getActiveRandomPool();
+        const picked = pool[Math.floor(Math.random() * pool.length)];
+        currentActiveTopic = picked.text;
+        roundBadge.textContent = `🎲 ${picked.packTitle}`;
       }
 
       document.getElementById("topic-display").textContent = currentActiveTopic;
@@ -1075,7 +1345,8 @@
       showScreen("idle");
     }
 
-    // 初始化渲染自訂題目列表
+    // 初始化渲染題組選擇與自訂題目列表
+    renderPackCards();
     renderCustomInputs();
   </script>
 <script src="/stats.js"></script>
