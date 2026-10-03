@@ -802,8 +802,8 @@
     </div>
 
     <div class="boom-actions">
-      <button class="btn" id="boom-main-btn" onclick="onBoomMainAction()">再玩一次</button>
-      <button class="btn-secondary" id="boom-cancel-btn" onclick="resetGame()" style="display:none;">結束並返回首頁</button>
+      <button class="btn" id="boom-main-btn" onclick="onBoomMainAction()">開始下一局</button>
+      <button class="btn-secondary" id="boom-cancel-btn" onclick="resetGame()">↩ 返回上一頁</button>
     </div>
   </div>
 
@@ -1387,59 +1387,46 @@
       const boomTitle = document.getElementById("boom-title");
       const currentTopicEl = document.getElementById("boom-current-topic");
       const nextSection = document.getElementById("boom-next-section");
-      const nextLabel = document.getElementById("boom-next-label");
-      const countdownNum = document.getElementById("boom-countdown-num");
       const mainBtn = document.getElementById("boom-main-btn");
       const cancelBtn = document.getElementById("boom-cancel-btn");
 
       currentTopicEl.textContent = currentActiveTopic;
+      if (nextSection) nextSection.style.display = "none";
 
-      if (currentTopicMode === "custom" && currentRoundIndex + 1 < customQueue.length) {
-        // 自訂模式且還有下一題
-        const nextRoundNum = currentRoundIndex + 2;
-        const total = customQueue.length;
-        boomTitle.textContent = `💥 第 ${currentRoundIndex + 1} 題 爆炸！`;
-        nextSection.style.display = "flex";
-        nextLabel.textContent = `準備進入第 ${nextRoundNum} / ${total} 題`;
-        mainBtn.textContent = `立即進入下一題（第 ${nextRoundNum} 題）`;
-        cancelBtn.style.display = "block";
+      // 「返回上一頁」按鈕始終顯示
+      cancelBtn.style.display = "block";
+      cancelBtn.textContent = "↩ 返回上一頁";
 
-        // 自動接續倒數
-        autoNextSecondsLeft = 3;
-        countdownNum.textContent = autoNextSecondsLeft;
-
-        autoNextInterval = setInterval(() => {
-          autoNextSecondsLeft--;
-          if (autoNextSecondsLeft > 0) {
-            countdownNum.textContent = autoNextSecondsLeft;
-          } else {
-            clearAutoNext();
-            proceedNextRound();
-          }
-        }, 1000);
-
-      } else if (currentTopicMode === "custom") {
-        // 自訂模式且全部完成
-        boomTitle.textContent = "💥 全部題目完成！";
-        nextSection.style.display = "none";
-        mainBtn.textContent = "全部完成！再玩一次";
-        cancelBtn.style.display = "none";
+      if (currentTopicMode === "custom") {
+        if (currentRoundIndex + 1 < customQueue.length) {
+          // 自訂模式且還有下一題
+          const nextRoundNum = currentRoundIndex + 2;
+          const total = customQueue.length;
+          boomTitle.textContent = `💥 第 ${currentRoundIndex + 1} 題 爆炸！`;
+          mainBtn.textContent = `開始下一題（第 ${nextRoundNum} / ${total} 題）`;
+        } else {
+          // 自訂模式且全部完成
+          boomTitle.textContent = "💥 全部題目完成！";
+          mainBtn.textContent = "重新開始自訂題目（從第 1 題）";
+        }
       } else {
         // 隨機題目模式
-        boomTitle.textContent = "BOOM！";
-        nextSection.style.display = "none";
-        mainBtn.textContent = "再玩一次";
-        cancelBtn.style.display = "none";
+        boomTitle.textContent = "💥 BOOM！";
+        mainBtn.textContent = "開始下一局";
       }
     }
 
     function onBoomMainAction() {
-      if (currentTopicMode === "custom" && currentRoundIndex + 1 < customQueue.length) {
-        clearAutoNext();
-        proceedNextRound();
-      } else {
-        resetGame();
+      clearAutoNext();
+      if (currentTopicMode === "custom") {
+        if (currentRoundIndex + 1 < customQueue.length) {
+          currentRoundIndex++;
+        } else {
+          currentRoundIndex = 0; // 全部完成後重啟第一輪
+        }
       }
+      // 直接繼續進行下一局遊戲，不需退回首頁
+      startTopicRound();
     }
 
     function proceedNextRound() {
