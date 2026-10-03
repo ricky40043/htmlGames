@@ -680,6 +680,43 @@
       background: #3d3d3d;
       color: #fff;
     }
+
+    /* ── MOBILE SOUND TIP (手機靜音模式提醒) ── */
+    .mobile-sound-tip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 170, 0, 0.12);
+      border: 1px solid rgba(255, 185, 0, 0.35);
+      border-radius: 999px;
+      padding: 7px 18px;
+      font-size: 0.85rem;
+      color: #ffd175;
+      letter-spacing: 0.5px;
+      line-height: 1.4;
+      max-width: 92%;
+      text-align: center;
+      box-shadow: 0 2px 12px rgba(255, 170, 0, 0.08);
+      animation: tip-glow 3s ease-in-out infinite alternate;
+    }
+    .mobile-sound-tip b {
+      color: #fff;
+    }
+    .tip-icon {
+      font-size: 1rem;
+      flex-shrink: 0;
+      animation: tip-shake 2.5s ease-in-out infinite;
+    }
+    @keyframes tip-shake {
+      0%, 80%, 100% { transform: rotate(0); }
+      85% { transform: rotate(14deg); }
+      90% { transform: rotate(-14deg); }
+      95% { transform: rotate(8deg); }
+    }
+    @keyframes tip-glow {
+      from { border-color: rgba(255, 185, 0, 0.25); }
+      to   { border-color: rgba(255, 185, 0, 0.6); box-shadow: 0 0 12px rgba(255, 170, 0, 0.2); }
+    }
   </style>
 </head>
 <body>
@@ -689,6 +726,12 @@
 
   <!-- ── IDLE SCREEN ── -->
   <div id="screen-idle" class="screen active">
+    <!-- 手機靜音模式提醒 -->
+    <div class="mobile-sound-tip">
+      <span class="tip-icon">🔔</span>
+      <span>手機請切換至<b>響鈴模式</b>（關閉靜音模式），否則不會有聲音喔！</span>
+    </div>
+
     <h1>🎲 定時炸彈桌遊</h1>
 
     <!-- 模式選擇 -->
