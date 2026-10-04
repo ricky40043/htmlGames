@@ -1072,6 +1072,7 @@
     let customQueue = [];
     let currentRoundIndex = 0;
     let currentActiveTopic = "";
+    let playedRandomTopics = new Set();
     let autoNextTimer = null;
     let autoNextInterval = null;
     let autoNextSecondsLeft = 3;
@@ -1476,12 +1477,31 @@
         roundBadge.textContent = `自訂題目 第 ${currentRoundIndex + 1} / ${customQueue.length} 題`;
       } else {
         const pool = getActiveRandomPool();
-        let picked = pool[Math.floor(Math.random() * pool.length)];
-        // 如果有 2 題以上，避免連續抽中完全相同題目
-        if (pool.length > 1 && picked.text === currentActiveTopic) {
-          const alternatePool = pool.filter(p => p.text !== currentActiveTopic);
-          picked = alternatePool[Math.floor(Math.random() * alternatePool.length)];
+        if (pool.length === 0) {
+          resetGame();
+          return;
         }
+
+        // 篩選出尚未玩過的題目
+        let availablePool = pool.filter(p => !playedRandomTopics.has(p.text));
+
+        // 若全部題目都已玩過，清空記錄重新開始新一輪
+        if (availablePool.length === 0) {
+          playedRandomTopics.clear();
+          availablePool = pool.slice();
+        }
+
+        // 若有多於 1 題可選，且剛好選中上一題，盡量避免連續同一題
+        let candidatePool = availablePool;
+        if (candidatePool.length > 1 && currentActiveTopic) {
+          const noRepeatPool = candidatePool.filter(p => p.text !== currentActiveTopic);
+          if (noRepeatPool.length > 0) {
+            candidatePool = noRepeatPool;
+          }
+        }
+
+        const picked = candidatePool[Math.floor(Math.random() * candidatePool.length)];
+        playedRandomTopics.add(picked.text);
         currentActiveTopic = picked.text;
         roundBadge.textContent = `🎲 ${picked.packTitle}`;
       }
@@ -1603,6 +1623,9 @@
       clearTimeout(bombTimer);
       clearInterval(tensionInterval);
       stopTick();
+
+      playedRandomTopics.clear();
+      currentActiveTopic = "";
 
       document.body.style.background = "#1a1a1a";
       document.getElementById("edge-glow").style.boxShadow = "none";
