@@ -19,7 +19,7 @@
     check(hook.world === world && snapshot() === state, 'switch preserves exact world identity, requests, RNG and clock');
     check(world.users.length === before + 5, 'five added viewers survive view switch');
     check(document.querySelector(`[data-graph-count="${region}"]`).textContent.includes(`目前 ${before + 5} 人`), 'architecture population comes from same users');
-    check(document.querySelectorAll('[data-graph-user]').length === world.users.length, 'small population shows every real viewer');
+    check(world.audienceGroups().reduce((n,g)=>n+g.ids.length,0) === world.users.length && document.querySelectorAll('[data-graph-audience]').length === world.audienceGroups().length, 'audience groups account for every real viewer');
     check(!document.querySelector('.yw-diagram').hidden && document.querySelector('.yw-topology').hidden, 'architecture is the active projection');
     const machine = world.machines.find(m => m.kind === 'stream' && m.region === region);
     const g = document.querySelector(`[data-graph-machine="${machine.id}"]`);

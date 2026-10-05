@@ -18,7 +18,7 @@
             if (kind) (kind === 'cache' ? [{ id: 'us' }] : world.regions).forEach(r => {
                 while (world.machines.filter(m => m.kind === kind && m.region === r.id).length < target) world.addMachine(kind, r.id);
             });
-            world.incident(`課程架構調整：${component.label || component.id} → ${component.options.find(o => o.id === value).label}；既有機器與請求保留`);
+            world.incident(`課程架構調整：${component.name || component.id} → ${component.options.find(o => o.id === value).label}；既有機器與請求保留`);
             return true;
         }
         advance() {
@@ -30,7 +30,7 @@
             course.sampleTarget = target;
             const added = count ? world.addAudienceGroup(count, 'tw', `第 ${course.month} 月新增觀眾`) : [];
             const cost = this.scenario.components.reduce((n, c) => n + (c.options.find(o => o.id === world.design[c.id])?.cost || 0), 0);
-            course.cost = Math.max(0, course.cost - cost * .6);
+            course.cost = Math.max(0, Math.min(100, course.cost - cost * .6));
             const event = this.scenario.events.find(e => e.month === course.month);
             const record = { month: course.month, added: added.length, demand: this.scenario.viewersAtMonth(course.month), at: world.time, choices: { ...world.design }, event: event?.id || null, machines: [] };
             if (event) {
@@ -48,8 +48,9 @@
             return record;
         }
         resolve() {
-            const course = this.world.course, record = course.pending;
-            if (!record) return false;
+            const course = this.world.course, pending = course.pending;
+            if (!pending) return false;
+            const record = course.records.find(r => r.month === pending.month && r.event === pending.event) || pending;
             course.uptime = Math.max(0, Math.min(100, course.uptime + (record.outcome.uptime || 0)));
             course.qoe = Math.max(0, Math.min(100, course.qoe + (record.outcome.qoe || 0)));
             record.reviewed = true;

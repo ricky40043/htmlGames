@@ -28,7 +28,7 @@
   // ---------------------------------------------------------------------------------------
   const regionNode = (r, label, yUpper, yCenter, yLower) => [
     { id: `users_${r}`, kind: 'user', label: `觀眾請求入口（${label}）`, region: label, regionKey: r, x: 90, y: yCenter, arriveLabel: '觀眾裝置收到回應' },
-    { id: `clientChunker_${r}`, kind: 'fixed', label: `上傳分塊器（${label}）`, region: label, regionKey: r, x: 280, y: yLower, size: 'small', arriveLabel: '瀏覽器串流讀取原始影片，切成可重試的小封包並計算 checksum' },
+    { id: `clientChunker_${r}`, kind: 'fixed', label: `上傳分塊器（${label}）`, region: label, regionKey: r, x: 280, y: yLower, size: 'small', arriveLabel: '瀏覽器串流讀取原始影片，示意切成可重試的上傳分塊；不讀取真實影片或計算 checksum' },
     { id: `cdn_${r}`, kind: 'component', componentId: 'cdnTier', label: `CDN（${label}）`, region: label, regionKey: r, x: 280, y: yUpper, arriveLabel: '檢查這部影片有沒有在這個地區的邊緣節點命中' },
     { id: `loadBalancer_${r}`, kind: 'fixed', label: `Load Balancer（${label}）`, region: label, regionKey: r, x: 480, y: yCenter, arriveLabel: '健康檢查後依路徑把請求導向 API 或串流伺服器群組' },
     {
@@ -71,13 +71,13 @@
       '**每一台機器都是獨立的**：伺服器群組裡的每一台都有自己的編號（#1、#2…）。**點某一台就可以把它拔掉**模擬當機——負載平衡器會立刻改導到還活著的機器，而「正在傳給那一台的請求」會當場中斷，你會看到封包在半路變紅消失。再點一次就把它插回去。所有機器球都用來關閉／恢復，切換方案請點上方有底線的策略文字；尚未建置的 CDN 點一下可建置。',
       '**節點上的符號**：✓ 有做保護 · ⚠ 機器照跑但沒備援，壞一台就有事 · ✕ 這個東西你還沒建（例如還沒買 CDN），流量不會經過它，連線也是虛線。伺服器不會因為你沒開備援就消失。',
       '**架構是你自己蓋的**：下面的「架構編輯」可以**新增／移除地區**（新地區會照同一份藍圖生出自己的 CDN、LB、串流與 API 伺服器），節點旁的 **＋／－** 可以加開或收掉機器，「＋100 人」會在你選的地區生出一個**獨立的使用者群組節點**，還能直接拖到別的地區——拖過去，那一區的負載就跟著變。',
-      '**容量是真的在算的**：地區觀眾數 ÷ 那一區的機器容量 = 負載率，超過 100% 變紅色，每推進一個月會扣播放品質分數。總觀眾人數是固定的，多開一個地區就是把同一群人分散開來。',
+      '**容量是真的在算的**：地區觀眾數 ÷ 那一區的機器容量 = 負載率，超過 100% 變紅色，每推進一個月會扣播放品質分數。新增地區不會自動搬移觀眾，需另外移動群組或新增觀眾。',
       '**CDN 決定流量從哪裡出來**：沒建 CDN 時每一次觀看都要回源到你自己的串流伺服器；建了之後大多數觀看在地區 CDN 就直接回覆，根本不碰後面的機器——封包動畫會直接顯示這個差別。',
       '**直接比較觀眾的播放感受**：播放器比較器會先放入一段 5 秒影片，再同時下載下一段。從台灣 CDN 抓 720p 能一直維持播放；跨海回美國抓同一段會先把緩衝耗光、出現轉圈圈，接著 ABR 自動改抓球更小、下載更快的低解析度版本。',
-      '**影片不是一整顆送出去**：瀏覽器會先用上傳分塊器串流讀取原始影片，切成可獨立重試的小封包並計算 checksum。模擬上傳時會看到一列粉紅色影片封包依序送出；紫色是 Metadata，黃色才是一般 API 請求。',
+      '**影片不是一整顆送出去**：瀏覽器會先用上傳分塊器串流讀取原始影片，切成可獨立重試的上傳分塊；checksum 為設計概念，本動畫不計算真實檔案校驗值。模擬上傳時會看到一列粉紅色影片封包依序送出；紫色是 Metadata，黃色才是一般 API 請求。',
       '**100 人隨機操作模式**：啟動後會自動混合觀看影片、搜尋與上傳，100 個操作各自走真實路由、分配到不同伺服器，並留下 Request 與資料寫入紀錄；可隨時按停止。',
-      '**播放追蹤點（📺）**：這是用來觀察畫質、緩衝與服務來源的動畫，不是另一位觀眾，也不會增加人數。可以拖到別區或讓它隨機移動。訊號不良區也能拖曳、縮放；正在傳的片段會先播完，下一段才依 ABR 降低或提高畫質。',
-      '拓樸圖上每個地區各有自己獨立的 CDN、Load Balancer——後面又分成兩條路：搜尋／上架影片打「API 伺服器」，觀看影片走「串流伺服器」，兩者是分開的伺服器群組，不會互相影響。後端則完整保留教材的原始儲存、轉碼、已轉碼儲存、完成事件佇列／處理器、Metadata DB／快取；跨海過去在動畫上會明顯變慢。'
+      '**播放追蹤點（📺）**：這是用來觀察畫質、緩衝與服務來源的動畫，不是另一位觀眾，也不會增加人數。可以拖到別區或讓它隨機移動。訊號不良區也能拖曳、縮放；已下載的緩衝可繼續播放；正在下載的片段會立即受弱網影響，下一段再依 ABR 選畫質。',
+      '拓樸圖上每個地區各有自己獨立的 CDN、Load Balancer——後面又分成兩條路：搜尋／上架影片打「API 伺服器」，觀看影片走「串流伺服器」，兩者使用不同伺服器群組，但仍可能受共用儲存與網路瓶頸影響。後端則完整保留教材的原始儲存、轉碼、已轉碼儲存、完成事件佇列／處理器、Metadata DB／快取；跨海過去在動畫上會明顯變慢。'
     ],
     months: 12,
     lexicon: {
@@ -231,12 +231,12 @@
         name: 'API 伺服器備援容量（搜尋／上架）',
         shortName: 'API 備援',
         presence: 'always',
-        desc: '伺服器是無狀態的，單台當機時負載平衡器能把流量導到其他伺服器——差別在於備援容量是「隨時待命」還是「當下才開」。這裡只管搜尋／上架影片這條線；觀看影片走的是另一組完全獨立的「串流伺服器」，備援策略要另外決定，兩邊不會互相牽動。',
+        desc: '伺服器是無狀態的，單台當機時負載平衡器能把流量導到其他伺服器——差別在於備援容量是「隨時待命」還是「當下才開」。這裡只管搜尋／上架影片這條線；觀看影片走的是另一組完全獨立的「串流伺服器」，備援策略要另外決定，前端故障可分開處理，但共用後端仍可能造成連帶影響。',
         ...ref('sd14-s09-p04'),
         options: [
           { ...OFF_ALWAYS('無備援（壞掉沒有人接手）'), instances: 1 },
-          { id: 'autoScale', label: '自動擴縮容（觸發後約 3–5 分鐘生效）', cost: 1, instances: 2, desc: '負載升高時自動開新機器，成本較低，但生效前這幾分鐘容量會偏緊。' },
-          { id: 'warmStandby', label: '熱備援（固定多開 2 台待命）', cost: 3, instances: 3, desc: '隨時有備援容量可以立即接手，幾乎無感，但平常就要多付這些機器的錢。' }
+          { id: 'autoScale', label: '自動擴容（持續滿載 180 秒後加機）', cost: 1, instances: 1, desc: '同區持續滿載 180 秒後增加一台；本模型未實作自動縮容。' },
+          { id: 'warmStandby', label: '多副本分流（固定共 3 台）', cost: 3, instances: 3, desc: '三台同時分流；故障後由健康節點接手，但仍受健康檢查、重試與剩餘容量限制。' }
         ]
       },
       {
@@ -244,25 +244,25 @@
         name: '串流伺服器備援容量（觀看影片）',
         shortName: '串流備援',
         presence: 'always',
-        desc: '串流伺服器只負責把影片位元組送到觀眾裝置，跟處理搜尋／上架的 API 伺服器是完全分開的一組機器、分開計費、分開故障——這裡的選擇不會影響 API 伺服器，反過來也一樣。',
+        desc: '串流伺服器只負責把影片位元組送到觀眾裝置，跟處理搜尋／上架的 API 伺服器是完全分開的一組機器、分開計費、分開故障——前端容量可獨立調整，但兩者仍共用部分後端資源。',
         ...ref('sd14-s02-p01'),
         options: [
           { ...OFF_ALWAYS('無備援（壞掉沒有人接手）'), instances: 1 },
-          { id: 'autoScale', label: '自動擴縮容（觸發後約 3–5 分鐘生效）', cost: 1, instances: 2, desc: '負載升高時自動開新機器，成本較低，但生效前這幾分鐘容量會偏緊。' },
-          { id: 'warmStandby', label: '熱備援（固定多開 2 台待命）', cost: 3, instances: 3, desc: '隨時有備援容量可以立即接手，幾乎無感，但平常就要多付這些機器的錢。' }
+          { id: 'autoScale', label: '自動擴容（持續滿載 180 秒後加機）', cost: 1, instances: 1, desc: '同區持續滿載 180 秒後增加一台；本模型未實作自動縮容。' },
+          { id: 'warmStandby', label: '多副本分流（固定共 3 台）', cost: 3, instances: 3, desc: '三台同時分流；故障後由健康節點接手，但仍受健康檢查、重試與剩餘容量限制。' }
         ]
       },
       {
         id: 'dbMasterSlave',
-        name: 'Metadata 資料庫 Master／Slave 複寫',
-        shortName: 'DB 主從複寫',
+        name: 'Metadata 資料庫主副本／故障轉移示意',
+        shortName: 'DB 故障轉移',
         presence: 'always',
         desc: 'Master 當機時需要有東西頂替——差別在於用自動選舉還是人工確認來完成這次切換。資料庫本身一直都在，這裡選的是「它壞掉的時候有沒有人接手」。',
         ...ref('sd14-s09-p04'),
         options: [
           OFF_ALWAYS('沒有複本（單一 Master，壞了就停擺）'),
-          { id: 'manual', label: '人工手動切換（約 5 分鐘，但更可控）', cost: 1, desc: '需要人工確認才切換，恢復較慢，但避免自動系統誤判造成的腦裂風險。' },
-          { id: 'auto', label: '自動故障轉移（偵測＋選舉，約 30 秒）', cost: 3, desc: '監控系統偵測 Master 無回應後自動選舉新 Master，中斷時間短，但需要額外的協調機制成本。' }
+          { id: 'manual', label: '人工切換（300 秒恢復示意）', cost: 1, desc: '以 300 秒計時示意人工處理時間；真實系統仍需 fencing 等機制避免舊主節點繼續寫入。' },
+          { id: 'auto', label: '自動故障轉移（30 秒恢復示意）', cost: 3, desc: '以 30 秒恢復計時示意故障轉移；本模型未實作主節點選舉、複寫延遲或腦裂處理。' }
         ]
       },
       {
@@ -275,7 +275,7 @@
         options: [
           OFF_ALWAYS('單一節點，沒有複本'),
           { id: 'replica2', label: '兩節點複寫', cost: 2, desc: '其中一個掛掉，另一個立刻頂上，多數情況夠用。' },
-          { id: 'replica3Quorum', label: '三節點＋Quorum 讀寫', cost: 4, desc: '能同時扛住兩個節點掛掉，讀寫一致性也更好，但成本更高、協調也更複雜。' }
+          { id: 'replica3Quorum', label: '三節點（可用性示意）', cost: 4, desc: '本模型任一健康快取節點仍可讀，未實作 Quorum。真正三節點多數決需要至少兩個節點，只能容忍一個節點故障。' }
         ]
       },
       {
@@ -296,7 +296,7 @@
         name: '預簽名網址直傳',
         shortName: '預簽名直傳',
         presence: 'optional',
-        desc: '客戶端拿到預簽名網址後直接上傳到原始儲存系統，不必經過 API 伺服器中轉大檔案位元組，同時也更安全——只有授權使用者可以上傳。沒啟用時這條直傳路徑根本不存在。',
+        desc: '客戶端拿到預簽名網址後直接上傳到原始儲存系統，不必經過 API 伺服器中轉大檔案位元組，API 驗證授權後簽發限定物件與期限的網址；持有網址者即可使用，必須防止外洩。沒啟用時這條直傳路徑根本不存在。',
         ...ref('sd14-s11-p02'),
         options: [
           { id: 'off', label: '不啟用（大檔案都經 API 伺服器中轉）', cost: 0 },
@@ -308,7 +308,7 @@
         name: '斷點續傳 Upload Session',
         shortName: '斷點續傳',
         presence: 'optional',
-        desc: '上傳中斷後能從已成功的位元組繼續，不必整份重傳一次 GB 等級的原始檔。沒啟用時，系統根本沒有記錄「傳到哪裡」的地方。',
+        desc: '上傳中斷後能從已成功的位元組繼續，不必整份重傳一次 GB 等級的原始檔。本示意在停用時丟棄已確認的分塊；正式系統的續傳能力取決於上傳協定與已保存狀態。',
         ...ref('sd14-s03-p02'),
         options: [
           { id: 'off', label: '不啟用（中斷就整份重傳）', cost: 0 },
@@ -487,8 +487,8 @@
         narrative: '負責寫入的 Metadata 資料庫 Master 節點突然離線，所有需要更新資料的操作都指向它。',
         resolve: ctx => {
           const choice = ctx.get('dbMasterSlave');
-          if (choice === 'auto') return { uptime: -1, qoe: 0, log: '監控系統在約 30 秒內偵測並選出新 Master，寫入服務幾乎無縫恢復，觀眾沒有察覺。', ok: true };
-          if (choice === 'manual') return { uptime: -6, qoe: -1, log: '需要人工確認才切換，大約 5 分鐘的寫入空窗——新影片發布跟觀看數更新暫時卡住，但沒有腦裂風險。', ok: true };
+          if (choice === 'auto') return { uptime: -1, qoe: 0, log: '策略評估以約 30 秒恢復示意自動故障轉移；期間寫入可能失敗，實際觀眾影響需看緩衝與重試，模型未執行主節點選舉。', ok: true };
+          if (choice === 'manual') return { uptime: -6, qoe: -1, log: '需要人工確認才切換，大約 5 分鐘的寫入空窗——新影片發布跟觀看數更新暫時卡住，仍需隔離舊主節點才能避免雙主寫入。', ok: true };
           return { uptime: -22, qoe: -4, log: '沒有可頂替的複本，所有需要寫入 Metadata 的操作全部卡住——新影片發布不了、觀看數也不會更新，直到有人手動處理。', ok: false };
         }
       },
@@ -501,7 +501,7 @@
         narrative: '負責搜尋與上架的其中一台 API 伺服器硬體故障離線，這台伺服器原本承擔的請求全部需要別人接手（觀看影片走的是另一組完全獨立的串流伺服器，備援策略也是分開決定的，這次事件不受影響）。',
         resolve: ctx => {
           const choice = ctx.get('apiRedundancy');
-          if (choice === 'warmStandby') return { uptime: 0, qoe: 0, log: '熱備援伺服器立即接手，容量足夠吸收這些流量，幾乎沒人感覺得到。', ok: true };
+          if (choice === 'warmStandby') return { uptime: 0, qoe: 0, log: '健康副本在偵測與重試後接手，容量足夠吸收這些流量，幾乎沒人感覺得到。', ok: true };
           if (choice === 'autoScale') return { uptime: -3, qoe: -3, log: 'Auto scaling 觸發後幾分鐘內開出新伺服器，這段等待期間容量偏緊，部分請求回應變慢。', ok: true };
           return { uptime: -9, qoe: -8, log: '只有一台在跑又沒有備援容量，它一掛整條搜尋／上架的路就斷了，請求大量逾時失敗。', ok: false };
         }
@@ -515,7 +515,7 @@
         narrative: '負責影片播放的其中一台串流伺服器硬體故障離線——這組伺服器跟處理搜尋／上架的 API 伺服器是完全分開的機器，備援策略也要另外準備，不能靠 API 那邊的設定。',
         resolve: ctx => {
           const choice = ctx.get('streamRedundancy');
-          if (choice === 'warmStandby') return { uptime: 0, qoe: 0, log: '熱備援伺服器立即接手，容量足夠吸收這些流量，觀眾幾乎沒有感覺。', ok: true };
+          if (choice === 'warmStandby') return { uptime: 0, qoe: 0, log: '健康副本在偵測與重試後接手，容量足夠吸收這些流量，觀眾幾乎沒有感覺。', ok: true };
           if (choice === 'autoScale') return { uptime: -2, qoe: -4, log: 'Auto scaling 觸發後幾分鐘內開出新伺服器，這段等待期間不少人畫面卡頓或緩衝變久。', ok: true };
           return { uptime: -4, qoe: -12, log: '只有一台在跑又沒有備援容量，它一掛，所有沒有在 CDN 命中的觀看請求直接失敗，大量觀眾影片卡死。', ok: false };
         }
@@ -561,7 +561,7 @@
         narrative: '其中一個 Metadata 快取節點硬體故障，這個節點原本保存的熱門資料瞬間消失。',
         resolve: ctx => {
           const choice = ctx.get('cacheReplica');
-          if (choice === 'replica3Quorum') return { uptime: 0, qoe: 0, log: '三節點＋Quorum 架構下，單一節點掛掉幾乎無感，資料一致性也沒有受影響。', ok: true };
+          if (choice === 'replica3Quorum') return { uptime: 0, qoe: 0, log: '三節點快取仍有健康節點可提供讀取；這是可用性示意，不能據此推論資料一致性。', ok: true };
           if (choice === 'replica2') return { uptime: -1, qoe: -1, log: '另一個複本立刻頂上，只有極短暫的延遲上升，系統很快把有問題的節點換掉。', ok: true };
           return { uptime: -5, qoe: -6, log: '只有單一快取節點，掛掉之後所有 Metadata 查詢直接打到資料庫，資料庫負擔瞬間暴增，連帶拖慢其他請求。', ok: false };
         }

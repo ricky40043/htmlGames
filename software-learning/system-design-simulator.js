@@ -7,6 +7,7 @@
     .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
   const numFmt = n => n.toLocaleString('zh-Hant-TW');
+  const loadPercent = ratio => Number.isFinite(ratio) ? `${Math.round(ratio * 100)}%` : '無可用容量';
 
   function loadProgress() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
@@ -1150,7 +1151,7 @@
       const percent = request.size ? Math.round((request.sent || 0) / request.size * 100) : 0;
       return `<li><b>${esc(request.id)}</b> · ${esc(request.kind)} · ${esc(request.status)} · ${percent}%</li>`;
     }).join('');
-    return `<strong>共用世界：第 ${world.courseMonth || 0} 月 · ${world.users.length} 人 · ${world.machines.filter(machine => machine.up).length}/${world.machines.length} 台運作</strong><span>模擬時間 ${world.time.toFixed(1)} 秒 · Request 進行中 ${active.length} · 完成 ${world.metrics.completed} · 失敗嘗試 ${world.metrics.failed}</span>${rows ? `<ul>${rows}</ul>` : '<small>目前沒有進行中的 Request。</small>'}`;
+    return `<strong>共用世界：第 ${world.courseMonth || 0} 月 · ${world.users.length} 人 · ${world.machines.filter(machine => machine.up).length}/${world.machines.length} 台運作</strong><span>模擬時間 ${world.time.toFixed(1)} 秒 · Request 進行中 ${active.length} · 完成 ${world.metrics.completed} · 失敗嘗試 ${world.metrics.failed}</span>${rows ? `<ul>${rows}</ul>` : '<small>目前沒有進行中的 Request。</small>'}<small>完整架構動畫另含教學流程與資料表；共用世界的 Request／即時指標為另一層執行模型，兩者的 ID 與時序不能逐筆對照。</small>`;
   }
 
   function startSharedWorldClock(root, state) {
@@ -4410,7 +4411,7 @@
         }
         if (overloadFactor < 1 && !dv.warnedOverload) {
           dv.warnedOverload = true;
-          scopedTrace(root, `⚠️「${esc(originNode?.label || regionName)}」已超載（負載 ${Math.round(load.ratio * 100)}%），分給每位${esc(lex(sim, 'viewer'))}的頻寬被壓縮，${esc(lex(sim, 'quality'))}會被迫下降——加開機器或用${esc(lex(sim, 'edgeShort'))}分流才救得回來。`, 'bad');
+          scopedTrace(root, `⚠️「${esc(originNode?.label || regionName)}」已超載（負載 ${loadPercent(load.ratio)}），分給每位${esc(lex(sim, 'viewer'))}的頻寬被壓縮，${esc(lex(sim, 'quality'))}會被迫下降——加開機器或用${esc(lex(sim, 'edgeShort'))}分流才救得回來。`, 'bad');
         }
         if (overloadFactor >= 1) dv.warnedOverload = false;
       };
@@ -4471,7 +4472,7 @@
   function overloadBannerHtml(sim, state) {
     const over = overloadedNodes(sim, state);
     if (!over.length) return '';
-    const list = over.slice(0, 3).map(x => `${esc(x.node.label)}（${Math.round(x.load.ratio * 100)}%）`).join('、');
+    const list = over.slice(0, 3).map(x => `${esc(x.node.label)}（${loadPercent(x.load.ratio)}）`).join('、');
     return `<div class="sim-hint bad">⚠️ 目前有 ${over.length} 個節點超載：${list}${over.length > 3 ? ' 等' : ''}。再推進一個月會扣${esc(lex(sim, 'qoeMetric'))}分數——用節點旁的 ＋ 加開機器，或改用${esc(lex(sim, 'edgeShort'))}把流量分流到邊緣節點。</div>`;
   }
 
@@ -4554,7 +4555,7 @@
       syncWorldFromLesson(sim, state);
       const load = nodeLoad(sim, state, node);
       traceLine(root, `「${node.label}」${delta > 0 ? '加開' : '收掉'}一台機器，現在共 ${base + nextExtra} 台${
-        load ? `，負載變成 ${Math.round(load.ratio * 100)}%` : ''
+        load ? `，負載變成 ${loadPercent(load.ratio)}` : ''
       }（每台每月成本 ${node.extraInstanceCost ?? 1}）。`, delta > 0 ? 'ok' : '');
     }, (nodeId, idx) => {
       // Pull (or re-seat) one specific machine. Requests already in flight toward it die on the
@@ -4623,7 +4624,7 @@
         state.log.push({
           month: state.month - 1,
           title: '容量不足：節點超載',
-          narrative: `這個月有 ${overload.count} 個節點的負載超過容量，最嚴重的是「${overload.worst.node.label}」（${Math.round(overload.worst.load.ratio * 100)}%）。`,
+          narrative: `這個月有 ${overload.count} 個節點的負載超過容量，最嚴重的是「${overload.worst.node.label}」（${loadPercent(overload.worst.load.ratio)}）。`,
           result: `超過容量的機器沒辦法給每位${lex(sim, 'viewer')}足夠的頻寬，${lex(sim, 'viewer')}端表現為${lex(sim, 'overloadSymptom')}、${lex(sim, 'quality')}被迫下降。加開機器或把流量分流到${lex(sim, 'edgeShort')}都能解決。`,
           ok: false, uptime: 0, qoe: -overload.penalty,
           relevantComponents: [], choiceSnapshot: snapshotChoices(sim, state),
@@ -4664,7 +4665,7 @@
     }
     root.querySelector('[data-month-card]')?.remove();
     const overload = applyMonthOverload(sim, state);
-    if (overload) state.log.push({ month: state.month, title: '容量不足：節點超載', narrative: `「${overload.worst.node.label}」負載 ${Math.round(overload.worst.load.ratio * 100)}%。`, result: '本月容量不足，播放品質扣分。', ok: false, uptime: 0, qoe: -overload.penalty, relevantComponents: [], choiceSnapshot: snapshotChoices(sim, state), capacityIssue: true });
+    if (overload) state.log.push({ month: state.month, title: '容量不足：節點超載', narrative: `「${overload.worst.node.label}」負載 ${loadPercent(overload.worst.load.ratio)}。`, result: '本月容量不足，播放品質扣分。', ok: false, uptime: 0, qoe: -overload.penalty, relevantComponents: [], choiceSnapshot: snapshotChoices(sim, state), capacityIssue: true });
     state.month++;
     if (state.sharedWorld) state.sharedWorld.courseMonth = state.month;
     applyMonthCost(sim, state);
@@ -4677,7 +4678,7 @@
       syncLessonMachinesFromWorld(sim, state, state.sharedWorld);
       showMonthCard(root, sim, state);
     } else state.history.push({ month: state.month, uptime: state.uptime, qoe: state.qoe });
-    traceLine(root, `📅 推進至第 ${state.month} 月，背景人數與成本已更新；現有請求、封包與紀錄繼續保留。`, 'head');
+    traceLine(root, `📅 推進至第 ${state.month} 月，尖峰需求估計與成本已更新；實際模擬人數另列，現有請求、封包與紀錄繼續保留。`, 'head');
     refreshMonthHeader(root, sim, state);
   }
 
@@ -4686,7 +4687,7 @@
     if (!event || root.querySelector('[data-month-card]')) return;
     state.pendingOutcome ||= event.resolve(makeChoiceCtx(sim, state));
     state.pendingChoiceSnapshot ||= snapshotChoices(sim, state);
-    root.querySelector('.sim-workbench-toolbar').insertAdjacentHTML('afterend', `<section class="sim-month-card" data-month-card><strong>第 ${state.month} 月 · 教學事件</strong><h2>${esc(event.title)}</h2><p>${esc(event.narrative)}</p><small>事件已作用於共用世界${state.sharedEventMachines?.length ? `：${state.sharedEventMachines.map(esc).join('、')} 已故障` : ''}；正在傳輸的 Request 會依同一套路由、逾時與重試規則處理。</small><div data-month-result></div><button type="button" class="button" data-month-resolve>查看評估結果</button></section>`);
+    root.querySelector('.sim-workbench-toolbar').insertAdjacentHTML('afterend', `<section class="sim-month-card" data-month-card><strong>第 ${state.month} 月 · 教學事件（評分為策略估計）</strong><h2>${esc(event.title)}</h2><p>${esc(event.narrative)}</p><small>評分依架構選項估計，並非即時量測的 SLA。${state.sharedEventMachines?.length ? `故障注入：${state.sharedEventMachines.map(esc).join('、')} 已故障` : '本事件未注入機器故障'}；正在傳輸的 Request 會依同一套路由、逾時與重試規則處理。</small><div data-month-result></div><button type="button" class="button" data-month-resolve>查看評估結果</button></section>`);
     const card = root.querySelector('[data-month-card]');
     card.querySelector('[data-month-resolve]').onclick = eventClick => {
       const outcome = state.pendingOutcome;

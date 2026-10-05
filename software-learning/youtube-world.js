@@ -34,30 +34,30 @@
         cdnTier: {
             off: { label: '不建 CDN', note: '每一次觀看都回源到串流伺服器與物件儲存。' },
             all: { label: '所有影片都進 CDN', note: '任何影片的任何片段都會被邊緣節點快取。' },
-            popularOnly: { label: '只有熱門影片進 CDN', note: '只有觀看數前三名的影片會被快取，長尾影片一律回源。' }
+            popularOnly: { label: '只有熱門影片進 CDN', note: '只有成功片段數前三名的影片會被快取，長尾影片一律回源。' }
         },
         streamRedundancy: {
             off: { label: '串流無備援', note: '每區只有 1 台串流伺服器，故障後不會自動補。' },
-            autoScale: { label: '串流自動擴縮容', note: '同區串流持續滿載 180 秒後自動補 1 台。' },
-            warmStandby: { label: '串流熱備援', note: '每區一開始就多開 2 台串流伺服器待命。' }
+            autoScale: { label: '串流自動擴容', note: '同區串流持續滿載 180 秒後自動補 1 台。' },
+            warmStandby: { label: '串流多副本分流', note: '每區一開始共 3 台串流伺服器，同時分擔流量。' }
         },
         apiRedundancy: {
             off: { label: 'API 無備援', note: '每區只有 1 台 API 伺服器，故障後不會自動補。' },
-            autoScale: { label: 'API 自動擴縮容', note: '同區 API 持續滿載 180 秒後自動補 1 台。' },
-            warmStandby: { label: 'API 熱備援', note: '每區一開始就多開 2 台 API 伺服器待命。' }
+            autoScale: { label: 'API 自動擴容', note: '同區 API 持續滿載 180 秒後自動補 1 台。' },
+            warmStandby: { label: 'API 多副本分流', note: '每區一開始共 3 台 API 伺服器，同時分擔流量。' }
         },
         dbMasterSlave: {
             off: { label: 'Metadata DB 沒有複本', note: 'DB 故障後不會自己恢復，要手動按「恢復機器」。' },
-            manual: { label: 'DB 人工手動切換', note: 'DB 故障後約 300 秒才切換完成。' },
-            auto: { label: 'DB 自動故障轉移', note: 'DB 故障後約 30 秒完成選舉並恢復。' }
+            manual: { label: 'DB 人工切換延遲示意', note: '啟用自動修復時，以 300 秒計時示意人工切換的恢復延遲。' },
+            auto: { label: 'DB 自動故障轉移', note: '啟用自動修復時，30 秒後恢復；未模擬選舉與資料複寫。' }
         },
         cacheReplica: {
             off: { label: '快取單節點', note: '只有 1 台 Metadata 快取；它一掛，metadata 讀取全部壓到 DB。' },
             replica2: { label: '快取兩節點複寫', note: '2 台 Metadata 快取，掛一台還有一台擋在 DB 前面。' },
-            replica3Quorum: { label: '快取三節點＋Quorum', note: '3 台 Metadata 快取，可用性最高。' }
+            replica3Quorum: { label: '快取三節點（可用性示意）', note: '3 台 Metadata 快取；任一健康節點可讀。未實作 Quorum 或一致性協定。' }
         },
         transcodeResilience: {
-            off: { label: '轉碼沒有容錯', note: '轉碼任務失敗就卡住，要手動重試整支影片。' },
+            off: { label: '轉碼沒有容錯', note: '轉碼任務失敗就卡住，要手動重試失敗任務。' },
             reassign: { label: '轉碼重新指派', note: '失敗換一台 worker，但該任務從頭重轉。' },
             checkpointResume: { label: '轉碼重派＋Checkpoint', note: '失敗換一台 worker，並從已完成的進度接著轉。' }
         },
@@ -282,11 +282,14 @@
         resourceKinds(r) {
             if (r.kind === 'segment') {
                 const key = `${r.region}:${r.videoId}:${r.quality}:${r.segment}`;
-                r.cacheHit = this.options.cdn && this.cache.has(key) && this.machines.some(m => m.kind === 'cdn' && m.region === r.region && (m.up || this.time < m.detectedAt));
+                r.cacheHit = this.options.cdn && this.cacheable(r.videoId) && this.cache.has(key) && this.machines.some(m => m.kind === 'cdn' && m.region === r.region && (m.up || this.time < m.detectedAt));
                 return r.cacheHit ? [['cdn', r.region]] : [['stream', r.region], ['storage', 'us']];
             }
             if (r.kind === 'chunk') return this.options.directUpload ? [['storage', 'us']] : [['api', r.region], ['storage', 'us']];
             if (r.kind === 'transcode') return [['worker', 'us']];
+            // Metadata writes must reach durable storage; a live cache cannot replace the DB.
+            if (r.kind === 'create-upload') return [['api', r.region], ['db', 'us']];
+            if (r.kind === 'publish') return [['db', 'us']];
             // Metadata 請求先問快取；快取節點全掛時才回頭壓 Metadata DB——這正是複寫節點數
             // 在這個世界裡唯一有意義的地方。
             const cacheUp = this.machines.some(m => m.kind === 'cache' && (m.up || this.time < m.detectedAt));
@@ -304,12 +307,12 @@
         startRequest(r) {
             if (r.retryAt > this.time) return;
             const u = this.user(r.userId);
-            if (u && this.network(u).mbps === 0 && r.kind !== 'transcode') {
+            if (u && this.network(u).mbps === 0 && !['transcode', 'publish'].includes(r.kind)) {
                 r.reason = '使用者離線，等待重新連線';
                 if (this.time - (r.waitSince ?? r.createdAt) >= 10) this.failAttempt(r, r.reason);
                 return;
             }
-            if (u && r.kind !== 'transcode') r.region = u.route === 'auto' ? u.region : u.route;
+            if (u && !['transcode', 'publish'].includes(r.kind)) r.region = u.route === 'auto' ? u.region : u.route;
             const picks = [];
             for (const [kind, region] of this.resourceKinds(r)) {
                 const pool = this.machines.filter(m => m.kind === kind && m.region === region && (m.up || this.time < m.detectedAt));
@@ -328,7 +331,7 @@
             picks.forEach(m => m.active++);
             r.status = 'running'; r.startedAt ??= this.time; r.attempt++;
             r.attemptAt = this.time;
-            r.latency = r.kind === 'transcode' ? 0 : (u ? this.network(u).latency : 0) + (u && u.region !== r.region ? 0.8 : 0.04) + (r.kind === 'segment' && !r.cacheHit && r.region !== 'us' ? 0.3 : 0);
+            r.latency = ['transcode', 'publish'].includes(r.kind) ? 0 : (u ? this.network(u).latency : 0) + (u && u.region !== r.region ? 0.8 : 0.04) + (r.kind === 'segment' && !r.cacheHit && r.region !== 'us' ? 0.3 : 0);
             r.history.push({ at: this.time, text: `第 ${r.attempt} 次：${picks.map(m => `${TYPES[m.kind]} ${m.id}`).join(' → ')}` });
             r.reason = '傳輸／處理中';
         }
@@ -355,7 +358,7 @@
             // 沒有容錯：轉碼任務一失敗就卡住，不再自動換機器重試。
             if (r.kind === 'transcode' && this.design.transcodeResilience === 'off') {
                 r.status = 'failed'; r.finishedAt = this.time;
-                r.reason = '轉碼沒有容錯，任務卡住，需要手動重試整支影片';
+                r.reason = '轉碼沒有容錯，任務卡住，需要手動重試失敗任務';
                 this.settle(r, false);
                 return;
             }
@@ -385,7 +388,7 @@
                     u.readySegments.push({ quality: r.quality, seconds: 5 });
                     u.measured = r.size * 8 / Math.max(0.1, this.time - r.attemptAt);
                     u.lastDownload = this.time - r.attemptAt;
-                    if (this.options.cdn && !r.cacheHit && this.cacheable(r.videoId)) this.cache.add(`${r.region}:${r.videoId}:${r.quality}:${r.segment}`);
+                    if (this.options.cdn && !r.cacheHit && this.cacheable(r.videoId) && this.machines.some(m => m.kind === 'cdn' && m.region === r.region && m.up)) this.cache.add(`${r.region}:${r.videoId}:${r.quality}:${r.segment}`);
                     if (v) v.views++;
                 } else { u.reason = '片段多次失敗，稍後重新請求'; u.fetchAfter = this.time + 3; }
             }
@@ -465,7 +468,7 @@
                         j.status = 'running'; this.request('transcode', null, { userId: v.owner, videoId: v.id, jobId: j.id, size: j.size });
                     });
                     if (v.jobs.every(j => j.status === 'completed') && !v.publishPending && (v.publishAfter || 0) <= this.time) {
-                        v.publishPending = true; this.request('publish', u, { videoId: v.id });
+                        v.publishPending = true; this.request('publish', null, { userId: v.owner, videoId: v.id, region: 'us' });
                     }
                 }
             });
@@ -571,16 +574,16 @@
             active.slice().reverse().filter(r => r.status !== 'running').forEach(r => this.startRequest(r));
             active = this.activeRequests().filter(r => r.status === 'running');
             const perUser = {};
-            active.filter(r => r.kind !== 'transcode').forEach(r => { perUser[r.userId] = (perUser[r.userId] || 0) + 1; });
+            active.filter(r => !['transcode', 'publish'].includes(r.kind)).forEach(r => { perUser[r.userId] = (perUser[r.userId] || 0) + 1; });
             const rates = new Map(active.map(r => {
                 const u = this.user(r.userId), resources = this.resources(r);
-                const client = u && r.kind !== 'transcode' ? this.network(u).mbps / perUser[u.id] : Infinity;
+                const client = u && !['transcode', 'publish'].includes(r.kind) ? this.network(u).mbps / perUser[u.id] : Infinity;
                 return [r.id, Math.min(client, ...resources.map(m => m.capacity / Math.max(1, m.active)))];
             }));
             active.forEach(r => {
                 if (r.status !== 'running') return;
                 const resources = this.resources(r), u = this.user(r.userId);
-                if (resources.some(m => !m.up) || (u && this.network(u).mbps === 0 && r.kind !== 'transcode')) {
+                if (resources.some(m => !m.up) || (u && this.network(u).mbps === 0 && !['transcode', 'publish'].includes(r.kind))) {
                     r.reason = '連線中斷，等待逾時'; r.brokenAt ??= this.time;
                     if (this.time - r.brokenAt >= 2) { r.brokenAt = null; this.failAttempt(r, '連線逾時，將重試其他健康機器'); }
                     return;
@@ -594,7 +597,7 @@
                 if (r.kind !== 'transcode') {
                     this.metrics.bytesMB += amount;
                     if (r.kind === 'segment') this.metrics[r.cacheHit ? 'cdnMB' : 'originMB'] += amount;
-                    if (u && (u.region !== r.region || (r.kind === 'segment' && !r.cacheHit && r.region !== 'us') || r.kind === 'chunk' && u.region !== 'us')) this.metrics.crossRegionMB += amount;
+                    if (u && r.kind !== 'publish' && (u.region !== r.region || (r.kind === 'segment' && !r.cacheHit && r.region !== 'us') || r.kind === 'chunk' && u.region !== 'us')) this.metrics.crossRegionMB += amount;
                 }
                 if (r.remaining < 1e-8) this.finish(r);
             });

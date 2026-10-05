@@ -260,13 +260,13 @@ window.SYSTEM_DESIGN_INTERACTIVE_CH14 = {
       type: 'arch',
       title: '圖 14-22／14-23：依 GOP 切分，然後平行上傳',
       hint: '點任一個 GOP 看它為什麼可以獨立；或播一次平行上傳。',
-      intro: 'GOP（Group of Pictures；圖片群組）是按照特定順序排列的一群畫面，每一組都是可以獨立播放的單元，長度通常是幾秒鐘。正因為可獨立，它才可以被單獨上傳、單獨重試。',
+      intro: 'GOP（Group of Pictures；圖片群組）是按照特定順序排列的一群畫面，本圖假設 closed GOP 與合適的解碼邊界。上傳分塊能否獨立重試，取決於上傳協定與確認紀錄，不要求分塊可播放。',
       nodes: [
         { id: 'src', label: '原始影片', hint: '客戶端上的檔案', kind: 'client', col: 1, row: 2,
           detail: '把整支影片當做一整個單位來上傳，是一種很沒效率的做法：慢，而且一斷線就要整支重來。' },
         { id: 'split', label: '依 GOP 對齊切分', hint: '可以在客戶端完成', kind: 'service', col: 2, row: 2,
           detail: '根據 GOP 來切分影片檔案的工作，可以由客戶端來實現，藉此提高上傳的速度。代價是舊版本的客戶端可能不支援——那時就把整支影片送到伺服器，改由伺服端切分。' },
-        { id: 'g1', label: 'GOP 1', kind: 'queue', col: 3, row: 1, detail: '一個可獨立播放的畫面群組，所以它可以自己上傳、自己重試，不必管其他 GOP 走到哪。' },
+        { id: 'g1', label: 'GOP 1', kind: 'queue', col: 3, row: 1, detail: '本圖使用可獨立解碼的 closed GOP；單塊重試則由上傳協定保存確認狀態。' },
         { id: 'g2', label: 'GOP 2', kind: 'queue', col: 3, row: 2, detail: '與 GOP 1 同時上傳。平行度就是這樣來的。' },
         { id: 'g3', label: 'GOP N', kind: 'queue', col: 3, row: 3, detail: '如果只有這一塊失敗，也只要重傳這一塊——這是切分帶來的第二個好處。' },
         { id: 'raw', label: '原始儲存系統', hint: '所有 GOP 在這裡會合', kind: 'store', col: 4, row: 2,
@@ -285,7 +285,7 @@ window.SYSTEM_DESIGN_INTERACTIVE_CH14 = {
         label: '平行上傳，以及只重傳失敗的那一塊',
         steps: [
           { from: 'src', to: 'split', text: '客戶端先把影片依 GOP 對齊的方式切分成比較小的幾群。' },
-          { from: 'split', to: 'g2', text: '每一個 GOP 都是可以獨立播放的單元，長度通常是幾秒鐘。' },
+          { from: 'split', to: 'g2', text: '本圖以 closed GOP 示意獨立解碼；open GOP 可能參照其他群組，不能一概視為可獨立播放。' },
           { from: 'g1', to: 'raw', text: 'GOP 1 開始上傳。' },
           { from: 'g2', to: 'raw', text: 'GOP 2 同時上傳——它們不必排隊等前一個傳完。' },
           { from: 'g3', to: 'raw', text: '假設 GOP N 這一塊傳到一半斷線了：要重傳的只有這一塊，前面已經成功的完全不受影響。' }
@@ -304,7 +304,7 @@ window.SYSTEM_DESIGN_INTERACTIVE_CH14 = {
         ['伺服器會自己把缺的部分補起來', false,
           '伺服器沒有那些位元組，只能等客戶端重傳。']
       ],
-      reveal: 'GOP 是「可獨立播放」的單元——正因為可獨立，它才可以被獨立上傳與獨立重試。'
+      reveal: 'GOP 是編碼群組；本圖假設 closed GOP。上傳分塊、GOP 與播放片段是不同概念，獨立重試靠上傳確認紀錄，不靠能否播放。'
     }]
   },
 

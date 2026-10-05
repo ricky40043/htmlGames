@@ -1,0 +1,35 @@
+(() => {
+    const results=[],check=(ok,name)=>{if(!ok)throw Error(name);results.push(name);};
+    const click=s=>document.querySelector(s).click(),hook=__worldWorkbench,w=hook.world;
+    if(!hook.paused)click('[data-action=pause]');
+    Object.assign(w.options,{arrivals:false,autoFaults:false,autoRepair:false,wander:false});
+    document.querySelector('#yw-add-count').value='10';click('[data-action=add-users]');
+    const group=w.audienceGroups().find(g=>g.ids.length===10),ids=group.ids.slice(),users=ids.map(id=>w.user(id));
+    check(!!group,'ten new people appear as one audience group');
+    document.querySelector(`[data-graph-audience="${group.key}"]`).dispatchEvent(new MouseEvent('click',{bubbles:true}));
+    document.querySelector('#yw-group-count').value='5';click('[data-action=group-weak]');
+    const groups=w.audienceGroups().filter(g=>g.cohort===group.cohort);
+    check(groups.length===2&&groups.every(g=>g.ids.length===5),'normal five and weak five split automatically');
+    check(document.querySelectorAll('.yw-weak-drop.occupied').length===1,'weak overlay covers affected group only');
+    check(users.every(u=>w.user(u.id)===u),'split retains original people');
+    click('[data-world-view=people]');
+    check(ids.filter(id=>w.user(id).zone).length===5,'same five are in weak area in people view');
+    check(document.querySelectorAll('[data-user]').length===11,'people view has all eleven including own character');
+    click('[data-world-view=architecture]');
+    check(__worldWorkbench.world===w,'view changes retain same world');
+    click('[data-action=group-good]');
+    check(w.audienceGroups().filter(g=>g.cohort===group.cohort).length===1,'returning five merges original group');
+    w.search(1);w.step(.1);hook.paint();const requests=w.requests.slice(),time=w.time;
+    click('[data-action=advance-month]');click('[data-action=advance-month]');
+    check(w.course.month===2&&!!w.course.pending,'monthly event appears inside workbench');
+    check(w.time===time&&requests.every(r=>w.requests.includes(r)),'month does not fast forward or replace requests');
+    check(w.course.pending.machines.every(id=>!w.machines.find(m=>m.id===id).up),'course event fails actual shared machine');
+    click('[data-action=resolve-month]');
+    check(!w.course.pending&&w.course.records[1].reviewed,'course review is retained');
+    const cdn=document.querySelector('[data-course-design=cdnTier]');cdn.value='off';cdn.dispatchEvent(new Event('change',{bubbles:true}));
+    check(!w.options.cdn&&w.design.cdnTier==='off','course decision changes the live world');
+    click('[data-world-course]');check(__worldWorkbench.world===w,'course navigation keeps same world');
+    check(document.documentElement.scrollWidth<=innerWidth,'layout fits viewport');
+    sessionStorage.setItem('group-course-expected',JSON.stringify({month:w.course.month,users:w.users.length,groups:w.audienceGroups().map(g=>[g.key,g.ids]),requests:w.requests.map(r=>r.id)}));
+    return {passed:results.length,results};
+})()
