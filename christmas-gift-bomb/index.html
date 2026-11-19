@@ -1,0 +1,1822 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#ff4444" />
+  <title>🎁 聖誕禮物爆炸</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Arial", "Helvetica", sans-serif;
+      background: #1a1a1a;
+      color: #fff;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ── SCREENS ── */
+    .screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      width: 100%;
+      max-width: 540px;
+      padding: 24px 20px 48px;
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+    .screen.active { display: flex; }
+
+    h1 {
+      font-size: 2.2rem;
+      letter-spacing: 2px;
+    }
+
+    /* ── BUTTON ── */
+    .btn {
+      padding: 14px 48px;
+      font-size: 1.5rem;
+      font-weight: bold;
+      background: linear-gradient(135deg, #c01a1a, #ff4444);
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 24px rgba(255,50,50,0.45);
+      letter-spacing: 2px;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .btn:active { transform: scale(0.96); box-shadow: 0 2px 10px rgba(255,50,50,0.3); }
+
+    .christmas-settings {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      width: 100%;
+      max-width: 480px;
+      padding: 16px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 16px;
+    }
+    .mode-tabs, #random-packs-panel, #custom-panel, .time-config-wrapper { display: none !important; }
+    .christmas-settings label { color: #ddd; font-size: 0.82rem; text-align: center; }
+    .christmas-settings select {
+      display: block;
+      width: 100%;
+      margin-top: 6px;
+      padding: 9px 4px;
+      color: #fff;
+      background: #292929;
+      border: 1px solid #555;
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+    .word-progress {
+      min-width: 230px;
+      padding: 10px 20px;
+      color: #ffe28a;
+      background: rgba(255, 210, 70, 0.12);
+      border: 1px solid rgba(255, 220, 100, 0.35);
+      border-radius: 999px;
+      font-size: 1.2rem;
+      font-weight: bold;
+      text-align: center;
+    }
+    .heard-words {
+      width: min(92%, 480px);
+      min-height: 48px;
+      padding: 10px 14px;
+      color: #ddd;
+      background: rgba(0,0,0,0.24);
+      border-radius: 12px;
+      text-align: center;
+      line-height: 1.5;
+    }
+    .voice-btn {
+      padding: 13px 24px;
+      color: #102019;
+      background: linear-gradient(135deg, #8ff0c2, #42d392);
+      border: 0;
+      border-radius: 12px;
+      font-size: 1.05rem;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 18px rgba(66,211,146,0.25);
+    }
+    .voice-btn.listening { color: #fff; background: linear-gradient(135deg, #d94b64, #a91e3a); }
+    .voice-status { min-height: 1.2em; color: #aaa; font-size: 0.85rem; }
+    @media (max-width: 430px) {
+      .christmas-settings { grid-template-columns: 1fr; }
+    }
+
+    /* ── TIME SETTINGS ── */
+    .time-config-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .time-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid #444;
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 0.85rem;
+      color: #888;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+    }
+    .time-toggle-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ccc;
+      border-color: #666;
+    }
+    .time-settings {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: #242424;
+      border: 1px solid #444;
+      border-radius: 14px;
+      padding: 12px 20px;
+      font-size: 1.05rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      animation: panel-fade 0.2s ease-out;
+    }
+    .time-settings label { color: #aaa; font-size: 0.95rem; }
+    .time-settings input[type="number"] {
+      width: 68px;
+      padding: 6px 8px;
+      font-size: 1.25rem;
+      text-align: center;
+      background: #333;
+      color: #fff;
+      border: 1px solid #666;
+      border-radius: 8px;
+    }
+    .time-settings .sep { color: #888; font-size: 1.3rem; }
+    .time-error {
+      color: #ff6b6b;
+      font-size: 0.9rem;
+      min-height: 1.2em;
+    }
+
+    /* ── RUNNING: TOPIC ── */
+    #topic-display {
+      font-size: clamp(1.8rem, 5.5vw, 2.8rem);
+      font-weight: bold;
+      padding: 24px 32px;
+      border-radius: 20px;
+      border: 2px solid rgba(255,80,80,0.35);
+      background: rgba(255,40,40,0.07);
+      max-width: 92%;
+      line-height: 1.45;
+      text-align: center;
+      animation: topic-pulse 2s ease-in-out infinite;
+    }
+    @keyframes topic-pulse {
+      0%,100% {
+        text-shadow: 0 0 10px rgba(255,120,120,0.4);
+        box-shadow: 0 0 20px rgba(255,50,50,0.1);
+        border-color: rgba(255,80,80,0.3);
+      }
+      50% {
+        text-shadow: 0 0 28px rgba(255,130,130,1), 0 0 55px rgba(255,60,60,0.45);
+        box-shadow: 0 0 55px rgba(255,50,50,0.35);
+        border-color: rgba(255,100,100,0.85);
+      }
+    }
+
+    /* ── RUNNING: BOMB ── */
+    .bomb-wrapper {
+      position: relative;
+      width: 140px;
+      height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #bomb-emoji {
+      font-size: 7rem;
+      display: inline-block;
+      animation: bomb-sway 1.6s ease-in-out infinite;
+      filter: drop-shadow(0 0 18px rgba(255,120,0,0.5));
+    }
+    @keyframes bomb-sway {
+      0%,100% { transform: rotate(-8deg) scale(1); }
+      50%      { transform: rotate(8deg)  scale(1.05); }
+    }
+
+    /* sparks */
+    .spark {
+      position: absolute;
+      border-radius: 50%;
+      animation: spark-fly var(--dur) ease-out infinite;
+      animation-delay: var(--delay);
+    }
+    @keyframes spark-fly {
+      0%   { opacity: 1; transform: translate(0,0) scale(1); }
+      100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.1); }
+    }
+
+    /* ── RUNNING: WARNING DOTS ── */
+    .warning-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .w-dot {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #ff2222;
+      animation: w-blink 1s ease-in-out infinite;
+    }
+    .w-dot:nth-child(3) { animation-delay: 0.33s; }
+    .w-dot:nth-child(5) { animation-delay: 0.66s; }
+    @keyframes w-blink {
+      0%,100% { opacity: 0.15; box-shadow: none; }
+      50%      { opacity: 1;    box-shadow: 0 0 8px #ff2222, 0 0 18px #ff0000; }
+    }
+    .w-label {
+      font-size: 0.82rem;
+      letter-spacing: 5px;
+      color: #555;
+      font-weight: bold;
+    }
+
+    /* ── RUNNING: MARQUEE ── */
+    .marquee-outer {
+      position: fixed;
+      bottom: 0; left: 0;
+      width: 100%;
+      overflow: hidden;
+      background: rgba(255,0,0,0.07);
+      border-top: 1px solid rgba(255,0,0,0.18);
+      padding: 7px 0;
+    }
+    .marquee-inner {
+      display: inline-flex;
+      white-space: nowrap;
+      animation: marquee-scroll 14s linear infinite;
+      color: #ff4444;
+      font-size: 0.85rem;
+      letter-spacing: 3px;
+      font-weight: bold;
+    }
+    @keyframes marquee-scroll {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* ── EDGE GLOW ── */
+    #edge-glow {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      z-index: 50;
+      transition: box-shadow 0.6s;
+    }
+
+    /* ── FLASH ── */
+    #flash {
+      position: fixed; inset: 0;
+      background: #fff;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 200;
+      transition: opacity 0.08s;
+    }
+
+    /* ── BOOM SCREEN ── */
+    .boom-explosion { font-size: 5.5rem; animation: boom-shake 0.3s infinite; }
+    .boom-text {
+      font-size: 5rem;
+      font-weight: bold;
+      color: #ff2020;
+      animation: boom-shake 0.3s infinite;
+      text-shadow: 0 0 30px #ff0000, 0 0 60px #ff6600;
+    }
+    @keyframes boom-shake {
+      0%   { transform: translate(2px,  2px) rotate(0deg);  }
+      14%  { transform: translate(-2px,-3px) rotate(-2deg); }
+      28%  { transform: translate(-4px, 0  ) rotate(2deg);  }
+      42%  { transform: translate(4px,  3px) rotate(0deg);  }
+      57%  { transform: translate(2px, -2px) rotate(2deg);  }
+      71%  { transform: translate(-2px, 3px) rotate(-2deg); }
+      85%  { transform: translate(-3px, 1px) rotate(0deg);  }
+      100% { transform: translate(3px, -2px) rotate(1deg);  }
+    }
+
+    /* ── MODE SELECTION TABS ── */
+    .mode-tabs {
+      display: flex;
+      background: #242424;
+      border: 1px solid #444;
+      border-radius: 12px;
+      padding: 4px;
+      gap: 6px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .mode-tab {
+      flex: 1;
+      padding: 10px 14px;
+      font-size: 1rem;
+      font-weight: bold;
+      color: #999;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .mode-tab:hover {
+      color: #fff;
+    }
+    .mode-tab.active {
+      background: linear-gradient(135deg, #c01a1a, #ff4444);
+      color: #fff;
+      box-shadow: 0 2px 12px rgba(255, 68, 68, 0.35);
+    }
+
+    /* ── CUSTOM TOPICS PANEL ── */
+    .custom-panel {
+      width: 100%;
+      max-width: 480px;
+      background: #242424;
+      border: 1px solid #3d3d3d;
+      border-radius: 16px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      animation: panel-fade 0.25s ease-out;
+    }
+    @keyframes panel-fade {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .custom-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #333;
+      padding-bottom: 10px;
+    }
+    .custom-panel-title {
+      font-size: 0.95rem;
+      font-weight: bold;
+      color: #ff8888;
+      letter-spacing: 1px;
+    }
+    .custom-count-badge {
+      font-size: 0.8rem;
+      background: #333;
+      color: #ccc;
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+    .custom-inputs-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 220px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .custom-inputs-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-inputs-list::-webkit-scrollbar-track {
+      background: #1a1a1a;
+      border-radius: 4px;
+    }
+    .custom-inputs-list::-webkit-scrollbar-thumb {
+      background: #444;
+      border-radius: 4px;
+    }
+    .custom-inputs-list::-webkit-scrollbar-thumb:hover {
+      background: #666;
+    }
+    .custom-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: row-in 0.2s ease-out;
+    }
+    @keyframes row-in {
+      from { opacity: 0; transform: translateX(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .custom-idx {
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: #888;
+      width: 28px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .custom-input {
+      flex: 1;
+      padding: 9px 12px;
+      font-size: 0.95rem;
+      background: #2e2e2e;
+      color: #fff;
+      border: 1px solid #555;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .custom-input:focus {
+      border-color: #ff5555;
+      box-shadow: 0 0 8px rgba(255, 85, 85, 0.35);
+    }
+    .custom-del-btn {
+      width: 32px;
+      height: 32px;
+      background: #382424;
+      color: #ff6666;
+      border: 1px solid #5c3030;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+    .custom-del-btn:hover {
+      background: #5a2020;
+      color: #fff;
+      border-color: #ff4444;
+    }
+    .custom-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      background: #363636;
+      color: #eee;
+      border: 1px solid #555;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-sm:hover {
+      background: #484848;
+      border-color: #777;
+      color: #fff;
+    }
+    .btn-sm.btn-add {
+      background: rgba(255, 68, 68, 0.18);
+      border-color: rgba(255, 80, 80, 0.4);
+      color: #ff8888;
+    }
+    .btn-sm.btn-add:hover {
+      background: rgba(255, 68, 68, 0.35);
+      border-color: #ff6666;
+      color: #fff;
+    }
+
+    /* ── ROUND BADGE (RUNNING) ── */
+    .round-badge {
+      font-size: 0.95rem;
+      letter-spacing: 2px;
+      padding: 6px 18px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #ff9999;
+      font-weight: bold;
+    }
+
+    /* ── TOPIC PACKS SELECTION ── */
+    .pack-panel {
+      width: 100%;
+      max-width: 480px;
+      background: #242424;
+      border: 1px solid #3d3d3d;
+      border-radius: 16px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+      animation: panel-fade 0.25s ease-out;
+    }
+    .pack-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #333;
+      padding-bottom: 8px;
+    }
+    .pack-panel-title {
+      font-size: 0.95rem;
+      font-weight: bold;
+      color: #ff8888;
+      letter-spacing: 1px;
+    }
+    .pack-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pack-link-btn {
+      background: none;
+      border: none;
+      color: #aaa;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .pack-link-btn:hover {
+      color: #ff7777;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .pack-sep {
+      color: #555;
+      font-size: 0.8rem;
+    }
+    .pack-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .pack-grid::-webkit-scrollbar {
+      width: 6px;
+    }
+    .pack-grid::-webkit-scrollbar-track {
+      background: #1e1e1e;
+      border-radius: 4px;
+    }
+    .pack-grid::-webkit-scrollbar-thumb {
+      background: #444;
+      border-radius: 4px;
+    }
+    .pack-grid::-webkit-scrollbar-thumb:hover {
+      background: #ff5555;
+    }
+    .pack-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #2b2b2b;
+      border: 1px solid #444;
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+    }
+    .pack-card:hover {
+      border-color: #666;
+      background: #333;
+    }
+    .pack-card.checked {
+      background: rgba(255, 68, 68, 0.12);
+      border-color: rgba(255, 80, 80, 0.6);
+      box-shadow: 0 0 10px rgba(255, 68, 68, 0.18);
+    }
+    .pack-card input[type="checkbox"] {
+      accent-color: #ff3333;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .pack-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+    .pack-name {
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: #eee;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .pack-card.checked .pack-name {
+      color: #fff;
+    }
+    .pack-sub {
+      font-size: 0.75rem;
+      color: #888;
+    }
+    .pack-stats {
+      font-size: 0.8rem;
+      color: #aaa;
+      text-align: right;
+    }
+
+    /* ── RUNNING ACTIONS (返回上一頁、換一題) ── */
+    .running-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      width: 100%;
+      max-width: 420px;
+      margin-top: 4px;
+      z-index: 10;
+    }
+    .run-action-btn {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 18px;
+      font-size: 1.05rem;
+      font-weight: bold;
+      border-radius: 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+      letter-spacing: 1px;
+    }
+    .run-action-btn:active {
+      transform: scale(0.96);
+    }
+    .run-btn-back {
+      background: rgba(45, 45, 45, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #ddd;
+      backdrop-filter: blur(8px);
+    }
+    .run-btn-back:hover {
+      background: rgba(65, 65, 65, 0.9);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+    .run-btn-skip {
+      background: rgba(255, 68, 68, 0.18);
+      border: 1px solid rgba(255, 90, 90, 0.45);
+      color: #ff9999;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 2px 10px rgba(255, 50, 50, 0.15);
+    }
+    .run-btn-skip:hover {
+      background: rgba(255, 68, 68, 0.32);
+      border-color: #ff6666;
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(255, 68, 68, 0.3);
+    }
+
+    /* ── BOOM SCREEN ENHANCEMENTS ── */
+    .boom-info {
+      text-align: center;
+      max-width: 460px;
+    }
+    .boom-topic-revealed {
+      font-size: 1.15rem;
+      color: #ccc;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .boom-topic-revealed span {
+      color: #ff8888;
+      font-weight: bold;
+    }
+    .boom-next-box {
+      background: rgba(255, 50, 50, 0.12);
+      border: 1px solid rgba(255, 80, 80, 0.35);
+      padding: 14px 20px;
+      border-radius: 12px;
+      margin: 4px 0 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: center;
+    }
+    .boom-next-title {
+      font-size: 1rem;
+      color: #ffaaaa;
+      font-weight: bold;
+    }
+    .boom-auto-hint {
+      font-size: 0.85rem;
+      color: #bbb;
+    }
+    .boom-auto-hint b {
+      color: #ff4444;
+      font-size: 1.1rem;
+      display: inline-block;
+      min-width: 14px;
+    }
+    .boom-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 320px;
+      align-items: stretch;
+    }
+    .btn-secondary {
+      padding: 10px 24px;
+      font-size: 1rem;
+      font-weight: bold;
+      background: #2d2d2d;
+      color: #bbb;
+      border: 1px solid #555;
+      border-radius: 10px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: all 0.15s;
+    }
+    .btn-secondary:hover {
+      background: #3d3d3d;
+      color: #fff;
+    }
+
+    /* ── MOBILE SOUND TIP (手機靜音模式提醒) ── */
+    .mobile-sound-tip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 170, 0, 0.12);
+      border: 1px solid rgba(255, 185, 0, 0.35);
+      border-radius: 999px;
+      padding: 7px 18px;
+      font-size: 0.85rem;
+      color: #ffd175;
+      letter-spacing: 0.5px;
+      line-height: 1.4;
+      max-width: 92%;
+      text-align: center;
+      box-shadow: 0 2px 12px rgba(255, 170, 0, 0.08);
+      animation: tip-glow 3s ease-in-out infinite alternate;
+    }
+    .mobile-sound-tip b {
+      color: #fff;
+    }
+    .tip-icon {
+      font-size: 1rem;
+      flex-shrink: 0;
+      animation: tip-shake 2.5s ease-in-out infinite;
+    }
+    @keyframes tip-shake {
+      0%, 80%, 100% { transform: rotate(0); }
+      85% { transform: rotate(14deg); }
+      90% { transform: rotate(-14deg); }
+      95% { transform: rotate(8deg); }
+    }
+    @keyframes tip-glow {
+      from { border-color: rgba(255, 185, 0, 0.25); }
+      to   { border-color: rgba(255, 185, 0, 0.6); box-shadow: 0 0 12px rgba(255, 170, 0, 0.2); }
+    }
+
+    /* ── MOBILE RESPONSIVE OPTIMIZATION (手機版排版優化) ── */
+    @media (max-width: 600px) {
+      .screen {
+        padding: 16px 16px 36px;
+        gap: 12px;
+        justify-content: flex-start;
+      }
+      h1 {
+        font-size: 1.75rem;
+        letter-spacing: 1.5px;
+        margin-top: 2px;
+      }
+      .mobile-sound-tip {
+        padding: 5px 12px;
+        font-size: 0.78rem;
+        gap: 6px;
+      }
+      .mode-tabs {
+        max-width: 100%;
+        padding: 3px;
+      }
+      .mode-tab {
+        padding: 8px 10px;
+        font-size: 0.88rem;
+      }
+      .pack-panel {
+        padding: 10px 12px;
+        gap: 8px;
+        max-width: 100%;
+      }
+      .pack-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        max-height: 160px;
+        padding-right: 3px;
+      }
+      .pack-card {
+        padding: 8px 10px;
+        gap: 8px;
+        border-radius: 8px;
+      }
+      .pack-card input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+      }
+      .pack-name {
+        font-size: 0.82rem;
+      }
+      .pack-sub {
+        font-size: 0.68rem;
+      }
+      .pack-stats {
+        font-size: 0.75rem;
+      }
+      .custom-panel {
+        padding: 12px 14px;
+        gap: 10px;
+        max-width: 100%;
+      }
+      .custom-inputs-list {
+        max-height: 150px;
+      }
+      .time-config-wrapper {
+        gap: 6px;
+      }
+      .time-toggle-btn {
+        padding: 5px 14px;
+        font-size: 0.8rem;
+      }
+      .time-settings {
+        padding: 8px 14px;
+        font-size: 0.95rem;
+        gap: 8px;
+      }
+      .time-settings input[type="number"] {
+        width: 58px;
+        padding: 4px 6px;
+        font-size: 1.1rem;
+      }
+      .time-error {
+        min-height: 0;
+        font-size: 0.8rem;
+      }
+      .btn {
+        width: 100%;
+        max-width: 300px;
+        padding: 12px 24px;
+        font-size: 1.35rem;
+        border-radius: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="flash"></div>
+  <div id="edge-glow"></div>
+
+  <!-- ── IDLE SCREEN ── -->
+  <div id="screen-idle" class="screen active">
+    <!-- 手機靜音模式提醒 -->
+    <div class="mobile-sound-tip">
+      <span class="tip-icon">🔔</span>
+      <span>手機請切換至<b>響鈴模式</b>（關閉靜音模式），否則不會有聲音喔！</span>
+    </div>
+
+    <h1>🎁 聖誕禮物爆炸</h1>
+
+    <div class="christmas-settings" aria-label="聖誕遊戲設定">
+      <label>參加人數
+        <select id="player-count">
+          <option value="1">1 人（15 詞）</option>
+          <option value="2">2 人（25 詞）</option>
+          <option value="3">3 人（35 詞）</option>
+          <option value="4">4 人（45 詞）</option>
+          <option value="5">5 人（55 詞）</option>
+          <option value="6">6 人（65 詞）</option>
+        </select>
+      </label>
+      <label>題目數量
+        <select id="topic-count">
+          <option value="1">1 題</option>
+          <option value="2">2 題</option>
+          <option value="3" selected>3 題</option>
+          <option value="5">5 題</option>
+          <option value="10">10 題</option>
+        </select>
+      </label>
+      <label>每題秒數
+        <select id="seconds-per-topic">
+          <option value="15">15 秒</option>
+          <option value="20">20 秒</option>
+          <option value="30" selected>30 秒</option>
+          <option value="45">45 秒</option>
+          <option value="60">60 秒</option>
+        </select>
+      </label>
+    </div>
+
+    <!-- 模式選擇 -->
+    <div class="mode-tabs">
+      <button type="button" class="mode-tab active" id="tab-random" onclick="setTopicMode('random')">🎲 隨機題目</button>
+      <button type="button" class="mode-tab" id="tab-custom" onclick="setTopicMode('custom')">✍️ 自訂題目</button>
+    </div>
+
+    <!-- 隨機題組選擇區塊 -->
+    <div id="random-packs-panel" class="pack-panel">
+      <div class="pack-panel-header">
+        <span class="pack-panel-title">📚 選擇隨機題組庫</span>
+        <div class="pack-actions">
+          <button type="button" class="pack-link-btn" onclick="toggleAllPacks(true)">全選</button>
+          <span class="pack-sep">|</span>
+          <button type="button" class="pack-link-btn" onclick="toggleAllPacks(false)">清空</button>
+        </div>
+      </div>
+      <div id="pack-grid" class="pack-grid">
+        <!-- JS 動態生成題組選項 -->
+      </div>
+      <div class="pack-stats" id="pack-selected-stats">已選擇 3 個題組（共 10 題）</div>
+    </div>
+
+    <!-- 自訂題目區塊 -->
+    <div id="custom-panel" class="custom-panel" style="display: none;">
+      <div class="custom-panel-header">
+        <span class="custom-panel-title">自訂接續題目清單（依序進行）</span>
+        <span class="custom-count-badge" id="custom-count-badge">3 題</span>
+      </div>
+      <div id="custom-inputs-list" class="custom-inputs-list">
+        <!-- JS 動態生成輸入欄位 -->
+      </div>
+      <div class="custom-actions">
+        <button type="button" class="btn-sm btn-add" onclick="addCustomInput()">＋ 新增題目</button>
+        <div style="display:flex;gap:6px;">
+          <button type="button" class="btn-sm" onclick="fillDefaultTopics()">✨ 範例題目</button>
+          <button type="button" class="btn-sm" onclick="clearCustomInputs()">🗑️ 清空</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 時間設定（預設收起保密，點開才顯示） -->
+    <div class="time-config-wrapper">
+      <button type="button" class="time-toggle-btn" id="time-toggle-btn" onclick="toggleTimeConfig()">
+        <span>⚙️</span> 時間設定
+      </button>
+      <div id="time-settings-panel" class="time-settings" style="display: none;">
+        <label>倒數時間</label>
+        <input type="number" id="time-min" value="15" min="1" max="300" />
+        <span class="sep">～</span>
+        <input type="number" id="time-max" value="45" min="1" max="300" />
+        <label>秒</label>
+      </div>
+    </div>
+    <div class="time-error" id="time-error"></div>
+    <button class="btn" onclick="startGame()">開始遊戲</button>
+  </div>
+
+  <!-- ── RUNNING SCREEN ── -->
+    <div id="screen-running" class="screen">
+      <div class="round-badge" id="round-badge">第 1 / 3 題</div>
+      <div id="topic-display"></div>
+      <div class="word-progress" id="word-progress">已說出 0 / 15 詞</div>
+      <div class="heard-words" id="heard-words">請按下麥克風，開始說出相關詞語</div>
+      <button type="button" class="voice-btn" id="voice-btn" onclick="toggleVoiceRecognition()">🎙️ 開始語音辨識</button>
+      <div class="voice-status" id="voice-status">尚未開始聆聽</div>
+      <div class="bomb-wrapper">
+      <span id="bomb-emoji">🎁</span>
+      <span class="spark" style="width:7px;height:7px;background:#ff6600;top:18px;right:30px;--tx:9px;--ty:-22px;--dur:0.45s;--delay:0s"></span>
+      <span class="spark" style="width:5px;height:5px;background:#ffaa00;top:12px;right:23px;--tx:-6px;--ty:-26px;--dur:0.5s;--delay:0.15s"></span>
+      <span class="spark" style="width:4px;height:4px;background:#ffffff;top:20px;right:18px;--tx:13px;--ty:-16px;--dur:0.38s;--delay:0.28s"></span>
+      <span class="spark" style="width:6px;height:6px;background:#ff3300;top:14px;right:34px;--tx:-9px;--ty:-18px;--dur:0.55s;--delay:0.4s"></span>
+    </div>
+    <div class="warning-strip">
+      <div class="w-dot"></div>
+      <span class="w-label">🎄 聖誕警示</span>
+      <div class="w-dot"></div>
+      <span class="w-label">🎄 聖誕警示</span>
+      <div class="w-dot"></div>
+    </div>
+
+    <!-- 遊戲中操作按鍵：返回上一頁、換一題 -->
+    <div class="running-actions">
+      <button type="button" class="run-action-btn run-btn-back" onclick="resetGame()" title="結束此局並返回設定頁面">
+        <span>↩</span> 返回上一頁
+      </button>
+      <button type="button" class="run-action-btn run-btn-skip" onclick="skipToNextTopic()" title="重新抽取或跳至下一題">
+        <span>🔄</span> 換一題
+      </button>
+    </div>
+
+    <div class="marquee-outer">
+      <div class="marquee-inner" id="marquee-inner">
+        🎄&nbsp;&nbsp;聖誕倒數中&nbsp;&nbsp;🎄&nbsp;&nbsp;小心禮物爆炸&nbsp;&nbsp;🎄&nbsp;&nbsp;快點傳下去&nbsp;&nbsp;🎄&nbsp;&nbsp;聖誕倒數中&nbsp;&nbsp;🎄&nbsp;&nbsp;小心禮物爆炸&nbsp;&nbsp;🎄&nbsp;&nbsp;快點傳下去&nbsp;&nbsp;🎄&nbsp;&nbsp;聖誕倒數中&nbsp;&nbsp;🎄&nbsp;&nbsp;小心禮物爆炸&nbsp;&nbsp;🎄&nbsp;&nbsp;快點傳下去&nbsp;&nbsp;
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BOOM SCREEN ── -->
+  <div id="screen-boom" class="screen">
+    <div class="boom-explosion">💥</div>
+    <div class="boom-text" id="boom-title">BOOM！</div>
+    
+    <div class="boom-info">
+      <div class="boom-topic-revealed" id="boom-topic-info">
+        剛才題目：<span id="boom-current-topic"></span>
+      </div>
+    </div>
+
+    <!-- 自訂模式接續下一題區塊 -->
+    <div id="boom-next-section" class="boom-next-box" style="display: none;">
+      <div class="boom-next-title" id="boom-next-label">下一題準備接續...</div>
+      <div class="boom-auto-hint">倒數 <b id="boom-countdown-num">3</b> 秒後自動接續下一輪</div>
+    </div>
+
+    <div class="boom-actions">
+      <button class="btn" id="boom-main-btn" onclick="onBoomMainAction()">開始下一局</button>
+      <button class="btn-secondary" id="boom-cancel-btn" onclick="resetGame()">↩ 返回上一頁</button>
+    </div>
+  </div>
+
+  <script>
+    // ── Topic Packs (題組分類) ──
+    const TOPIC_PACKS = [
+      {
+        id: "christmas",
+        title: "聖誕節篇",
+        icon: "🎄",
+        topics: [
+          "聖誕節會出現的東西",
+          "聖誕樹上的裝飾品",
+          "適合當聖誕禮物的東西",
+          "聖誕節會吃的食物",
+          "聖誕節會聽到的歌曲",
+          "和冬天有關的東西",
+          "聖誕節派對會玩的活動",
+          "聖誕卡片上會寫的祝福語",
+          "紅色或綠色的聖誕物品",
+          "聖誕交換禮物可能收到的東西",
+          "聖誕節街上會看到的裝飾",
+          "可以掛在聖誕樹上的東西"
+        ]
+      },
+      {
+        id: "campus",
+        title: "校園與地名篇",
+        icon: "🏫",
+        topics: [
+          "大學裡的學校建築或景點",
+          "大學選修課或通識課的名稱",
+          "台北捷運線上的站名",
+          "期末考會出現的崩潰科目"
+        ]
+      },
+      {
+        id: "food",
+        title: "飲食與生活篇",
+        icon: "🍜",
+        topics: [
+          "學校附近走路會到的餐廳小吃",
+          "麥當勞菜單上有的東西",
+          "超商御飯糰的口味",
+          "火鍋裡面會放的配料"
+        ]
+      },
+      {
+        id: "entertainment",
+        title: "娛樂與八卦篇",
+        icon: "🎬",
+        topics: [
+          "追蹤數超過50萬的台灣YouTuber",
+          "聽過的一首周杰倫的歌"
+        ]
+      },
+      {
+        id: "others",
+        title: "其他趣味題組",
+        icon: "🌀",
+        topics: [
+          "操場上可以看到的東西",
+          "宇宙中可能有的事物",
+          "廁所裡會突然冒出的驚嚇",
+          "夢境中可能遇到的怪事",
+          "平行世界的你會做的工作",
+          "叢林探險會遇到的驚嚇",
+          "時間旅行者會帶的裝備",
+          "如果恐龍還在會看到的場景",
+          "手機突然變成魔法神器的功能",
+          "平常不會說出口的內心OS",
+          "派對上最怕聽到的爆料",
+          "戶外露營可能遇到的神秘生物",
+          "科技展上讓人驚呼的發明",
+          "假裝成熟時會做的奇妙舉動",
+          "穿越到古代必備的現代物品",
+          "電影片場會發生的NG狀況",
+          "動物園裡動物的內心OS",
+          "美食家會挑剔的奇怪理由",
+          "劇場彩排時最怕出錯的橋段",
+          "如果恐怖片主角很理性的反應",
+          "超級英雄退休後會做的事",
+          "新年會許的絕妙願望",
+          "下雨天可以自嗨的活動",
+          "晴天爆汗也想玩的戶外活動",
+          "從老闆口中聽到會崩潰的句子",
+          "工作摸魚的最佳偽裝技巧",
+          "夜市攤販的奇怪招客方式",
+          "超商架上讓人困惑的物品",
+          "廚房裡會偷吃你食物的兇手",
+          "冰箱裡最不想看到的東西",
+          "睡前一定會做的放鬆儀式",
+          "旅行最怕忘記帶的必需品",
+          "登山包裡藏著的秘密物品",
+          "寵物店會賣的可愛又奇怪的東西",
+          "半夜肚子餓會做的特製料理",
+          "海邊野餐一定會帶的東西",
+          "如果你是忍者會用的武器",
+          "童年卡通角色長大後的職業",
+          "兒童主題樂園會看到的設施",
+          "當你變成一隻貓第一件事",
+          "超級市場結帳時最怕聽到的狀況",
+          "打開鞋櫃會掉出來的東西",
+          "電梯裡會遇到的尷尬情境",
+          "長輩聚會一定會問的問題",
+          "社群媒體上令人崩潰的貼文",
+          "戀愛中會做的超幼稚舉動",
+          "暗戀對象不小心看到會崩潰的東西",
+          "假日百貨公司會看到的景象",
+          "過年團圓飯一定會出現的菜",
+          "室友最常犯的地雷行為",
+          "下班前五分鐘的內心戲",
+          "健身教練會糾正的習慣",
+          "如果你中了樂透會先買的物品",
+          "朋友生日驚喜會準備的小道具",
+          "交通工具上最怕遇到的旅伴",
+          "博物館裡會看到的奇妙展品",
+          "夏天避暑會做的行程安排",
+          "冬天保暖最離奇的方法"
+        ]
+      }
+    ];
+
+    let selectedPackIds = new Set(["christmas"]);
+
+    // ── Mode & Custom Topics State ──
+    let currentTopicMode = 'random'; // 'random' | 'custom'
+    let customTopicsList = [
+      "說出三種紅色的水果",
+      "模仿一種動物的叫聲",
+      "說出三個字尾是「斯」的國家"
+    ];
+    let customQueue = [];
+    let currentRoundIndex = 0;
+    let currentActiveTopic = "";
+    let playedRandomTopics = new Set();
+    let autoNextTimer = null;
+    let autoNextInterval = null;
+    let autoNextSecondsLeft = 3;
+    let targetWordCount = 15;
+    let heardWords = [];
+    let speechRecognition = null;
+    let isListening = false;
+    let topicSucceeded = false;
+
+    const CHRISTMAS_TOPICS = TOPIC_PACKS.find(pack => pack.id === "christmas").topics;
+
+    function getTargetWordCount(playerCount) {
+      return 15 + (Number(playerCount) - 1) * 10;
+    }
+
+    function updateWordProgress() {
+      const progress = document.getElementById("word-progress");
+      const heard = document.getElementById("heard-words");
+      if (progress) progress.textContent = `已說出 ${heardWords.length} / ${targetWordCount} 詞`;
+      if (heard) heard.textContent = heardWords.length
+        ? `已辨識：${heardWords.join("、")}`
+        : "請按下麥克風，開始說出相關詞語";
+      if (heardWords.length >= targetWordCount) {
+        clearTimeout(bombTimer);
+        stopVoiceRecognition();
+        topicSucceeded = true;
+        document.getElementById("voice-status").textContent = "🎉 詞語達標！準備下一題";
+        setTimeout(() => triggerBoom(), 450);
+      }
+    }
+
+    function segmentChineseWords(text) {
+      const cleaned = text.replace(/[，。！？、；：,.!?;:"「」『』（）()\s]+/g, " ").trim();
+      if (!cleaned) return [];
+      if (typeof Intl !== "undefined" && Intl.Segmenter) {
+        const segmenter = new Intl.Segmenter("zh-TW", { granularity: "word" });
+        return [...segmenter.segment(cleaned)]
+          .map(item => item.segment.trim())
+          .filter(word => /[\u3400-\u9fffA-Za-z0-9]/.test(word) && !/^(我|你|他|她|它|是|有|的|了|和|跟|一個|這個|那個)$/.test(word));
+      }
+      return cleaned.split(/\s+/).filter(Boolean);
+    }
+
+    function handleSpeechText(text) {
+      const words = segmentChineseWords(text);
+      words.forEach(word => {
+        if (!heardWords.includes(word)) heardWords.push(word);
+      });
+      updateWordProgress();
+    }
+
+    function createSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return null;
+      const recognition = new SpeechRecognition();
+      recognition.lang = "zh-TW";
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.onresult = event => {
+        const start = event.resultIndex || 0;
+        for (let i = start; i < event.results.length; i++) {
+          if (event.results[i].isFinal) handleSpeechText(event.results[i][0].transcript);
+        }
+      };
+      recognition.onerror = event => {
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          document.getElementById("voice-status").textContent = "麥克風權限被拒絕，請改用人工判定或重新允許麥克風";
+          stopVoiceRecognition();
+        } else {
+          document.getElementById("voice-status").textContent = `語音辨識狀態：${event.error}，請再試一次`;
+        }
+      };
+      recognition.onend = () => {
+        if (isListening) {
+          try { recognition.start(); } catch (_) { /* 短暫重啟即可 */ }
+        }
+      };
+      return recognition;
+    }
+
+    function toggleVoiceRecognition() {
+      if (isListening) {
+        stopVoiceRecognition();
+        return;
+      }
+      if (!speechRecognition) speechRecognition = createSpeechRecognition();
+      if (!speechRecognition) {
+        document.getElementById("voice-status").textContent = "此瀏覽器不支援語音辨識，請改用 Chrome 或人工判定";
+        return;
+      }
+      try {
+        speechRecognition.start();
+        isListening = true;
+        document.getElementById("voice-btn").textContent = "⏹️ 停止語音辨識";
+        document.getElementById("voice-btn").classList.add("listening");
+        document.getElementById("voice-status").textContent = "正在聆聽，請一個一個說出詞語";
+      } catch (_) {}
+    }
+
+    function stopVoiceRecognition() {
+      isListening = false;
+      if (speechRecognition) {
+        try { speechRecognition.stop(); } catch (_) {}
+      }
+      const button = document.getElementById("voice-btn");
+      if (button) {
+        button.textContent = "🎙️ 開始語音辨識";
+        button.classList.remove("listening");
+      }
+    }
+
+    function setTopicMode(mode) {
+      currentTopicMode = mode;
+      const tabRandom = document.getElementById("tab-random");
+      const tabCustom = document.getElementById("tab-custom");
+      const randomPacksPanel = document.getElementById("random-packs-panel");
+      const customPanel = document.getElementById("custom-panel");
+
+      if (mode === "random") {
+        tabRandom.classList.add("active");
+        tabCustom.classList.remove("active");
+        randomPacksPanel.style.display = "flex";
+        customPanel.style.display = "none";
+      } else {
+        tabCustom.classList.add("active");
+        tabRandom.classList.remove("active");
+        randomPacksPanel.style.display = "none";
+        customPanel.style.display = "flex";
+        if (customTopicsList.length === 0) {
+          fillDefaultTopics();
+        } else {
+          renderCustomInputs();
+        }
+      }
+    }
+
+    function toggleTimeConfig() {
+      const panel = document.getElementById("time-settings-panel");
+      const btn = document.getElementById("time-toggle-btn");
+      if (panel.style.display === "none") {
+        panel.style.display = "inline-flex";
+        btn.innerHTML = "<span>▲</span> 收起時間設定";
+      } else {
+        panel.style.display = "none";
+        btn.innerHTML = "<span>⚙️</span> 時間設定";
+      }
+    }
+
+    // ── Random Pack Selection Logic ──
+    function renderPackCards() {
+      const container = document.getElementById("pack-grid");
+      if (!container) return;
+      container.innerHTML = "";
+
+      TOPIC_PACKS.forEach(pack => {
+        const isChecked = selectedPackIds.has(pack.id);
+        const card = document.createElement("div");
+        card.className = `pack-card ${isChecked ? 'checked' : ''}`;
+        card.onclick = (e) => {
+          if (e.target.tagName !== "INPUT") {
+            togglePack(pack.id);
+          }
+        };
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = isChecked;
+        checkbox.onchange = () => togglePack(pack.id);
+
+        const info = document.createElement("div");
+        info.className = "pack-info";
+
+        const name = document.createElement("span");
+        name.className = "pack-name";
+        name.textContent = `${pack.icon} ${pack.title}`;
+
+        const sub = document.createElement("span");
+        sub.className = "pack-sub";
+        sub.textContent = `${pack.topics.length} 道題目`;
+
+        info.appendChild(name);
+        info.appendChild(sub);
+
+        card.appendChild(checkbox);
+        card.appendChild(info);
+        container.appendChild(card);
+      });
+
+      updatePackStats();
+    }
+
+    function togglePack(id) {
+      if (selectedPackIds.has(id)) {
+        selectedPackIds.delete(id);
+      } else {
+        selectedPackIds.add(id);
+      }
+      renderPackCards();
+    }
+
+    function toggleAllPacks(checkAll) {
+      if (checkAll) {
+        selectedPackIds = new Set(TOPIC_PACKS.map(p => p.id));
+      } else {
+        selectedPackIds.clear();
+      }
+      renderPackCards();
+    }
+
+    function updatePackStats() {
+      const statsEl = document.getElementById("pack-selected-stats");
+      if (!statsEl) return;
+      const countPacks = selectedPackIds.size;
+      let countTopics = 0;
+      TOPIC_PACKS.forEach(p => {
+        if (selectedPackIds.has(p.id)) countTopics += p.topics.length;
+      });
+      statsEl.textContent = `已選擇 ${countPacks} 個題組（共 ${countTopics} 題可抽）`;
+    }
+
+    function getActiveRandomPool() {
+      const pool = [];
+      TOPIC_PACKS.forEach(pack => {
+        if (selectedPackIds.has(pack.id)) {
+          pack.topics.forEach(t => {
+            pool.push({
+              packTitle: pack.title,
+              packIcon: pack.icon,
+              text: t
+            });
+          });
+        }
+      });
+      return pool;
+    }
+
+    function renderCustomInputs() {
+      const container = document.getElementById("custom-inputs-list");
+      const badge = document.getElementById("custom-count-badge");
+      container.innerHTML = "";
+
+      customTopicsList.forEach((text, index) => {
+        const row = document.createElement("div");
+        row.className = "custom-row";
+
+        const idxSpan = document.createElement("span");
+        idxSpan.className = "custom-idx";
+        idxSpan.textContent = `#${index + 1}`;
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "custom-input";
+        input.placeholder = `題目 ${index + 1}（例：說出...）`;
+        input.value = text;
+        input.maxLength = 50;
+        input.oninput = (e) => {
+          customTopicsList[index] = e.target.value;
+        };
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "custom-del-btn";
+        delBtn.title = "刪除此題";
+        delBtn.innerHTML = "✕";
+        delBtn.onclick = () => removeCustomInput(index);
+
+        row.appendChild(idxSpan);
+        row.appendChild(input);
+        row.appendChild(delBtn);
+        container.appendChild(row);
+      });
+
+      badge.textContent = `共 ${customTopicsList.length} 題`;
+    }
+
+    function addCustomInput(defaultText = "") {
+      if (customTopicsList.length >= 20) {
+        alert("最多可設定 20 道題目！");
+        return;
+      }
+      customTopicsList.push(defaultText);
+      renderCustomInputs();
+
+      const container = document.getElementById("custom-inputs-list");
+      container.scrollTop = container.scrollHeight;
+      const inputs = container.querySelectorAll(".custom-input");
+      if (inputs.length > 0) {
+        inputs[inputs.length - 1].focus();
+      }
+    }
+
+    function removeCustomInput(index) {
+      if (customTopicsList.length <= 1) {
+        customTopicsList[0] = "";
+        renderCustomInputs();
+        return;
+      }
+      customTopicsList.splice(index, 1);
+      renderCustomInputs();
+    }
+
+    function fillDefaultTopics() {
+      customTopicsList = [
+        "說出三種紅色的水果",
+        "模仿一種動物的叫聲",
+        "說出三個字尾是「斯」的國家"
+      ];
+      renderCustomInputs();
+    }
+
+    function clearCustomInputs() {
+      customTopicsList = [""];
+      renderCustomInputs();
+      const container = document.getElementById("custom-inputs-list");
+      const input = container.querySelector(".custom-input");
+      if (input) input.focus();
+    }
+
+    // ── Audio ──
+    let audioCtx = null, tickBuffer = null, boomBuffer = null, tickSource = null;
+    let audioReadyPromise = null, audioUnlocked = false;
+    const tickAudio = new Audio("tick.mp3");
+    const boomAudio = new Audio("boom.mp3");
+    tickAudio.loop = true;
+    tickAudio.preload = "auto";
+    boomAudio.preload = "auto";
+
+    async function initAudio() {
+      if (audioReadyPromise) return audioReadyPromise;
+      audioReadyPromise = (async () => {
+        if (!window.AudioContext && !window.webkitAudioContext) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === "suspended") await audioCtx.resume().catch(() => {});
+        const [tickData, boomData] = await Promise.all([
+          fetch("tick.mp3").then(r => r.arrayBuffer()),
+          fetch("boom.mp3").then(r => r.arrayBuffer()),
+        ]);
+        tickBuffer = await audioCtx.decodeAudioData(tickData);
+        boomBuffer = await audioCtx.decodeAudioData(boomData);
+      })().catch(() => {
+        audioCtx = null;
+      });
+      return audioReadyPromise;
+    }
+
+    function safePlay(audio) {
+      const promise = audio.play();
+      if (promise && typeof promise.catch === "function") promise.catch(() => {});
+      return promise;
+    }
+
+    async function primeAudioElement(audio) {
+      const wasMuted = audio.muted;
+      const oldVolume = audio.volume;
+      try {
+        audio.muted = true;
+        audio.volume = 0;
+        await safePlay(audio);
+        audio.pause();
+        audio.currentTime = 0;
+      } catch (_) {
+        // Some browsers still reject priming; the Web Audio path remains preferred.
+      } finally {
+        audio.muted = wasMuted;
+        audio.volume = oldVolume;
+      }
+    }
+
+    async function unlockAudio() {
+      if (audioUnlocked) return;
+      await initAudio();
+      if (audioCtx && audioCtx.state === "suspended") await audioCtx.resume().catch(() => {});
+
+      if (audioCtx) {
+        const silent = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+        const src = audioCtx.createBufferSource();
+        src.buffer = silent;
+        src.connect(audioCtx.destination);
+        src.start(0);
+      }
+
+      await Promise.all([primeAudioElement(tickAudio), primeAudioElement(boomAudio)]);
+      audioUnlocked = true;
+    }
+
+    function playTick() {
+      if (!audioCtx || !tickBuffer) {
+        tickAudio.currentTime = 0;
+        safePlay(tickAudio);
+        return;
+      }
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      tickSource = audioCtx.createBufferSource();
+      tickSource.buffer = tickBuffer;
+      tickSource.loop = true;
+      tickSource.connect(audioCtx.destination);
+      tickSource.start();
+    }
+
+    function stopTick() {
+      tickAudio.pause();
+      tickAudio.currentTime = 0;
+      if (tickSource) {
+        try { tickSource.stop(); } catch(_) {}
+        tickSource = null;
+      }
+    }
+
+    function playBoom() {
+      if (!audioCtx || !boomBuffer) {
+        boomAudio.currentTime = 0;
+        safePlay(boomAudio);
+        return;
+      }
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const src = audioCtx.createBufferSource();
+      src.buffer = boomBuffer;
+      src.connect(audioCtx.destination);
+      src.start();
+    }
+
+    // ── Screens ──
+    function showScreen(id) {
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      document.getElementById("screen-" + id).classList.add("active");
+    }
+
+    // ── Tension system ──
+    let countdownTotal = 0, elapsed = 0;
+    let bombTimer = null, tensionInterval = null;
+
+    function updateTension(p) {
+      // Bomb sway speed
+      document.getElementById("bomb-emoji").style.animationDuration =
+        Math.max(0.25, 1.6 - p * 1.35) + "s";
+      // Topic pulse speed
+      document.getElementById("topic-display").style.animationDuration =
+        Math.max(0.35, 2 - p * 1.6) + "s";
+      // Warning blink speed
+      document.querySelectorAll(".w-dot").forEach(d =>
+        d.style.animationDuration = Math.max(0.12, 1 - p * 0.85) + "s"
+      );
+      // Marquee speed
+      document.getElementById("marquee-inner").style.animationDuration =
+        Math.max(2.5, 14 - p * 11.5) + "s";
+      // Edge glow intensity
+      const glow = Math.floor(p * 90);
+      const alpha = (p * 0.55).toFixed(2);
+      document.getElementById("edge-glow").style.boxShadow =
+        `inset 0 0 ${glow}px rgba(255,0,0,${alpha})`;
+      // Background color shift → dark red
+      const r = Math.round(26 + p * 64);
+      const gb = Math.round(Math.max(0, 26 - p * 22));
+      document.body.style.background = `rgb(${r},${gb},${gb})`;
+    }
+
+    // ── Game logic ──
+    async function startGame() {
+      const playerCount = parseInt(document.getElementById("player-count").value, 10);
+      const topicCount = parseInt(document.getElementById("topic-count").value, 10);
+      const seconds = parseInt(document.getElementById("seconds-per-topic").value, 10);
+      const errorEl = document.getElementById("time-error");
+
+      if (!playerCount || !topicCount || !seconds) {
+        errorEl.textContent = "請完成遊戲設定";
+        return;
+      }
+      targetWordCount = getTargetWordCount(playerCount);
+      customQueue = [...CHRISTMAS_TOPICS].sort(() => Math.random() - 0.5).slice(0, Math.min(topicCount, CHRISTMAS_TOPICS.length));
+      currentTopicMode = "custom";
+      currentRoundIndex = 0;
+      document.getElementById("time-min").value = seconds;
+      document.getElementById("time-max").value = seconds;
+      errorEl.textContent = "";
+
+      await unlockAudio();
+      startTopicRound();
+    }
+
+    function startTopicRound() {
+      clearAutoNext();
+      clearTimeout(bombTimer);
+      clearInterval(tensionInterval);
+
+      const seconds = parseInt(document.getElementById("seconds-per-topic").value, 10);
+
+      const roundBadge = document.getElementById("round-badge");
+      currentActiveTopic = customQueue[currentRoundIndex];
+      roundBadge.textContent = `🎄 第 ${currentRoundIndex + 1} / ${customQueue.length} 題`;
+
+      const topicDisplay = document.getElementById("topic-display");
+      topicDisplay.textContent = currentActiveTopic;
+
+      countdownTotal = seconds;
+      elapsed = 0;
+      heardWords = [];
+      topicSucceeded = false;
+      updateWordProgress();
+      document.getElementById("voice-status").textContent = "尚未開始聆聽";
+      stopVoiceRecognition();
+
+      updateTension(0);
+      showScreen("running");
+      setTimeout(() => toggleVoiceRecognition(), 350);
+      stopTick();
+      playTick();
+
+      tensionInterval = setInterval(() => {
+        elapsed++;
+        updateTension(Math.min(elapsed / countdownTotal, 1));
+      }, 1000);
+
+      bombTimer = setTimeout(triggerBoom, countdownTotal * 1000);
+    }
+
+    function skipToNextTopic() {
+      if (currentTopicMode === "custom") {
+        if (customQueue.length > 1) {
+          currentRoundIndex = (currentRoundIndex + 1) % customQueue.length;
+        }
+      }
+      startTopicRound();
+    }
+
+    function triggerBoom() {
+      clearInterval(tensionInterval);
+      stopTick();
+      stopVoiceRecognition();
+
+      const flash = document.getElementById("flash");
+      flash.style.opacity = "1";
+      setTimeout(() => { flash.style.opacity = "0"; }, 160);
+
+      document.body.style.background = "#1a1a1a";
+      document.getElementById("edge-glow").style.boxShadow = "none";
+
+      setTimeout(() => {
+        setupBoomScreen();
+        if (topicSucceeded) document.getElementById("boom-title").textContent = "🎉 詞語達標！";
+        showScreen("boom");
+        playBoom();
+      }, 220);
+    }
+
+    function setupBoomScreen() {
+      clearAutoNext();
+
+      const boomTitle = document.getElementById("boom-title");
+      const currentTopicEl = document.getElementById("boom-current-topic");
+      const nextSection = document.getElementById("boom-next-section");
+      const mainBtn = document.getElementById("boom-main-btn");
+      const cancelBtn = document.getElementById("boom-cancel-btn");
+
+      currentTopicEl.textContent = currentActiveTopic;
+      if (nextSection) nextSection.style.display = "none";
+
+      // 「返回上一頁」按鈕始終顯示
+      cancelBtn.style.display = "block";
+      cancelBtn.textContent = "↩ 返回上一頁";
+
+      if (currentTopicMode === "custom") {
+        if (currentRoundIndex + 1 < customQueue.length) {
+          // 自訂模式且還有下一題
+          const nextRoundNum = currentRoundIndex + 2;
+          const total = customQueue.length;
+          boomTitle.textContent = `💥 第 ${currentRoundIndex + 1} 題 爆炸！`;
+          mainBtn.textContent = `開始下一題（第 ${nextRoundNum} / ${total} 題）`;
+        } else {
+          // 自訂模式且全部完成
+          boomTitle.textContent = "💥 全部題目完成！";
+          mainBtn.textContent = "重新開始自訂題目（從第 1 題）";
+        }
+      } else {
+        // 隨機題目模式
+        boomTitle.textContent = "💥 BOOM！";
+        mainBtn.textContent = "開始下一局";
+      }
+    }
+
+    function onBoomMainAction() {
+      clearAutoNext();
+      if (currentTopicMode === "custom") {
+        if (currentRoundIndex + 1 < customQueue.length) {
+          currentRoundIndex++;
+        } else {
+          currentRoundIndex = 0; // 全部完成後重啟第一輪
+        }
+      }
+      // 直接繼續進行下一局遊戲，不需退回首頁
+      startTopicRound();
+    }
+
+    function proceedNextRound() {
+      clearAutoNext();
+      currentRoundIndex++;
+      startTopicRound();
+    }
+
+    function clearAutoNext() {
+      if (autoNextTimer) {
+        clearTimeout(autoNextTimer);
+        autoNextTimer = null;
+      }
+      if (autoNextInterval) {
+        clearInterval(autoNextInterval);
+        autoNextInterval = null;
+      }
+    }
+
+    function resetGame() {
+      clearAutoNext();
+      clearTimeout(bombTimer);
+      clearInterval(tensionInterval);
+      stopTick();
+      stopVoiceRecognition();
+
+      playedRandomTopics.clear();
+      currentActiveTopic = "";
+
+      document.body.style.background = "#1a1a1a";
+      document.getElementById("edge-glow").style.boxShadow = "none";
+      showScreen("idle");
+    }
+
+    // 初始化渲染題組選擇與自訂題目列表
+    renderPackCards();
+    renderCustomInputs();
+  </script>
+<script src="/stats.js"></script>
+</body>
+</html>

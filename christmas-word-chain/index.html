@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#12351f">
+  <title>🎄 聖誕快手詞語接龍</title>
+  <style>
+    :root{--red:#d9344b;--green:#1f8a55;--gold:#ffd86b;--ink:#fff;--muted:#c7d4ca}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
+    body{background:radial-gradient(circle at 15% 8%,#d9344b55,transparent 30%),radial-gradient(circle at 85% 10%,#1f8a5555,transparent 32%),linear-gradient(145deg,#071b12,#12351f 55%,#160b12)}
+    .wrap{max-width:720px;margin:auto;padding:24px 16px 48px}.top{text-align:center}.top small{color:var(--gold);letter-spacing:.18em;font-weight:800}.top h1{font-size:clamp(2rem,8vw,4rem);margin:12px 0 24px;text-shadow:0 0 25px #ffd86b77}
+    .card{background:#071c13dc;border:1px solid #ffffff2b;border-radius:24px;padding:22px;margin:16px 0;box-shadow:0 22px 60px #0008;backdrop-filter:blur(12px)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}label{display:block;color:var(--muted);font-size:.85rem;font-weight:800}input,select,textarea,button{width:100%;min-height:48px;margin-top:7px;border:1px solid #ffffff2e;border-radius:12px;background:#06140dd9;color:#fff;padding:11px 13px;font-size:1rem}button{cursor:pointer;font-weight:900}button:disabled{opacity:.45;cursor:not-allowed}.wide{grid-column:1/-1}.primary{background:linear-gradient(135deg,var(--gold),#ec9d2b);color:#241605;border:0}.voice{background:linear-gradient(135deg,#58d995,#1f8a55);border:0}.voice.listening{background:linear-gradient(135deg,#f36b7b,var(--red))}.pass{background:linear-gradient(135deg,#65e49e,#19804e);border:0}.fail{background:linear-gradient(135deg,#ff7b88,var(--red));border:0}.hidden{display:none!important}.center{text-align:center}.topic{display:inline-block;padding:8px 16px;border:1px solid #ffd86b66;border-radius:999px;color:var(--gold);font-weight:900}.turn{font-size:clamp(1.6rem,7vw,3rem);font-weight:1000;margin:18px 0;color:#fff}.word{font-size:clamp(3.5rem,18vw,8rem);font-weight:1000;letter-spacing:.12em;color:var(--gold);text-shadow:0 0 30px #ffd86b88;min-height:1.2em}.hint{color:var(--muted);min-height:1.5em}.timer{font-size:clamp(3rem,14vw,6rem);font-weight:1000;color:var(--gold);margin:10px}.status{min-height:1.5em;color:var(--muted)}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:15px}.players{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px}.pill{padding:8px 13px;border-radius:999px;background:#ffffff12;color:var(--muted);border:1px solid #ffffff24}.pill.active{background:var(--gold);color:#261605;font-weight:900}.history{margin-top:18px;color:var(--muted);font-size:.9rem;line-height:1.7}.notice{padding:10px;border-radius:12px;background:#ffd86b12;border:1px solid #ffd86b30;color:#ffeab0;margin-top:13px}
+    @media(max-width:520px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.actions{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top"><small>CHRISTMAS WORD ARENA</small><h1>🎄 聖誕快手詞語接龍</h1></header>
+
+    <section id="setup" class="card">
+      <div class="grid">
+        <div><label for="count">玩家人數</label><input id="count" type="number" min="1" max="12" value="2"></div>
+        <div><label for="names">玩家名稱（每行一位）</label><textarea id="names" rows="2" placeholder="玩家 1\n玩家 2"></textarea></div>
+        <div class="wide"><label>遊戲規則</label><div class="notice">題目：聖誕節。每回合必須講出一個三字詞，語音辨識後由現場人員在 10 秒內判定。</div></div>
+      </div>
+      <button id="start" class="primary">開始遊戲</button>
+    </section>
+
+    <section id="game" class="card hidden center">
+      <div class="topic">🎄 聖誕節</div>
+      <div id="turn" class="turn"></div>
+      <div id="word" class="word">？</div>
+      <div id="hint" class="hint">請按麥克風，說出一個三字詞</div>
+      <button id="voice" class="voice">🎙️ 開始語音辨識</button>
+      <div id="status" class="status">等待玩家回答</div>
+      <div id="judge" class="hidden">
+        <div class="timer" id="judgeTime">10</div>
+        <div class="notice">請在 10 秒內判斷這個詞語是否符合規則</div>
+        <div class="actions"><button id="pass" class="pass">✅ 通過</button><button id="fail" class="fail">❌ 不通過</button></div>
+      </div>
+      <div id="players" class="players"></div>
+      <div id="history" class="history">尚無紀錄</div>
+    </section>
+
+    <section id="result" class="card hidden center"><div class="word">🎉</div><h2>本局完成</h2><div id="summary" class="history"></div><button id="again" class="primary">再玩一次</button></section>
+  </main>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    let players = [], current = 0, mediaRecorder = null, mediaStream = null, listening = false, judgeTimer = null, judgeLeft = 0, history = [], pendingWord = "";
+    const TRANSLATE_API = "https://translate.ricky-nova.com/api";
+
+    function renderPlayers() {
+      $("players").innerHTML = players.map((name, i) => `<span class="pill ${i === current ? "active" : ""}">${name}</span>`).join("");
+    }
+
+    function segmentText(text) {
+      const cleaned = text.replace(/[，。！？、；：,.!?;:"「」『』（）()\s]/g, "");
+      if (Intl.Segmenter) {
+        const segmenter = new Intl.Segmenter("zh-TW", { granularity: "word" });
+        const segments = [...segmenter.segment(text)].map(x => x.segment.replace(/[^\u3400-\u9fffA-Za-z0-9]/g, "")).filter(Boolean);
+        const exact = segments.find(x => [...x].length === 3);
+        if (exact) return exact;
+      }
+      return [...cleaned].length === 3 ? cleaned : "";
+    }
+
+    function setStatus(text) { $("status").textContent = text; }
+
+    function stopListening() {
+      listening = false;
+      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+      if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+      mediaStream = null;
+      $("voice").textContent = "🎙️ 開始語音辨識";
+      $("voice").classList.remove("listening");
+    }
+
+    async function getApiToken() {
+      const saved = localStorage.getItem("christmasWordChainApiToken");
+      if (saved) return saved;
+      const response = await fetch(`${TRANSLATE_API}/auth/guest`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ display_name: "聖誕詞語接龍", preferred_lang: "zh-TW", input_lang: "zh-TW", output_lang: "zh-TW" }) });
+      if (!response.ok) throw new Error("翻譯服務登入失敗");
+      const data = await response.json();
+      localStorage.setItem("christmasWordChainApiToken", data.token);
+      return data.token;
+    }
+
+    async function transcribeAudio(blob) {
+      const token = await getApiToken();
+      const form = new FormData();
+      form.append("audio", blob, "christmas-word.webm");
+      form.append("lang_a", "zh-TW");
+      form.append("lang_b", "en");
+      form.append("is_final", "true");
+      const response = await fetch(`${TRANSLATE_API}/translator/translate`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+      if (!response.ok) throw new Error("翻譯服務語音辨識失敗");
+      return response.json();
+    }
+
+    async function startListening() {
+      if (listening) { stopListening(); return; }
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { setStatus("此瀏覽器不支援錄音，請改用 Chrome 或 Safari"); return; }
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/mp4";
+        const chunks = [];
+        mediaRecorder = new MediaRecorder(mediaStream, { mimeType: mime });
+        mediaRecorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+        mediaRecorder.onstop = async () => {
+          const blob = new Blob(chunks, { type: mime });
+          setStatus("正在送到翻譯服務辨識⋯");
+          try {
+            const result = await transcribeAudio(blob);
+            const text = result.transcript || "";
+            const word = segmentText(text);
+            if (!word) { $("word").textContent = "？"; setStatus(`聽到「${text || "（沒有內容）"}」，但不是三字詞，請再試一次`); return; }
+            pendingWord = word; $("word").textContent = word; $("hint").textContent = `翻譯服務辨識：${text}`; setStatus("請現場人員判定"); startJudgement();
+          } catch (error) { setStatus(`${error.message}，請再試一次`); }
+        };
+        mediaRecorder.start(); listening = true; $("voice").textContent = "⏹️ 停止錄音並辨識"; $("voice").classList.add("listening"); setStatus("正在錄音，說完三字詞後按停止");
+      } catch (error) { setStatus("無法使用麥克風，請允許麥克風權限"); }
+    }
+
+    function startJudgement() {
+      clearInterval(judgeTimer); judgeLeft = 10; $("judgeTime").textContent = judgeLeft; $("judge").classList.remove("hidden"); $("voice").disabled = true;
+      judgeTimer = setInterval(() => { judgeLeft--; $("judgeTime").textContent = judgeLeft; if (judgeLeft <= 0) finishJudgement(false); }, 1000);
+    }
+
+    function finishJudgement(accepted) {
+      clearInterval(judgeTimer); $("judge").classList.add("hidden"); $("voice").disabled = false;
+      history.push(`${players[current]}：${pendingWord}（${accepted ? "通過" : "不通過"}）`);
+      $("history").innerHTML = history.slice(-8).join("<br>");
+      if (!accepted) setStatus("不通過，換下一位"); else setStatus("通過，換下一位");
+      current = (current + 1) % players.length; pendingWord = ""; $("word").textContent = "？"; $("hint").textContent = "請按麥克風，說出一個三字詞"; renderPlayers();
+    }
+
+    function startGame() {
+      const count = Math.max(1, Math.min(12, Number($("count").value) || 2));
+      const names = $("names").value.split("\n").map(x => x.trim()).filter(Boolean);
+      players = Array.from({ length: count }, (_, i) => names[i] || `玩家 ${i + 1}`);
+      current = 0; history = []; pendingWord = ""; $("setup").classList.add("hidden"); $("result").classList.add("hidden"); $("game").classList.remove("hidden"); $("history").textContent = "尚無紀錄"; renderPlayers();
+    }
+
+    $("start").onclick = startGame; $("voice").onclick = startListening; $("pass").onclick = () => finishJudgement(true); $("fail").onclick = () => finishJudgement(false); $("again").onclick = () => location.reload();
+  </script>
+</body>
+</html>
