@@ -1,4 +1,4 @@
-import hashlib, json, os, urllib.error, urllib.request, uuid
+import hashlib, json, os, re, urllib.error, urllib.request, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from xml.sax.saxutils import escape
@@ -13,6 +13,19 @@ ROOT=os.environ.get('CACHE_ROOT','/app/cache'); os.makedirs(ROOT,exist_ok=True)
 MAX_CHARS=80
 MAX_AUDIO=3*1024*1024
 INITIALS=set('ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙ')
+STT_PROMPT='以下是一個繁體中文詞語。'
+# Whisper 在沒人講話時會編出字幕類的句子（作詞作曲、請訂閱…），規則沿用 realtime-translate
+NO_SPEECH_THRESHOLD=0.5
+MAX_COMPRESSION_RATIO=2.4
+HALLUCINATIONS=[re.compile(p,re.IGNORECASE) for p in [
+    r'(點贊|点赞).*(訂閱|订阅)|(訂閱|订阅).*(頻道|频道|轉發|转发|打賞|打赏)|明鏡與|明镜与|點點欄目|点点栏目',
+    r'字幕(由|提供|製作|制作|志願|志愿|組|组|by)|中文字幕|字幕君',
+    r'(作詞|作词|作曲|編曲|编曲|詞曲|词曲|演唱|監製|监制)',
+    r'感謝(收看|觀看|您的觀看)|感谢(收看|观看|您的观看)|下次再[見见]|歡迎收看|欢迎收看',
+    r'thank(s| you) for watching|please subscribe|like and subscribe|amara\.org|subtitles by',
+    r'繁體中文詞語|繁体中文词语',
+]]
+WEAK_HALLUCINATIONS={'謝謝','谢谢','謝謝大家','谢谢大家','嗯','you','thank you','bye'}
 AUDIO_EXT={'audio/webm':'webm','audio/ogg':'ogg','audio/mp4':'m4a','audio/x-m4a':'m4a','audio/mpeg':'mp3','audio/wav':'wav','audio/x-wav':'wav'}
 def body(data): return json.dumps(data,ensure_ascii=False).encode()
 def clamp_rate(raw):
@@ -25,12 +38,21 @@ def synthesize(text,rate):
 def transcribe(audio,content_type):
     # Groq Whisper（OpenAI 相容的 multipart 介面）；prompt 讓它偏向輸出繁體中文詞語
     boundary=uuid.uuid4().hex; ext=AUDIO_EXT.get(content_type,'webm'); parts=[]
-    for k,v in (('model',STT_MODEL),('language','zh'),('response_format','json'),('temperature','0'),('prompt','以下是一個繁體中文詞語。')):
+    for k,v in (('model',STT_MODEL),('language','zh'),('response_format','verbose_json'),('temperature','0'),('prompt',STT_PROMPT)):
         parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode())
     parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="answer.{ext}"\r\nContent-Type: {content_type}\r\n\r\n'.encode()+audio+b'\r\n')
     parts.append(f'--{boundary}--\r\n'.encode())
     req=urllib.request.Request('https://api.groq.com/openai/v1/audio/transcriptions',data=b''.join(parts),method='POST',headers={'Authorization':f'Bearer {GROQ_KEY}','Content-Type':f'multipart/form-data; boundary={boundary}','User-Agent':'htmlGames-stt'})
-    with urllib.request.urlopen(req,timeout=20) as r: return json.loads(r.read()).get('text','').strip()
+    with urllib.request.urlopen(req,timeout=20) as r: return clean_transcript(json.loads(r.read()))
+def clean_transcript(res):
+    # 「沒有語音機率」高或壓縮比過高（同一句一直重複）的段落直接丟掉，剩下的再比對幻覺字串
+    segs=res.get('segments') or []
+    no_speech=max((s.get('no_speech_prob',0) for s in segs),default=0)
+    text=''.join(s.get('text','') for s in segs if s.get('no_speech_prob',0)<NO_SPEECH_THRESHOLD and s.get('compression_ratio',0)<=MAX_COMPRESSION_RATIO) if segs else res.get('text','')
+    text=text.strip()
+    if any(p.search(text) for p in HALLUCINATIONS): return ''
+    if text.strip(' 。.！!？?，,').lower() in WEAK_HALLUCINATIONS and no_speech>0.1: return ''
+    return text
 def firsts(ch):
     # 一個字所有讀音的第一個注音符號（破音字任何一個讀音符合都算）
     return {r[0] for r in pinyin(ch,style=Style.BOPOMOFO,heteronym=True)[0] if r}
