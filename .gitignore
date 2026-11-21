@@ -50,3 +50,7 @@ software-learning/Google Drive/
 
 # KTV runtime media is stored on the deployment host, not in Git.
 ktv/media/*.mp4
+
+# Azure 語音金鑰只放在伺服器，語音快取是執行期資料
+.env
+tts-api/cache/

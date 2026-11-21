@@ -1,0 +1,170 @@
+{
+  "engine": "say",
+  "referenceBpm": 80,
+  "topics": {
+    "夜市小吃": {
+      "file": "t01.mp3",
+      "beats": 4
+    },
+    "水果": {
+      "file": "t02.mp3",
+      "beats": 4
+    },
+    "飲料": {
+      "file": "t03.mp3",
+      "beats": 4
+    },
+    "動物": {
+      "file": "t04.mp3",
+      "beats": 4
+    },
+    "國家": {
+      "file": "t05.mp3",
+      "beats": 4
+    },
+    "台灣地名": {
+      "file": "t06.mp3",
+      "beats": 4
+    },
+    "交通工具": {
+      "file": "t07.mp3",
+      "beats": 4
+    },
+    "便利商店商品": {
+      "file": "t08.mp3",
+      "beats": 5
+    },
+    "早餐店餐點": {
+      "file": "t09.mp3",
+      "beats": 5
+    },
+    "火鍋料": {
+      "file": "t10.mp3",
+      "beats": 4
+    },
+    "日本料理": {
+      "file": "t11.mp3",
+      "beats": 4
+    },
+    "甜點": {
+      "file": "t12.mp3",
+      "beats": 4
+    },
+    "冰品": {
+      "file": "t13.mp3",
+      "beats": 4
+    },
+    "職業": {
+      "file": "t14.mp3",
+      "beats": 4
+    },
+    "卡通角色": {
+      "file": "t15.mp3",
+      "beats": 4
+    },
+    "電影角色": {
+      "file": "t16.mp3",
+      "beats": 4
+    },
+    "歌手": {
+      "file": "t17.mp3",
+      "beats": 4
+    },
+    "家電": {
+      "file": "t18.mp3",
+      "beats": 4
+    },
+    "家具": {
+      "file": "t19.mp3",
+      "beats": 4
+    },
+    "文具": {
+      "file": "t20.mp3",
+      "beats": 4
+    },
+    "廚房用品": {
+      "file": "t21.mp3",
+      "beats": 4
+    },
+    "衣服": {
+      "file": "t22.mp3",
+      "beats": 4
+    },
+    "鞋子": {
+      "file": "t23.mp3",
+      "beats": 4
+    },
+    "顏色": {
+      "file": "t24.mp3",
+      "beats": 4
+    },
+    "程式語言": {
+      "file": "t25.mp3",
+      "beats": 4
+    },
+    "手機品牌": {
+      "file": "t26.mp3",
+      "beats": 4
+    },
+    "App": {
+      "file": "t27.mp3",
+      "beats": 4
+    },
+    "運動": {
+      "file": "t28.mp3",
+      "beats": 4
+    },
+    "台灣景點": {
+      "file": "t29.mp3",
+      "beats": 4
+    },
+    "超級英雄": {
+      "file": "t30.mp3",
+      "beats": 4
+    },
+    "聖誕節": {
+      "file": "t31.mp3",
+      "beats": 4
+    },
+    "聖誕老公公": {
+      "file": "t32.mp3",
+      "beats": 4
+    },
+    "聖誕樹": {
+      "file": "t33.mp3",
+      "beats": 4
+    },
+    "聖誕禮物": {
+      "file": "t34.mp3",
+      "beats": 4
+    },
+    "聖誕大餐": {
+      "file": "t35.mp3",
+      "beats": 4
+    },
+    "聖誕歌": {
+      "file": "t36.mp3",
+      "beats": 4
+    },
+    "冬天": {
+      "file": "t37.mp3",
+      "beats": 4
+    },
+    "下雪": {
+      "file": "t38.mp3",
+      "beats": 4
+    },
+    "交換禮物": {
+      "file": "t39.mp3",
+      "beats": 4
+    },
+    "派對": {
+      "file": "t40.mp3",
+      "beats": 4
+    },
+    "溫暖的東西": {
+      "file": "t41.mp3",
+      "beats": 4
+    }
+  }
+}

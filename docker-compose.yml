@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     depends_on:
       - ktv-api
+      - tts-api
     volumes:
       - ./ktv/media:/usr/share/nginx/html/ktv/media
 
@@ -14,3 +15,14 @@ services:
     restart: unless-stopped
     volumes:
       - ./ktv/media:/app/media
+
+  # 金鑰放在伺服器上 repo 目錄的 .env（不進 Git），例如 AZURE_SPEECH_KEY=xxxx
+  tts-api:
+    build: ./tts-api
+    restart: unless-stopped
+    environment:
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY:-}
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-eastasia}
+      - AZURE_SPEECH_VOICE=${AZURE_SPEECH_VOICE:-zh-TW-HsiaoChenNeural}
+    volumes:
+      - ./tts-api/cache:/app/cache
