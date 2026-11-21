@@ -24,5 +24,7 @@ services:
       - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY:-}
       - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-eastasia}
       - AZURE_SPEECH_VOICE=${AZURE_SPEECH_VOICE:-zh-TW-HsiaoChenNeural}
+      # 注音挑戰的語音辨識（Groq Whisper），可以沿用 realtime-translate 的同一把金鑰
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
     volumes:
       - ./tts-api/cache:/app/cache
