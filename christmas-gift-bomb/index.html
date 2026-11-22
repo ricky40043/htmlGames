@@ -1735,6 +1735,7 @@
       document.getElementById("time-max").value = seconds;
       errorEl.textContent = "";
 
+      celebrate.unlock();
       await unlockAudio();
       startTopicRound();
     }
@@ -1826,17 +1827,6 @@
     }
 
     // ── 過關：慶祝畫面，3 秒後自動進下一關；最後一題過關就是全部完成 ──
-    function playCheer() {
-      if (!audioCtx) return;
-      if (audioCtx.state === "suspended") audioCtx.resume();
-      [523, 659, 784, 1046].forEach((f, i) => {
-        const o = audioCtx.createOscillator(), g = audioCtx.createGain(), at = audioCtx.currentTime + i * 0.12;
-        o.type = "triangle"; o.frequency.value = f;
-        g.gain.setValueAtTime(0.18, at); g.gain.exponentialRampToValueAtTime(0.001, at + 0.35);
-        o.connect(g).connect(audioCtx.destination); o.start(at); o.stop(at + 0.36);
-      });
-    }
-
     function onTopicPassed() {
       // 語音達標和人員判定可能同時觸發，已經在過關畫面就不要重來一次
       if (document.getElementById("screen-pass").classList.contains("active")) return;
@@ -1865,7 +1855,7 @@
         mainBtn.textContent = "馬上下一關";
       }
       showScreen("pass");
-      playCheer();
+      isLast ? celebrate.final() : celebrate.level();
     }
 
     // ── 工作人員判定：倒數結束進入 10 秒審核；Enter／通過＝過關，X／失敗或 10 秒沒按＝爆炸 ──
@@ -1961,6 +1951,7 @@
     renderPackCards();
     renderCustomInputs();
   </script>
+<script src="celebrate.js?v=20261122a"></script>
 <script src="/stats.js"></script>
 </body>
 </html>
