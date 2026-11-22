@@ -20,6 +20,7 @@
         <div><label for="mode">倒數模式</label><select id="mode"><option value="on" selected>開啟倒數</option><option value="off">不倒數</option></select></div>
       </div>
       <div class="xmas-only"><p class="note">🎄 聖誕挑戰：每關 <b id="xmasSec">10</b> 秒內說出用這些注音開頭的詞，全部過關就有禮物！（秒數、字數照上面的設定）</p><div class="presets"><button class="xmas-btn" data-total="5">🎁 挑戰 5 關</button><button class="xmas-btn" data-total="7">🎁 挑戰 7 關</button><button class="xmas-btn" data-total="10">🎁 挑戰 10 關</button><button class="xmas-btn" data-total="endless">♾️ 挑戰到輸為止</button></div></div>
+      <label class="toggle"><input id="tick" type="checkbox" checked> ⏱ 倒數滴答音效</label>
       <label class="toggle"><input id="stt" type="checkbox" checked> 🎤 語音辨識自動判斷（說完按空白鍵或外接按鈕送出）</label>
       <p class="note">看見注音後，在時間內說出用這些注音開頭的詞，說完按空白鍵或外接按鈕：系統辨識答對就自動下一題並重新倒數，答錯可以再說一次。語音辨識不能用時，由主持人確認後按「答對，下一題」。固定題數全部完成就是勝利；「挑戰到輸為止」會一直出題，看能闖過幾關。任何一題時間到就是失敗。</p>
       <button id="start" class="primary">開始限時挑戰</button>
@@ -50,9 +51,14 @@
     function syncSetup(){$('totalBox').classList.toggle('hidden',$('goal').value==='endless');$('xmasSec').textContent=$('seconds').value}
     // ── 倒數：用 deadline 計時，送出答案辨識時暫停、答錯再接著倒數 ──
     let deadline=0;
-    function stopTimer(){clearInterval(timerId);timerId=null}
+    // 倒數音效：沿用聖誕禮物爆炸的 tick.mp3，倒數進行中循環播放，暫停（辨識中）或結束就停
+    let audioCtx=null,tickBuffer=null,tickSource=null;
+    async function initTick(){if(tickBuffer||!(window.AudioContext||window.webkitAudioContext))return;try{audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')await audioCtx.resume();tickBuffer=await audioCtx.decodeAudioData(await fetch('tick.mp3?v=20261122a').then(r=>r.arrayBuffer()))}catch{tickBuffer=null}}
+    function stopTick(){if(tickSource){try{tickSource.stop()}catch{}tickSource=null}}
+    function startTick(){stopTick();if(!audioCtx||!tickBuffer||!$('tick').checked)return;tickSource=audioCtx.createBufferSource();tickSource.buffer=tickBuffer;tickSource.loop=true;tickSource.connect(audioCtx.destination);tickSource.start()}
+    function stopTimer(){clearInterval(timerId);timerId=null;stopTick()}
     function pauseTimer(){stopTimer();return Math.max(0,deadline-Date.now())}
-    function startTimer(ms){const timer=$('timer'),label=timer.querySelector('span');stopTimer();deadline=Date.now()+ms;const tick=()=>{if(ended)return;const remaining=Math.max(0,deadline-Date.now());left=Math.ceil(remaining/1000);label.textContent=`${left} 秒`;timer.style.setProperty('--progress',`${remaining/(seconds*1000)*100}%`);timer.classList.toggle('danger',left<=3);if(remaining<=0)finish(false,'本題時間已到，直接判定失敗。')};tick();timerId=setInterval(tick,100)}
+    function startTimer(ms){const timer=$('timer'),label=timer.querySelector('span');stopTimer();startTick();deadline=Date.now()+ms;const tick=()=>{if(ended)return;const remaining=Math.max(0,deadline-Date.now());left=Math.ceil(remaining/1000);label.textContent=`${left} 秒`;timer.style.setProperty('--progress',`${remaining/(seconds*1000)*100}%`);timer.classList.toggle('danger',left<=3);if(remaining<=0)finish(false,'本題時間已到，直接判定失敗。')};tick();timerId=setInterval(tick,100)}
     // ── 語音辨識：題目一出現就開始錄，按空白鍵／外接按鈕送到後台 /api/stt（Groq Whisper）判斷 ──
     let sttOn=false,stream=null,recorder=null,chunks=[],judging=false,renderId=0;
     async function setupStt(){sttOn=false;if(!$('stt').checked||!navigator.mediaDevices||!window.MediaRecorder)return;try{const h=await fetch('/api/stt/health').then(r=>r.ok?r.json():{});if(!h.configured)return;stream=stream||await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});sttOn=true}catch{sttOn=false}}
@@ -75,7 +81,7 @@
     }
     function finish(win,reason){if(ended)return;ended=true;stopTimer();stopRecording();$('next').disabled=true;$('reroll').disabled=true;$('reset').disabled=true;$('game').classList.add('hidden');$('done').classList.remove('hidden');$('result').className=`result ${win?'win':'lose'}`;$('result').textContent=win?(xmas?'🎁 過關！領禮物':'🎉 勝利！'):(xmas?'⏰ GG！':'⏰ 失敗！');let msg=win?`全部 ${questions.length} 題完成！`:reason||'時間到，挑戰結束。';if(endless&&!win){const cleared=index;let best=0;try{best=Math.max(cleared,+localStorage.bopoEndlessBest||0);localStorage.bopoEndlessBest=best}catch{best=cleared}$('result').textContent=`🏁 闖過 ${cleared} 關！`;msg=`${reason||'時間到'}　最佳紀錄：${best} 關`}const ans=!win&&answers[questions[index]];$('summary').textContent=msg+(ans?`\n參考答案：${ans}`:'')}
     function render(){ended=false;judging=false;const id=++renderId;stopTimer();stopRecording();$('next').disabled=false;$('reroll').disabled=false;$('reset').disabled=false;$('progress').textContent=endless?`第 ${index+1} 關`:`第 ${index+1} / ${questions.length} 題`;$('question').textContent=questions[index];fitQuestion();$('hint').textContent=sttOn?'說出用這些注音開頭的詞，說完按空白鍵或按鈕':'請念出這組注音，答對後按下一題';heard('');startRecording();const timer=$('timer'),label=timer.querySelector('span');if(!useTimer){label.textContent='不倒數';timer.className='timer off';return}timer.className='timer';startTimer(seconds*1000)}
-    async function start(){const total=Math.max(1,Math.min(100,+$('total').value||10));lengthSetting=$('length').value;endless=$('goal').value==='endless';used.clear();questions=Array.from({length:endless?1:total},()=>make(pickLength()));seconds=+$('seconds').value||10;useTimer=$('mode').value==='on';index=0;ended=false;await setupStt();$('setup').classList.add('hidden');$('done').classList.add('hidden');$('game').classList.remove('hidden');render()}
+    async function start(){await initTick();const total=Math.max(1,Math.min(100,+$('total').value||10));lengthSetting=$('length').value;endless=$('goal').value==='endless';used.clear();questions=Array.from({length:endless?1:total},()=>make(pickLength()));seconds=+$('seconds').value||10;useTimer=$('mode').value==='on';index=0;ended=false;await setupStt();$('setup').classList.add('hidden');$('done').classList.add('hidden');$('game').classList.remove('hidden');render()}
     function next(){if(ended)return;if(index>=questions.length-1){if(!endless){finish(true);return}questions.push(make(pickLength()))}index++;render()}
     // 外接按鈕（藍牙翻頁器、自拍按鈕等）多半送出空白鍵、Enter、PageDown 或右方向鍵，都當作「送出答案」
     const SUBMIT_KEYS=['Space','Enter','NumpadEnter','PageDown','ArrowRight','ArrowDown','MediaPlayPause'];
