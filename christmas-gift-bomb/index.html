@@ -114,6 +114,20 @@
       cursor: pointer;
       box-shadow: 0 4px 18px rgba(66,211,146,0.25);
     }
+    .word-progress.reached { border-color: #4ade80; color: #bbf7d0; box-shadow: 0 0 24px rgba(74, 222, 128, .35); }
+    #screen-review { background: radial-gradient(circle at 50% 30%, #4a2a05 0%, #1a0d02 70%); padding: 24px 16px; }
+    .review-title { font-size: clamp(1.8rem, 7vw, 2.8rem); font-weight: 900; color: #ffd86b; text-align: center; }
+    .review-topic { margin-top: 8px; font-size: 1.2rem; color: #ffe8c2; text-align: center; }
+    .review-count { margin: 14px 0 8px; font-size: 1.3rem; font-weight: 900; color: #fff; text-align: center; }
+    .review-words { max-width: 760px; max-height: 38vh; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 6px; }
+    .review-words span { padding: 6px 14px; border-radius: 999px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .25); font-size: 1.05rem; }
+    .review-timer { margin: 16px 0 12px; font-size: 1.1rem; color: #ffd0a0; text-align: center; }
+    .review-timer b { font-size: 2.6rem; color: #ff6b6b; }
+    .review-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .review-actions .manual-pass-btn { margin: 0; }
+    .review-fail-btn { padding: 14px 28px; border: 1px solid #ff8b96; border-radius: 16px; font-size: 1.15rem; font-weight: 900; cursor: pointer; color: #fff; background: rgba(217, 52, 75, .5); }
+    .manual-pass-btn { margin: 4px auto 10px; padding: 14px 28px; border: 0; border-radius: 16px; font-size: 1.15rem; font-weight: 900; cursor: pointer; color: #2a1500; background: linear-gradient(135deg, #ffd86b, #f59e0b); box-shadow: 0 8px 24px rgba(245, 158, 11, .35); }
+    .manual-pass-btn:active { transform: scale(.97); }
     .voice-btn.listening { color: #fff; background: linear-gradient(135deg, #d94b64, #a91e3a); }
     .voice-status { min-height: 1.2em; color: #aaa; font-size: 0.85rem; }
     @media (max-width: 430px) {
@@ -1036,6 +1050,7 @@
       <div class="heard-words" id="heard-words">請按下麥克風，開始說出相關詞語</div>
       <button type="button" class="voice-btn" id="voice-btn" onclick="toggleVoiceRecognition()">🎙️ 開始語音辨識</button>
       <div class="voice-status" id="voice-status">尚未開始聆聽</div>
+      <button type="button" class="manual-pass-btn" id="manual-pass-btn" onclick="manualPass()" title="語音辨識漏聽時，由工作人員直接判定過關">✓ 人員判定過關（Enter）</button>
       <div class="bomb-wrapper">
       <span id="bomb-emoji">🎁</span>
       <span class="spark" style="width:7px;height:7px;background:#ff6600;top:18px;right:30px;--tx:9px;--ty:-22px;--dur:0.45s;--delay:0s"></span>
@@ -1089,6 +1104,19 @@
     <div class="boom-actions">
       <button class="btn" id="boom-main-btn" onclick="onBoomMainAction()">開始下一局</button>
       <button class="btn-secondary" id="boom-cancel-btn" onclick="resetGame()">↩ 返回上一頁</button>
+    </div>
+  </div>
+
+  <!-- ── REVIEW SCREEN：倒數結束後給工作人員 10 秒確認有效詞數 ── -->
+  <div id="screen-review" class="screen">
+    <div class="review-title">⏱ 時間到！工作人員確認</div>
+    <div class="review-topic" id="review-topic"></div>
+    <div class="review-count" id="review-count"></div>
+    <div class="review-words" id="review-words"></div>
+    <div class="review-timer"><b id="review-seconds">10</b> 秒內沒按通過就爆炸</div>
+    <div class="review-actions">
+      <button type="button" class="manual-pass-btn" onclick="manualPass()">✓ 通過（Enter）</button>
+      <button type="button" class="review-fail-btn" onclick="manualFail()">✗ 失敗（X）</button>
     </div>
   </div>
 
@@ -1256,12 +1284,10 @@
       if (heard) heard.textContent = heardWords.length
         ? `已辨識：${heardWords.join("、")}`
         : "請按下麥克風，開始說出相關詞語";
+      // 語音辨識達標只是提示，過不過關一律由工作人員按「通過」決定
+      if (progress) progress.classList.toggle("reached", heardWords.length >= targetWordCount);
       if (heardWords.length >= targetWordCount) {
-        clearTimeout(bombTimer);
-        stopVoiceRecognition();
-        topicSucceeded = true;
-        document.getElementById("voice-status").textContent = "🎉 詞語達標！準備下一題";
-        setTimeout(() => onTopicPassed(), 450);
+        document.getElementById("voice-status").textContent = "🎉 辨識已達標，等工作人員按通過";
       }
     }
 
@@ -1715,6 +1741,7 @@
 
     function startTopicRound() {
       clearAutoNext();
+      clearReview();
       clearTimeout(bombTimer);
       clearInterval(tensionInterval);
 
@@ -1746,7 +1773,7 @@
         updateTension(Math.min(elapsed / countdownTotal, 1));
       }, 1000);
 
-      bombTimer = setTimeout(triggerBoom, countdownTotal * 1000);
+      bombTimer = setTimeout(startReview, countdownTotal * 1000);
     }
 
     function skipToNextTopic() {
@@ -1759,6 +1786,7 @@
     }
 
     function triggerBoom() {
+      clearReview();
       clearInterval(tensionInterval);
       stopTick();
       stopVoiceRecognition();
@@ -1810,6 +1838,8 @@
     }
 
     function onTopicPassed() {
+      // 語音達標和人員判定可能同時觸發，已經在過關畫面就不要重來一次
+      if (document.getElementById("screen-pass").classList.contains("active")) return;
       clearAutoNext();
       clearTimeout(bombTimer);
       clearInterval(tensionInterval);
@@ -1838,6 +1868,55 @@
       playCheer();
     }
 
+    // ── 工作人員判定：倒數結束進入 10 秒審核；Enter／通過＝過關，X／失敗或 10 秒沒按＝爆炸 ──
+    let reviewTimer = null, reviewInterval = null;
+    function clearReview() {
+      clearTimeout(reviewTimer); clearInterval(reviewInterval);
+      reviewTimer = reviewInterval = null;
+    }
+    function isScreen(id) { return document.getElementById("screen-" + id).classList.contains("active"); }
+
+    function startReview() {
+      clearInterval(tensionInterval);
+      stopTick();
+      stopVoiceRecognition();
+      clearReview();
+      document.getElementById("review-topic").textContent = `題目：${currentActiveTopic}`;
+      document.getElementById("review-count").textContent = `語音辨識到 ${heardWords.length} 個詞（目標 ${targetWordCount} 詞），請確認實際有效的詞`;
+      document.getElementById("review-words").innerHTML = heardWords.length
+        ? heardWords.map(w => `<span>${w.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</span>`).join("")
+        : "<span>（沒有辨識到詞語）</span>";
+      let left = 10;
+      const sec = document.getElementById("review-seconds");
+      sec.textContent = left;
+      reviewInterval = setInterval(() => { left = Math.max(0, left - 1); sec.textContent = left; }, 1000);
+      reviewTimer = setTimeout(() => { if (isScreen("review")) triggerBoom(); }, 10000);
+      showScreen("review");
+    }
+
+    function manualPass() {
+      if (!isScreen("running") && !isScreen("review")) return;
+      clearReview();
+      topicSucceeded = true;
+      onTopicPassed();
+    }
+
+    function manualFail() {
+      if (!isScreen("running") && !isScreen("review")) return;
+      clearTimeout(bombTimer);
+      triggerBoom();
+    }
+
+    document.addEventListener("keydown", e => {
+      if (e.repeat || ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+      const key = e.key.toLowerCase();
+      if (key !== "enter" && key !== "x") return;
+      if (!isScreen("running") && !isScreen("review")) return;
+      e.preventDefault();
+      document.activeElement?.blur();
+      key === "enter" ? manualPass() : manualFail();
+    });
+
     function onPassMainAction() {
       clearAutoNext();
       if (currentRoundIndex + 1 >= customQueue.length) return startGame();
@@ -1864,6 +1943,7 @@
 
     function resetGame() {
       clearAutoNext();
+      clearReview();
       clearTimeout(bombTimer);
       clearInterval(tensionInterval);
       stopTick();
