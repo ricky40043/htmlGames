@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#10121c">
     <title>限時記憶大挑戰</title>
-    <link rel="stylesheet" href="styles.css?v=2">
+    <link rel="stylesheet" href="styles.css?v=3">
     <script defer src="bank.js"></script>
-    <script defer src="game.js?v=2"></script>
+    <script defer src="game.js?v=3"></script>
 </head>
 <body data-phase="setup">
     <header class="topbar">
@@ -35,9 +35,12 @@
             </div>
 
             <form id="setup-form">
-                <div class="setup-columns">
+                <div class="setup-panels">
                     <section class="setup-panel" aria-labelledby="settings-title">
-                        <h2 id="settings-title">出題設定</h2>
+                        <div class="panel-heading">
+                            <h2 id="settings-title">出題設定</h2>
+                            <p id="pool-count" class="help" aria-live="polite"></p>
+                        </div>
                         <div class="controls-grid">
                             <div class="field">
                                 <label for="rounds">每局圖片張數</label>
@@ -74,21 +77,34 @@
                                 </select>
                             </label>
                         </div>
-                        <p id="pool-count" class="help pool-count" aria-live="polite"></p>
                     </section>
-                    <section class="setup-panel players-panel" aria-labelledby="players-title">
+                    <section class="setup-panel" aria-labelledby="players-title">
                         <div class="panel-heading">
                             <h2 id="players-title">玩家與隊伍</h2>
-                            <label class="count-label" for="player-count">人數</label>
-                            <select id="player-count" aria-label="玩家或隊伍數"></select>
+                            <p class="help">玩家口頭作答，主持人負責計分。</p>
                         </div>
-                        <div id="player-names" class="player-names"></div>
-                        <p class="help">玩家口頭作答，主持人負責計分。</p>
-                        <div class="setup-footer">
-                            <p id="setup-error" class="error" role="alert" hidden></p>
-                            <button id="start" class="primary" type="submit">開始挑戰</button>
+                        <div class="player-settings">
+                            <div class="field player-count-field">
+                                <label for="player-count">玩家人數</label>
+                                <div class="number-control">
+                                    <input id="player-count" type="number" min="1" max="12" step="1" value="2" inputmode="numeric" aria-describedby="player-range" required>
+                                    <span class="number-unit" aria-hidden="true">人</span>
+                                    <select id="player-count-menu" class="number-menu" aria-label="下拉選擇玩家人數">
+                                        <option value="" disabled hidden>選擇人數</option>
+                                    </select>
+                                </div>
+                                <span id="player-range" class="sr-only">可選 1 至 12 人</span>
+                            </div>
+                            <div class="player-roster">
+                                <p id="player-names-label">玩家名稱 <span class="help">選填</span></p>
+                                <div id="player-names" class="player-names" role="group" aria-labelledby="player-names-label"></div>
+                            </div>
                         </div>
                     </section>
+                </div>
+                <div class="setup-footer">
+                    <p id="setup-error" class="error" role="alert" hidden></p>
+                    <button id="start" class="primary" type="submit">開始挑戰</button>
                 </div>
             </form>
         </section>

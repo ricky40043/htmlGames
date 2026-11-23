@@ -25,7 +25,7 @@
     const endDialog = byId('end-dialog');
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const bank = window.memoryChallengeBank;
-    const playerDrafts = Array(12).fill('');
+    const playerDrafts = Array(Number(playerCount.max)).fill('');
 
     let session = null;
     let phase = 'setup';
@@ -69,23 +69,31 @@
         menu.value = field.validity.valid ? String(field.valueAsNumber) : '';
     }
 
-    function connectNumberMenu(field, menu) {
-        field.addEventListener('input', () => syncNumberMenu(field, menu));
+    function connectNumberMenu(field, menu, onUpdate) {
+        const update = () => {
+            syncNumberMenu(field, menu);
+            onUpdate?.();
+        };
+        field.addEventListener('input', update);
         menu.addEventListener('change', () => {
             field.value = menu.value;
+            update();
         });
-        syncNumberMenu(field, menu);
+        update();
+    }
+
+    function numberOptions(max, unit) {
+        return Array.from({ length: max }, (_, index) => {
+            const count = index + 1;
+            return new Option(`${count} ${unit}`, String(count));
+        });
     }
 
     function updatePool() {
         const available = filteredBank().length;
         roundsField.max = available;
         if (available && roundsField.valueAsNumber > available) roundsField.value = available;
-        const choices = Array.from({ length: available }, (_, index) => {
-            const count = index + 1;
-            return new Option(`${count} 張`, String(count));
-        });
-        roundsMenu.replaceChildren(roundsMenu.options[0], ...choices);
+        roundsMenu.replaceChildren(roundsMenu.options[0], ...numberOptions(available, '張'));
         roundsMenu.disabled = available === 0;
         syncNumberMenu(roundsField, roundsMenu);
         byId('pool-count').textContent = `符合條件的圖片有 ${available} 張`;
@@ -93,7 +101,9 @@
     }
 
     function renderPlayerFields() {
-        const fields = playerDrafts.slice(0, Number(playerCount.value)).map((name, index) => {
+        const count = playerCount.valueAsNumber;
+        if (!playerCount.validity.valid || count === playerNames.childElementCount) return;
+        const fields = playerDrafts.slice(0, count).map((name, index) => {
             const label = element('label', 'player-field');
             const number = element('span', 'player-no', index + 1);
             number.setAttribute('aria-hidden', 'true');
@@ -241,7 +251,7 @@
 
     function startSession(event) {
         event.preventDefault();
-        if (!roundsField.validity.valid || !questionsField.validity.valid) return;
+        if (!roundsField.validity.valid || !questionsField.validity.valid || !playerCount.validity.valid) return;
         const pool = filteredBank();
         const total = roundsField.valueAsNumber;
         if (total > pool.length) return;
@@ -250,7 +260,7 @@
         unlockSound();
         const questionCount = questionsField.valueAsNumber;
         session = {
-            players: playerDrafts.slice(0, Number(playerCount.value)).map((name, index) => ({
+            players: playerDrafts.slice(0, playerCount.valueAsNumber).map((name, index) => ({
                 name: name.trim() || `玩家 ${index + 1}`,
                 score: 0
             })),
@@ -603,16 +613,14 @@
     }
 
     Object.entries(bank.themes).forEach(([id, label]) => themeField.add(new Option(label, id)));
-    for (let count = 1; count <= 12; count += 1) {
-        playerCount.add(new Option(String(count), String(count), false, count === 2));
-    }
+    const playerCountMenu = byId('player-count-menu');
+    playerCountMenu.append(...numberOptions(playerDrafts.length, '人'));
 
     form.addEventListener('submit', startSession);
     connectNumberMenu(roundsField, roundsMenu);
     connectNumberMenu(questionsField, byId('questions-menu'));
+    connectNumberMenu(playerCount, playerCountMenu, renderPlayerFields);
     themeField.addEventListener('change', updatePool);
     styleField.addEventListener('change', updatePool);
-    playerCount.addEventListener('change', renderPlayerFields);
     updatePool();
-    renderPlayerFields();
 })();
