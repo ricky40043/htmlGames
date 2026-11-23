@@ -20,6 +20,8 @@
     const playerCount = byId('player-count');
     const playerNames = byId('player-names');
     const soundToggle = byId('sound-toggle');
+    const effectsToggle = byId('effects-toggle');
+    const sound = window.memoryChallengeSound;
     const fullscreen = byId('fullscreen');
     const endGame = byId('end-game');
     const endDialog = byId('end-dialog');
@@ -34,9 +36,8 @@
     let deadline = 0;
     let showTime = null;
     let showCovered = null;
-    let audio = null;
-    let applause = null;
     let soundOn = true;
+    let effectsOverride = null;
 
     function element(tag, className, content) {
         const node = document.createElement(tag);
@@ -132,76 +133,22 @@
     }
 
     function unlockSound() {
-        if (!soundOn) return;
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContext) return;
-        audio ||= new AudioContext();
-        if (audio.state === 'suspended') audio.resume().catch(() => {});
+        if (soundOn) sound?.unlock();
     }
 
-    function tone(frequency, delay, duration = .12, volume = .12) {
-        if (!soundOn || audio?.state !== 'running') return;
-        const start = audio.currentTime + delay;
-        const oscillator = audio.createOscillator();
-        const envelope = audio.createGain();
-        oscillator.type = 'sine';
-        oscillator.frequency.value = frequency;
-        envelope.gain.setValueAtTime(.001, start);
-        envelope.gain.exponentialRampToValueAtTime(volume, start + .019);
-        envelope.gain.exponentialRampToValueAtTime(.001, start + duration);
-        oscillator.connect(envelope).connect(audio.destination);
-        oscillator.start(start);
-        oscillator.stop(start + duration);
+    function playSound(effect) {
+        if (soundOn) sound?.play(effect);
     }
 
-    function chime(notes) {
-        notes.forEach((frequency, index) => tone(frequency, index * .09, .16));
+    function fullEffects() {
+        return effectsOverride ?? !reducedMotion.matches;
     }
 
-    function cheer() {
-        if (!soundOn || audio?.state !== 'running') return;
-        chime([523, 659, 784, 1047]);
-        const sampleRate = audio.sampleRate;
-        const buffer = audio.createBuffer(1, sampleRate * 2.25, sampleRate);
-        const samples = buffer.getChannelData(0);
-        for (let clap = 0; clap < 125; clap += 1) {
-            const time = Math.random() * 2.08;
-            const first = Math.floor(time * sampleRate);
-            const length = Math.floor(sampleRate * (.026 + Math.random() * .03));
-            const volume = .1 * (1 - time / 2.25);
-            for (let i = 0; i < length; i += 1) {
-                samples[first + i] += (Math.random() * 2 - 1) * volume * (1 - i / length) ** 3;
-            }
-        }
-        for (let voice = 0; voice < 9; voice += 1) {
-            const first = Math.floor(sampleRate * (.08 + Math.random() * .55));
-            const length = Math.floor(sampleRate * (.35 + Math.random() * .45));
-            const pitch = 220 + Math.random() * 220;
-            let angle = 0;
-            for (let i = 0; i < length; i += 1) {
-                const curve = Math.sin(Math.PI * i / length);
-                angle += (pitch + 100 * curve) * 2 * Math.PI / sampleRate;
-                const timbre = Math.sin(angle) + .4 * Math.sin(angle * 2) + .24 * Math.sin(angle * 3);
-                samples[first + i] += .018 * curve ** 2 * timbre;
-            }
-        }
-        const crowd = audio.createBufferSource();
-        const filter = audio.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.value = 1400;
-        crowd.buffer = buffer;
-        crowd.connect(filter).connect(audio.destination);
-        crowd.start();
-        applause = crowd;
-        crowd.addEventListener('ended', () => {
-            if (applause === crowd) applause = null;
-        });
-    }
-
-    function stopApplause() {
-        if (!applause) return;
-        applause.stop();
-        applause = null;
+    function updateEffects() {
+        const full = fullEffects();
+        document.body.dataset.effects = full ? 'full' : 'reduced';
+        effectsToggle.textContent = full ? '特效完整' : '特效精簡';
+        effectsToggle.setAttribute('aria-pressed', String(full));
     }
 
     function announce(message) {
@@ -256,7 +203,7 @@
         const total = roundsField.valueAsNumber;
         if (total > pool.length) return;
 
-        stopApplause();
+        sound?.stop();
         unlockSound();
         const questionCount = questionsField.valueAsNumber;
         session = {
@@ -266,7 +213,8 @@
             })),
             rounds: shuffle(pool).slice(0, total).map((scene) => ({
                 ...scene,
-                questions: shuffle(scene.questions).slice(0, questionCount)
+                questions: shuffle(scene.questions),
+                questionLimit: questionCount
             })),
             round: 0,
             question: 0,
@@ -288,7 +236,9 @@
         setPhase('loading', `${theme}・${style}`);
 
         const loading = element('div', 'stage-card loading');
-        loading.append(element('h2', '', '準備圖片…'));
+        const loader = element('div', 'loading-ring');
+        loader.setAttribute('aria-hidden', 'true');
+        loading.append(loader, element('h2', '', '準備圖片…'));
         showCard(loading, null);
 
         const picture = new Image();
@@ -327,9 +277,11 @@
         const card = element('div', 'scene-card');
         const back = element('div', 'scene-back');
         back.setAttribute('aria-hidden', 'true');
-        back.append(element('span', '', '✦'), element('div', '', '時間到！'));
+        back.append(element('div', 'seal-icon'), element('div', '', '圖片已封存'));
         card.append(picture, back);
-        frame.append(card);
+        const scan = element('div', 'scene-scan');
+        scan.setAttribute('aria-hidden', 'true');
+        frame.append(card, scan);
 
         const timer = element('div', 'timer-row');
         timer.setAttribute('role', 'timer');
@@ -338,7 +290,7 @@
         const fill = element('div', 'timer-fill');
         const value = element('span', 'timer-value', '10 秒');
         track.append(fill);
-        timer.append(track, value);
+        timer.append(element('span', 'timer-label', '觀察時間'), track, value);
         observation.append(frame, timer);
         showCard(observation, null);
 
@@ -349,18 +301,28 @@
             if (seconds === previous) return;
             previous = seconds;
             value.textContent = `${seconds} 秒`;
-            timer.classList.toggle('urgent', seconds <= 3);
-            if (seconds <= 3 && seconds > 0) tone(645, 0, .1, .07);
+            const urgent = seconds > 0 && seconds <= 3;
+            timer.classList.toggle('urgent', urgent);
+            frame.classList.toggle('urgent', urgent);
+            if (urgent) {
+                playSound('tick');
+                if (fullEffects()) {
+                    value.animate?.([
+                        { transform: 'scale(1.27)', opacity: .73 },
+                        { transform: 'scale(1)', opacity: 1 }
+                    ], { duration: 460, easing: 'cubic-bezier(.18,.78,.28,1)' });
+                }
+            }
         };
         showCovered = () => {
             picture.alt = '';
             picture.setAttribute('aria-hidden', 'true');
             card.classList.add('flipping');
-            if (reducedMotion.matches) picture.hidden = true;
+            frame.classList.add('sealed');
         };
 
         announce('觀察圖片，計時 10 秒');
-        chime([540, 700]);
+        playSound('observe');
         deadline = performance.now() + observationMs;
         timeout = window.setTimeout(advanceTimer, observationMs);
         advanceTimer();
@@ -379,41 +341,87 @@
         clearTimeout(timeout);
         setPhase('cover', '時間到');
         showCovered();
-        chime([451, 337]);
-        timeout = window.setTimeout(renderQuestion, reducedMotion.matches ? 0 : 545);
+        announce('時間到，圖片已蓋上');
+        playSound('cover');
+        timeout = window.setTimeout(renderQuestion, fullEffects() ? 920 : 100);
+    }
+
+    function currentRound() {
+        return session.rounds[session.round];
     }
 
     function currentQuestion() {
-        return session.rounds[session.round].questions[session.question];
+        return currentRound().questions[session.question];
     }
 
     function questionLabel() {
-        return `第 ${session.question + 1}／${session.rounds[session.round].questions.length} 題`;
+        return `第 ${session.question + 1}／${currentRound().questionLimit} 題`;
     }
 
-    function renderQuestion() {
+    function renderQuestion(message = '') {
         setPhase('question', questionLabel());
-        const card = element('div', 'stage-card question-card enter');
+        const card = element('div', message ? 'stage-card question-card question-shift' : 'stage-card question-card enter');
         const heading = element('h2', '', currentQuestion()[0]);
+        const skip = button('跳過本題', skipQuestion, 'outline');
+        const replace = button('換一題', replaceQuestion, 'outline');
+        replace.disabled = session.question + 1 >= currentRound().questions.length;
         const reveal = button('公布答案', renderScoring);
-        card.append(heading, actions(reveal));
+        card.append(heading, actions(skip, replace, reveal));
+        const hint = message || (replace.disabled ? '這張圖已沒有其他題目可換。' : '');
+        if (hint) card.append(element('p', 'question-hint', hint));
         showCard(card, heading);
     }
 
+    function advanceQuestion(message = '') {
+        if (session.question + 1 < currentRound().questionLimit) {
+            session.question += 1;
+            renderQuestion(message);
+        } else if (session.round + 1 < session.rounds.length) {
+            session.round += 1;
+            beginRound();
+        } else {
+            renderRankings();
+        }
+    }
+
+    function skipQuestion() {
+        if (phase !== 'question') return;
+        playSound('move');
+        announce('已跳過本題');
+        advanceQuestion('已跳過上一題。');
+    }
+
+    function replaceQuestion() {
+        if (phase !== 'question') return;
+        const round = currentRound();
+        if (session.question + 1 >= round.questions.length) return;
+
+        const previousLimit = round.questionLimit;
+        round.questions.splice(session.question, 1);
+        round.questionLimit = Math.min(previousLimit, round.questions.length);
+        const message = round.questionLimit < previousLimit
+            ? `已換題，這張圖改問 ${round.questionLimit} 題。`
+            : '已換成同一張圖的新題目。';
+        playSound('move');
+        announce(message);
+        renderQuestion(message);
+    }
+
     function nextLabel() {
-        const lastQuestion = session.question === session.rounds[session.round].questions.length - 1;
+        const lastQuestion = session.question === currentRound().questionLimit - 1;
         if (!lastQuestion) return '下一題';
         return session.round === session.rounds.length - 1 ? '公布排行榜' : '下一張圖片';
     }
 
     function renderScoring() {
+        if (phase !== 'question') return;
         unlockSound();
-        chime([590, 790]);
+        playSound('reveal');
         setPhase('scoring', `${questionLabel()}・計分`);
         session.selections.clear();
 
         const [question, answer] = currentQuestion();
-        const card = element('div', 'stage-card');
+        const card = element('div', 'stage-card scoring-card');
         const answerCard = element('div', 'answer-flip');
         const answerHeading = element('h2', '', answer);
         answerCard.append(element('p', '', '標準答案'), answerHeading);
@@ -453,26 +461,18 @@
         setPhase('awarding', `${questionLabel()}・計分完成`);
         stage.querySelectorAll('button').forEach((control) => { control.disabled = true; });
 
-        const { selections, players, rounds, round, question } = session;
+        const { selections, players } = session;
         selections.forEach((index) => { players[index].score += pointsPerAnswer; });
         const finish = () => {
             renderScores();
-            if (question + 1 < rounds[round].questions.length) {
-                session.question += 1;
-                renderQuestion();
-            } else if (round + 1 < rounds.length) {
-                session.round += 1;
-                beginRound();
-            } else {
-                renderRankings();
-            }
+            advanceQuestion();
         };
 
         if (selections.size > 0) {
             renderScores(selections);
             announce(`${Array.from(selections, (index) => players[index].name).join('、')}各加 1 分`);
-            chime([660, 880]);
-            timeout = window.setTimeout(finish, reducedMotion.matches ? 100 : 465);
+            playSound('score');
+            timeout = window.setTimeout(finish, fullEffects() ? 680 : 100);
         } else {
             finish();
         }
@@ -490,10 +490,11 @@
 
     function resultList(ranked, reveal) {
         const list = element('ol', 'result-list');
-        ranked.forEach((player) => {
+        ranked.forEach((player, index) => {
             const top = player.rank === 1;
             const visible = !top || reveal;
             const row = element('li', top ? 'top-rank' : '');
+            row.style.setProperty('--rank-delay', `${index * 48}ms`);
             row.append(
                 element('span', 'rank', `第 ${player.rank} 名`),
                 element('strong', 'result-name', visible ? player.name : '待揭曉'),
@@ -506,7 +507,7 @@
 
     function renderRankings() {
         setPhase('rankings', '成績結算');
-        const total = session.rounds.reduce((sum, round) => sum + round.questions.length, 0);
+        const total = session.rounds.reduce((sum, round) => sum + round.questionLimit, 0);
         progress.textContent = `完成 ${session.rounds.length} 張圖片・${total} 題`;
         const card = element('div', 'stage-card results-card enter');
         card.append(
@@ -520,9 +521,9 @@
     function makeConfetti() {
         const confetti = element('div', 'confetti');
         confetti.setAttribute('aria-hidden', 'true');
-        if (reducedMotion.matches) return confetti;
-        const colors = ['#e5f775', '#fc986f', '#91eecb', '#fff1a4', '#eeb1f7'];
-        for (let i = 0; i < 70; i += 1) {
+        if (!fullEffects()) return confetti;
+        const colors = ['#78fbf4', '#5fa5ff', '#94ffbb', '#ffe296', '#c6a4ff'];
+        for (let i = 0; i < 90; i += 1) {
             const piece = element('i');
             piece.style.setProperty('--color', colors[i % colors.length]);
             piece.style.setProperty('--left', `${Math.random() * 100}%`);
@@ -548,9 +549,12 @@
         const card = element('div', 'stage-card results-card champion enter');
         const home = element('a', 'outline', '回遊戲大集合');
         home.href = '../index.html';
+        const trophy = element('div', 'champion-trophy', '🏆');
+        trophy.setAttribute('aria-hidden', 'true');
         card.append(
             makeConfetti(),
-            element('p', 'winner-callout', `✦ ${title} ✦`),
+            trophy,
+            element('p', 'winner-callout', title),
             element('h2', '', names),
             element('p', 'champion-lead', `${winners[0].score} 分`),
             resultList(ranked, true),
@@ -558,12 +562,12 @@
         );
         showCard(card);
         announce(`${title}是${names}，${winners[0].score} 分`);
-        cheer();
+        playSound('champion');
     }
 
     function returnToSetup() {
         stopTimers();
-        stopApplause();
+        sound?.stop();
         session = null;
         stage.replaceChildren();
         scores.replaceChildren();
@@ -577,10 +581,19 @@
         soundOn = !soundOn;
         soundToggle.textContent = soundOn ? '音效開啟' : '音效關閉';
         soundToggle.setAttribute('aria-pressed', String(soundOn));
-        if (!soundOn) stopApplause();
-        if (audio && !soundOn) audio.suspend().catch(() => {});
-        if (soundOn) unlockSound();
+        if (!soundOn) sound?.stop();
+        if (soundOn) {
+            unlockSound();
+            playSound('move');
+        }
     });
+
+    effectsToggle.addEventListener('click', () => {
+        effectsOverride = !fullEffects();
+        updateEffects();
+    });
+    reducedMotion.addEventListener('change', updateEffects);
+    updateEffects();
 
     if (!document.fullscreenEnabled) fullscreen.hidden = true;
     fullscreen.addEventListener('click', async () => {

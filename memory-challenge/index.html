@@ -3,11 +3,12 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#10121c">
+    <meta name="theme-color" content="#080d16">
     <title>限時記憶大挑戰</title>
-    <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="stylesheet" href="styles.css?v=4">
     <script defer src="bank.js"></script>
-    <script defer src="game.js?v=3"></script>
+    <script defer src="sound.js?v=4"></script>
+    <script defer src="game.js?v=4"></script>
 </head>
 <body data-phase="setup">
     <header class="topbar">
@@ -15,6 +16,7 @@
             <a class="home-link" href="../index.html"><span aria-hidden="true">‹</span> 小遊戲大集合</a>
             <div class="topbar-actions">
                 <button id="sound-toggle" class="outline compact" type="button" aria-pressed="true">音效開啟</button>
+                <button id="effects-toggle" class="outline compact" type="button" aria-pressed="true">特效完整</button>
                 <button id="fullscreen" class="outline compact" type="button">全螢幕</button>
                 <button id="end-game" class="outline compact" type="button" hidden>結束本局</button>
             </div>
