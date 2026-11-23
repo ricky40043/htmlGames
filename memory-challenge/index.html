@@ -3,11 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f3f6ec">
+    <meta name="theme-color" content="#10121c">
     <title>限時記憶大挑戰</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2">
     <script defer src="bank.js"></script>
-    <script defer src="game.js"></script>
+    <script defer src="game.js?v=2"></script>
 </head>
 <body data-phase="setup">
     <header class="topbar">
@@ -25,14 +25,12 @@
         <section id="setup" class="setup shell" aria-labelledby="game-title">
             <div class="hero">
                 <div class="hero-text">
-                    <h1 id="game-title">限時<span>記憶</span><br>大挑戰</h1>
-                    <p>看圖 10 秒，蓋上後憑記憶作答。<br>也要留意畫面裡的數字和文字。</p>
+                    <h1 id="game-title"><span>限時記憶</span><span>大挑戰</span></h1>
+                    <p>看圖 10 秒。翻牌後，憑記憶回答畫面裡的細節。</p>
                 </div>
                 <div class="hero-art" aria-hidden="true">
-                    <div class="art-card art-back"><i></i></div>
-                    <div class="art-card art-middle"><i></i></div>
-                    <div class="art-card art-front"><i></i><b>10</b><span>秒</span></div>
-                    <span class="art-spark spark-one">✦</span><span class="art-spark spark-two">✧</span>
+                    <div class="art-card art-photo"><i></i></div>
+                    <div class="art-card art-timer"><b>10</b><span>秒</span><i></i></div>
                 </div>
             </div>
 
@@ -41,17 +39,30 @@
                     <section class="setup-panel" aria-labelledby="settings-title">
                         <h2 id="settings-title">出題設定</h2>
                         <div class="controls-grid">
-                            <label class="field">每局圖片張數
-                                <input id="rounds" type="number" min="1" max="100" step="1" value="5" inputmode="numeric" required>
-                            </label>
-                            <fieldset class="field">
-                                <legend>每張圖片題數</legend>
-                                <div class="segments">
-                                    <label><input type="radio" name="questions" value="3" checked><span>3 題</span></label>
-                                    <label><input type="radio" name="questions" value="4"><span>4 題</span></label>
-                                    <label><input type="radio" name="questions" value="5"><span>5 題</span></label>
+                            <div class="field">
+                                <label for="rounds">每局圖片張數</label>
+                                <div class="number-control">
+                                    <input id="rounds" type="number" min="1" max="100" step="1" value="5" inputmode="numeric" aria-describedby="pool-count" required>
+                                    <span class="number-unit" aria-hidden="true">張</span>
+                                    <select id="rounds-menu" class="number-menu" aria-label="下拉選擇每局圖片張數">
+                                        <option value="" disabled hidden>選擇張數</option>
+                                    </select>
                                 </div>
-                            </fieldset>
+                            </div>
+                            <div class="field">
+                                <label for="questions">每張圖片題數</label>
+                                <div class="number-control">
+                                    <input id="questions" type="number" min="3" max="5" step="1" value="3" inputmode="numeric" aria-describedby="question-range" required>
+                                    <span class="number-unit" aria-hidden="true">題</span>
+                                    <select id="questions-menu" class="number-menu" aria-label="下拉選擇每張圖片題數">
+                                        <option value="" disabled hidden>選擇題數</option>
+                                        <option value="3" selected>3 題</option>
+                                        <option value="4">4 題</option>
+                                        <option value="5">5 題</option>
+                                    </select>
+                                </div>
+                                <span id="question-range" class="sr-only">可選 3 至 5 題</span>
+                            </div>
                             <label class="field">場景主題
                                 <select id="theme"><option value="">全部主題</option></select>
                             </label>
@@ -63,21 +74,21 @@
                                 </select>
                             </label>
                         </div>
-                        <p id="pool-count" class="help" aria-live="polite"></p>
+                        <p id="pool-count" class="help pool-count" aria-live="polite"></p>
                     </section>
-                    <section class="setup-panel" aria-labelledby="players-title">
+                    <section class="setup-panel players-panel" aria-labelledby="players-title">
                         <div class="panel-heading">
                             <h2 id="players-title">玩家與隊伍</h2>
                             <label class="count-label" for="player-count">人數</label>
                             <select id="player-count" aria-label="玩家或隊伍數"></select>
                         </div>
                         <div id="player-names" class="player-names"></div>
-                        <p class="help">大家口頭回答，主持人為答對者加分。</p>
+                        <p class="help">玩家口頭作答，主持人負責計分。</p>
+                        <div class="setup-footer">
+                            <p id="setup-error" class="error" role="alert" hidden></p>
+                            <button id="start" class="primary" type="submit">開始挑戰</button>
+                        </div>
                     </section>
-                </div>
-                <div class="setup-footer">
-                    <p id="setup-error" class="error" role="alert" hidden></p>
-                    <button id="start" class="primary" type="submit">開始挑戰 <span aria-hidden="true">▶</span></button>
                 </div>
             </form>
         </section>

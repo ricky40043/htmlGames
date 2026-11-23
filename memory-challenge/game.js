@@ -13,6 +13,8 @@
     const phaseLabel = byId('phase-label');
     const status = byId('live-status');
     const roundsField = byId('rounds');
+    const roundsMenu = byId('rounds-menu');
+    const questionsField = byId('questions');
     const themeField = byId('theme');
     const styleField = byId('style');
     const playerCount = byId('player-count');
@@ -63,10 +65,29 @@
         );
     }
 
+    function syncNumberMenu(field, menu) {
+        menu.value = field.validity.valid ? String(field.valueAsNumber) : '';
+    }
+
+    function connectNumberMenu(field, menu) {
+        field.addEventListener('input', () => syncNumberMenu(field, menu));
+        menu.addEventListener('change', () => {
+            field.value = menu.value;
+        });
+        syncNumberMenu(field, menu);
+    }
+
     function updatePool() {
         const available = filteredBank().length;
         roundsField.max = available;
-        if (roundsField.valueAsNumber > available) roundsField.value = available;
+        if (available && roundsField.valueAsNumber > available) roundsField.value = available;
+        const choices = Array.from({ length: available }, (_, index) => {
+            const count = index + 1;
+            return new Option(`${count} 張`, String(count));
+        });
+        roundsMenu.replaceChildren(roundsMenu.options[0], ...choices);
+        roundsMenu.disabled = available === 0;
+        syncNumberMenu(roundsField, roundsMenu);
         byId('pool-count').textContent = `符合條件的圖片有 ${available} 張`;
         byId('start').disabled = available === 0;
     }
@@ -220,13 +241,14 @@
 
     function startSession(event) {
         event.preventDefault();
+        if (!roundsField.validity.valid || !questionsField.validity.valid) return;
         const pool = filteredBank();
         const total = roundsField.valueAsNumber;
-        if (!Number.isInteger(total) || total < 1 || total > pool.length) return;
+        if (total > pool.length) return;
 
         stopApplause();
         unlockSound();
-        const questionCount = Number(new FormData(form).get('questions'));
+        const questionCount = questionsField.valueAsNumber;
         session = {
             players: playerDrafts.slice(0, Number(playerCount.value)).map((name, index) => ({
                 name: name.trim() || `玩家 ${index + 1}`,
@@ -586,6 +608,8 @@
     }
 
     form.addEventListener('submit', startSession);
+    connectNumberMenu(roundsField, roundsMenu);
+    connectNumberMenu(questionsField, byId('questions-menu'));
     themeField.addEventListener('change', updatePool);
     styleField.addEventListener('change', updatePool);
     playerCount.addEventListener('change', renderPlayerFields);
