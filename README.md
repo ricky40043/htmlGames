@@ -17,6 +17,7 @@
 
 ### 聚會與靜態遊戲
 
+- ⏱️ **限時記憶大挑戰** - 100 張寫實與卡通場景，涵蓋 10 個主題與 500 道觀察題。看圖 10 秒後隨機回答 3～5 題，由主持人為 1～12 位玩家或隊伍計分
 - 💣 **定時炸彈** - 話題傳遞遊戲
 - 🔐 **1A2B** - 猜數字推理
 - 🎭 **2種人** - 分類問答遊戲
@@ -86,6 +87,7 @@ npm run dev
 ├── rhythm-chain/
 ├── bopomofo-challenge/
 ├── word-chain/
+├── memory-challenge/
 ├── fullscreen-clock/
 ├── ktv/
 │   └── index.html

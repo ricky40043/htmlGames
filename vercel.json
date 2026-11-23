@@ -15,6 +15,10 @@
       "use": "@vercel/static"
     },
     {
+      "src": "memory-challenge/images/*.webp",
+      "use": "@vercel/static"
+    },
+    {
       "src": "**/*.mp3",
       "use": "@vercel/static"
     }

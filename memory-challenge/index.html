@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f3f6ec">
+    <title>限時記憶大挑戰</title>
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="bank.js"></script>
+    <script defer src="game.js"></script>
+</head>
+<body data-phase="setup">
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="home-link" href="../index.html"><span aria-hidden="true">‹</span> 小遊戲大集合</a>
+            <div class="topbar-actions">
+                <button id="sound-toggle" class="outline compact" type="button" aria-pressed="true">音效開啟</button>
+                <button id="fullscreen" class="outline compact" type="button">全螢幕</button>
+                <button id="end-game" class="outline compact" type="button" hidden>結束本局</button>
+            </div>
+        </div>
+    </header>
+
+    <main id="main">
+        <section id="setup" class="setup shell" aria-labelledby="game-title">
+            <div class="hero">
+                <div class="hero-text">
+                    <h1 id="game-title">限時<span>記憶</span><br>大挑戰</h1>
+                    <p>看圖 10 秒，蓋上後憑記憶作答。<br>也要留意畫面裡的數字和文字。</p>
+                </div>
+                <div class="hero-art" aria-hidden="true">
+                    <div class="art-card art-back"><i></i></div>
+                    <div class="art-card art-middle"><i></i></div>
+                    <div class="art-card art-front"><i></i><b>10</b><span>秒</span></div>
+                    <span class="art-spark spark-one">✦</span><span class="art-spark spark-two">✧</span>
+                </div>
+            </div>
+
+            <form id="setup-form">
+                <div class="setup-columns">
+                    <section class="setup-panel" aria-labelledby="settings-title">
+                        <h2 id="settings-title">出題設定</h2>
+                        <div class="controls-grid">
+                            <label class="field">每局圖片張數
+                                <input id="rounds" type="number" min="1" max="100" step="1" value="5" inputmode="numeric" required>
+                            </label>
+                            <fieldset class="field">
+                                <legend>每張圖片題數</legend>
+                                <div class="segments">
+                                    <label><input type="radio" name="questions" value="3" checked><span>3 題</span></label>
+                                    <label><input type="radio" name="questions" value="4"><span>4 題</span></label>
+                                    <label><input type="radio" name="questions" value="5"><span>5 題</span></label>
+                                </div>
+                            </fieldset>
+                            <label class="field">場景主題
+                                <select id="theme"><option value="">全部主題</option></select>
+                            </label>
+                            <label class="field">圖片風格
+                                <select id="style">
+                                    <option value="">混合風格</option>
+                                    <option value="photo">寫實真人風</option>
+                                    <option value="cartoon">卡通風</option>
+                                </select>
+                            </label>
+                        </div>
+                        <p id="pool-count" class="help" aria-live="polite"></p>
+                    </section>
+                    <section class="setup-panel" aria-labelledby="players-title">
+                        <div class="panel-heading">
+                            <h2 id="players-title">玩家與隊伍</h2>
+                            <label class="count-label" for="player-count">人數</label>
+                            <select id="player-count" aria-label="玩家或隊伍數"></select>
+                        </div>
+                        <div id="player-names" class="player-names"></div>
+                        <p class="help">大家口頭回答，主持人為答對者加分。</p>
+                    </section>
+                </div>
+                <div class="setup-footer">
+                    <p id="setup-error" class="error" role="alert" hidden></p>
+                    <button id="start" class="primary" type="submit">開始挑戰 <span aria-hidden="true">▶</span></button>
+                </div>
+            </form>
+        </section>
+
+        <section id="game" class="game shell" aria-label="挑戰進行中" hidden>
+            <div class="stage-heading">
+                <p id="round-progress" class="round-progress"></p>
+                <p id="phase-label" class="phase-label"></p>
+            </div>
+            <div id="stage" class="stage"></div>
+            <section id="scores" class="scores" aria-label="目前分數" hidden></section>
+        </section>
+        <noscript><p class="shell">請開啟 JavaScript 才能遊玩。</p></noscript>
+    </main>
+
+    <dialog id="end-dialog" aria-labelledby="end-title">
+        <form method="dialog">
+            <h2 id="end-title">結束這局？</h2>
+            <p>本局的進度與分數將清除。</p>
+            <div class="dialog-actions">
+                <button class="outline" value="cancel" autofocus>繼續遊戲</button>
+                <button class="primary" value="end">結束本局</button>
+            </div>
+        </form>
+    </dialog>
+    <div id="live-status" class="sr-only" role="status" aria-live="polite"></div>
+</body>
+</html>
