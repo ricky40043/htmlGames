@@ -11,7 +11,7 @@
     let revision = 0;
 
     function audioUrl(effect) {
-        return `audio/${effect}.mp3`;
+        return `audio/${effect}.mp3?v=7`;
     }
 
     function unlock() {

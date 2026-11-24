@@ -417,14 +417,11 @@ select option { color: var(--ink); background: var(--control); }
     display: grid;
     place-content: center;
     justify-items: center;
-    gap: clamp(12px, 2.1vw, 28px);
     color: var(--accent);
     background:
         radial-gradient(ellipse at center, #174b58, #0b1827 62%),
         var(--control);
     box-shadow: inset 0 0 40px #0006;
-    font-size: clamp(1.3rem, 4vw, 3rem);
-    font-weight: 860;
 }
 .seal-icon {
     position: relative;
@@ -658,9 +655,12 @@ select option { color: var(--ink); background: var(--control); }
 .result-list .result-score { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .result-list .top-rank { background: #163543; border-color: #397b87; }
 
-.champion { background: radial-gradient(ellipse at 50% 0, #352a30, #111b2a 60%, #091423); }
-.champion::before { opacity: .6; }
-.champion::after {
+.finale {
+    border-color: #907248;
+    background: radial-gradient(ellipse at 50% 0, #4b3537, #181e34 65%, #0a1526);
+}
+.finale::before { opacity: .6; }
+.finale::after {
     content: "";
     pointer-events: none;
     position: absolute;
@@ -694,29 +694,30 @@ select option { color: var(--ink); background: var(--control); }
     animation: trophy-in .67s cubic-bezier(.13,.87,.32,1.3) both;
 }
 @keyframes trophy-in { from { opacity: 0; transform: translateY(12px) scale(.48) rotate(-12deg); } to { opacity: 1; transform: none; } }
-.winner-callout, .champion h2 { color: var(--gold); }
-.champion h2 { text-shadow: 0 0 30px #ffe1a55c; }
+.winner-callout, .finale h2 { color: var(--gold); }
+.finale h2 { text-shadow: 0 0 30px #ffe1a55c; }
 .champion-lead { margin: 0; font-size: 1.2rem; font-weight: 760; }
-.champion .primary { background: var(--gold); color: var(--control); }
-.champion .top-rank { background: #302b32; border-color: #856f47; }
+.finale .primary { background: var(--gold); color: var(--control); }
+.finale .top-rank { background: #302b32; border-color: #856f47; }
 
-.confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 3; }
+.confetti { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 10; }
 .confetti i {
     position: absolute;
-    top: -20px;
-    left: var(--left);
-    display: block;
-    width: var(--width);
-    height: var(--height);
+    bottom: 0;
+    left: var(--origin);
+    width: var(--size);
+    height: calc(var(--size) * 1.65);
     background: var(--color);
     border-radius: 2px;
     animation: confetti var(--duration) var(--delay) linear both;
 }
+.confetti i:nth-child(4n) { width: 3px; height: calc(var(--size) * 2.6); }
 @keyframes confetti {
-    from { transform: translate3d(0, -12px, 0) rotate(0deg); opacity: 0; }
-    11% { opacity: .92; }
-    62% { opacity: .8; }
-    to { transform: translate3d(var(--drift), var(--fall), 0) rotate(var(--spin)); opacity: 0; }
+    from { transform: translate(0, 12px) rotate(0); opacity: 0; }
+    10%, 68% { opacity: 1; }
+    38% { transform: translate(calc(var(--drift) * .58), var(--rise)) rotate(calc(var(--spin) * .38)); }
+    66% { transform: translate(calc(var(--drift) * .83), calc(var(--rise) * .77)) rotate(calc(var(--spin) * .66)); }
+    to { transform: translate(var(--drift), 12px) rotate(var(--spin)); opacity: 0; }
 }
 
 dialog {
@@ -887,4 +888,4 @@ dialog p { margin-top: 7px; color: var(--muted); }
 }
 [data-effects="reduced"] .scene-scan,
 [data-effects="reduced"] .confetti,
-[data-effects="reduced"] .champion::after { display: none; }
+[data-effects="reduced"] .finale::after { display: none; }

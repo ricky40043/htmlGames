@@ -8,6 +8,7 @@
     const form = byId('setup-form');
     const game = byId('game');
     const stage = byId('stage');
+    const confetti = byId('confetti');
     const scores = byId('scores');
     const progress = byId('round-progress');
     const phaseLabel = byId('phase-label');
@@ -36,6 +37,7 @@
     let phase = 'setup';
     let animation = 0;
     let timeout = 0;
+    let confettiTimeout = 0;
     let deadline = 0;
     let showTime = null;
     let showCovered = null;
@@ -158,6 +160,7 @@
         document.body.dataset.effects = full ? 'full' : 'reduced';
         effectsToggle.textContent = full ? '特效完整' : '特效精簡';
         effectsToggle.setAttribute('aria-pressed', String(full));
+        if (!full) clearConfetti();
     }
 
     function announce(message) {
@@ -292,7 +295,7 @@
         const card = element('div', 'scene-card');
         const back = element('div', 'scene-back');
         back.setAttribute('aria-hidden', 'true');
-        back.append(element('div', 'seal-icon'), element('div', '', '圖片已封存'));
+        back.append(element('div', 'seal-icon'));
         card.append(picture, back);
         const scan = element('div', 'scene-scan');
         scan.setAttribute('aria-hidden', 'true');
@@ -321,14 +324,12 @@
             const urgent = seconds > 0 && seconds <= 3;
             timer.classList.toggle('urgent', urgent);
             frame.classList.toggle('urgent', urgent);
-            if (urgent) {
-                playSound('tick');
-                if (fullEffects()) {
-                    value.animate?.([
-                        { transform: 'scale(1.27)', opacity: .73 },
-                        { transform: 'scale(1)', opacity: 1 }
-                    ], { duration: 460, easing: 'cubic-bezier(.18,.78,.28,1)' });
-                }
+            if (seconds > 0) playSound('tick');
+            if (urgent && fullEffects()) {
+                value.animate?.([
+                    { transform: 'scale(1.27)', opacity: .73 },
+                    { transform: 'scale(1)', opacity: 1 }
+                ], { duration: 460, easing: 'cubic-bezier(.18,.78,.28,1)' });
             }
         };
         showCovered = () => {
@@ -358,7 +359,7 @@
         clearTimeout(timeout);
         setPhase('cover', '時間到');
         showCovered();
-        announce('時間到，圖片已蓋上');
+        announce('時間到');
         playSound('cover');
         timeout = window.setTimeout(renderQuestion, fullEffects() ? 920 : 100);
     }
@@ -513,6 +514,7 @@
         }
         card.append(actions(skip, next));
         showCard(card, answerHeading);
+        launchConfetti();
     }
 
     function scoringChoices(next) {
@@ -599,34 +601,51 @@
         progress.textContent = skipped
             ? `完成 ${rounds.length - skipped} 張・跳過 ${skipped} 張・${total} 題`
             : `完成 ${rounds.length} 張圖片・${total} 題`;
-        const card = element('div', 'stage-card results-card enter');
+        const card = element('div', 'stage-card results-card finale enter');
         card.append(
             element('h2', '', '排行榜'),
             resultList(rankPlayers(), false),
             actions(button('揭曉冠軍', renderChampion))
         );
         showCard(card);
+        celebrateFinal();
     }
 
-    function makeConfetti() {
-        const confetti = element('div', 'confetti');
-        confetti.setAttribute('aria-hidden', 'true');
-        if (!fullEffects()) return confetti;
-        const colors = ['#78fbf4', '#5fa5ff', '#94ffbb', '#ffe296', '#c6a4ff'];
-        for (let i = 0; i < 90; i += 1) {
-            const piece = element('i');
-            piece.style.setProperty('--color', colors[i % colors.length]);
-            piece.style.setProperty('--left', `${Math.random() * 100}%`);
-            piece.style.setProperty('--width', `${5 + Math.random() * 7}px`);
-            piece.style.setProperty('--height', `${7 + Math.random() * 11}px`);
-            piece.style.setProperty('--duration', `${1.9 + Math.random() * 2.1}s`);
-            piece.style.setProperty('--delay', `${Math.random() * .7}s`);
-            piece.style.setProperty('--fall', `${350 + Math.random() * 420}px`);
-            piece.style.setProperty('--drift', `${Math.random() * 210 - 105}px`);
-            piece.style.setProperty('--spin', `${Math.random() * 1100 - 550}deg`);
-            confetti.append(piece);
+    function clearConfetti() {
+        clearTimeout(confettiTimeout);
+        confetti.replaceChildren();
+    }
+
+    function launchConfetti(final = false) {
+        clearConfetti();
+        if (!fullEffects()) return;
+
+        const colors = ['#76fff0', '#68a6ff', '#91ffaa', '#ffe384', '#f894cb', '#bea2ff', '#fff8df'];
+        const waves = final ? [96, 80, 80] : [56];
+        const pieces = document.createDocumentFragment();
+        for (const [wave, count] of waves.entries()) {
+            for (let i = 0; i < count; i += 1) {
+                const direction = i % 2 === 0 ? 1 : -1;
+                const piece = element('i');
+                piece.style.setProperty('--color', colors[i % colors.length]);
+                piece.style.setProperty('--origin', direction > 0 ? '0%' : '100%');
+                piece.style.setProperty('--size', `${5 + Math.random() * 6}px`);
+                piece.style.setProperty('--duration', `${(final ? 1.86 : 1.04) + Math.random() * .55}s`);
+                piece.style.setProperty('--delay', `${wave * .48 + Math.random() * .12}s`);
+                piece.style.setProperty('--rise', `-${(final ? 49 : 36) + Math.random() * 47}dvh`);
+                piece.style.setProperty('--drift', `${direction * (17 + Math.random() * 68)}vw`);
+                piece.style.setProperty('--spin', `${direction * (280 + Math.random() * 650)}deg`);
+                pieces.append(piece);
+            }
         }
-        return confetti;
+        confetti.append(pieces);
+        confettiTimeout = window.setTimeout(clearConfetti, final ? 3600 : 1800);
+    }
+
+    function celebrateFinal() {
+        sound?.stop();
+        playSound('champion');
+        launchConfetti(true);
     }
 
     function renderChampion() {
@@ -637,13 +656,12 @@
         const title = winners.length > 1 ? '並列冠軍' : '本局冠軍';
         const names = winners.map((player) => player.name).join('、');
         const headline = names.length > 35 ? `${winners.length} 位並列第一` : names;
-        const card = element('div', 'stage-card results-card champion enter');
+        const card = element('div', 'stage-card results-card champion finale enter');
         const home = element('a', 'outline', '回遊戲大集合');
         home.href = '../index.html';
         const trophy = element('div', 'champion-trophy', '🏆');
         trophy.setAttribute('aria-hidden', 'true');
         card.append(
-            makeConfetti(),
             trophy,
             element('p', 'winner-callout', title),
             element('h2', '', headline),
@@ -653,11 +671,12 @@
         );
         showCard(card);
         announce(`${title}是${names}，${winners[0].score} 分`);
-        playSound('champion');
+        celebrateFinal();
     }
 
     function returnToSetup() {
         stopTimers();
+        clearConfetti();
         sound?.stop();
         session = null;
         stage.replaceChildren();
