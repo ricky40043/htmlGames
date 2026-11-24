@@ -111,8 +111,6 @@
         if (!playerCount.validity.valid || count === playerNames.childElementCount) return;
         const fields = playerDrafts.slice(0, count).map((name, index) => {
             const label = element('label', 'player-field');
-            const number = element('span', 'player-no', index + 1);
-            number.setAttribute('aria-hidden', 'true');
             const input = element('input');
             input.type = 'text';
             input.maxLength = 20;
@@ -122,7 +120,7 @@
             input.addEventListener('input', () => {
                 playerDrafts[index] = input.value;
             });
-            label.append(number, input);
+            label.append(input);
             return label;
         });
         playerNames.replaceChildren(...fields);

@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#080d16">
     <title>限時記憶大挑戰</title>
-    <link rel="stylesheet" href="styles.css?v=8">
+    <link rel="stylesheet" href="styles.css?v=9">
     <script defer src="bank.js?v=5"></script>
     <script defer src="sound.js?v=8"></script>
-    <script defer src="game.js?v=8"></script>
+    <script defer src="game.js?v=9"></script>
 </head>
 <body data-phase="setup">
     <header class="topbar">
@@ -25,24 +25,20 @@
 
     <main id="main">
         <section id="setup" class="setup shell" aria-labelledby="game-title">
-            <div class="hero">
-                <div class="hero-text">
-                    <h1 id="game-title"><span>限時記憶</span><span>大挑戰</span></h1>
-                    <p>看圖 10 秒，憑記憶回答畫面裡的細節。</p>
-                </div>
-                <div class="hero-art" aria-hidden="true">
-                    <div class="art-card art-photo"><i></i></div>
-                    <div class="art-card art-timer"><b>10</b><span>秒</span><i></i></div>
-                </div>
-            </div>
-
             <form id="setup-form">
+                <div class="hero">
+                    <div class="hero-text">
+                        <h1 id="game-title"><span>限時記憶</span><span>大挑戰</span></h1>
+                        <p class="hero-instructions">看圖 10 秒，翻牌後憑記憶答題。</p>
+                        <button id="start" class="primary launch-button" type="submit">開始挑戰 <span aria-hidden="true">→</span></button>
+                        <p id="setup-error" class="error" role="alert" hidden></p>
+                    </div>
+                </div>
                 <div class="setup-panels">
                     <section class="setup-panel" aria-labelledby="settings-title">
                         <div class="panel-heading">
                             <h2 id="settings-title">出題設定</h2>
                             <label class="mode-toggle"><input id="multiple-choice" type="checkbox">四選一模式</label>
-                            <p id="pool-count" class="help pool-count" aria-live="polite"></p>
                         </div>
                         <div class="controls-grid">
                             <div class="field">
@@ -80,6 +76,7 @@
                                 </select>
                             </label>
                         </div>
+                        <p id="pool-count" class="help pool-count" aria-live="polite"></p>
                     </section>
                     <section class="setup-panel" aria-labelledby="players-title">
                         <div class="panel-heading">
@@ -104,10 +101,6 @@
                             </div>
                         </div>
                     </section>
-                </div>
-                <div class="setup-footer">
-                    <p id="setup-error" class="error" role="alert" hidden></p>
-                    <button id="start" class="primary" type="submit">開始挑戰</button>
                 </div>
             </form>
         </section>
