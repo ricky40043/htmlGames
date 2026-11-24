@@ -91,14 +91,33 @@ main { min-height: 0; min-width: 0; }
     padding: clamp(22px, 4.4vw, 70px);
     border: 1px solid #9d764d;
     border-radius: 23px;
-    background-color: #101926;
-    background-image:
-        linear-gradient(90deg, #080f1aef, #080f1a95 42%, #080f1a00 83%),
-        linear-gradient(0deg, #080e1be0, transparent 66%),
-        url("images/launch-cover.webp");
-    background-size: cover;
-    background-position: center, center, 58% 45%;
+    background: #101926;
     box-shadow: var(--shadow);
+}
+.hero-scenes { position: absolute; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
+.hero-scenes img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: var(--cover-position, 58% 45%);
+    transform-origin: 70% 42%;
+}
+.hero-scenes img:nth-child(n+2) { opacity: 0; animation: cover-switch 18s linear -13s infinite; }
+.hero-scenes img:nth-child(3) { animation-delay: -7s; }
+.hero-scenes::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, #080f1aee, #080f1a87 44%, transparent 84%),
+        linear-gradient(0deg, #080e1bd9, transparent 70%);
+}
+@keyframes cover-switch {
+    0% { opacity: 0; scale: 1; }
+    6%, 31% { opacity: 1; }
+    38%, 100% { opacity: 0; scale: 1.05; }
 }
 .hero::after {
     content: "";
@@ -373,6 +392,10 @@ select option { color: var(--ink); background: var(--control); }
     grid-template-rows: minmax(0, 1fr) auto;
     gap: var(--screen-gap);
     min-height: 0;
+    border-radius: 17px;
+    background:
+        linear-gradient(115deg, #0a1222ba, #0815277d),
+        url("images/observatory-ice.webp") center 48% / cover;
 }
 .scene-space {
     display: grid;
@@ -549,6 +572,12 @@ select option { color: var(--ink); background: var(--control); }
     gap: clamp(5px, 1dvh, 12px);
     padding-inline: clamp(13px, 5.4vw, 76px);
 }
+.question-card, .scoring-card {
+    background:
+        radial-gradient(ellipse at center, #081021f2 8%, #0a1324ba 75%, #090f20a8),
+        var(--stage-art, url("images/observatory-nebula.webp")) center 44% / cover;
+}
+.scoring-card { --stage-art: url("images/observatory-ice.webp"); }
 .question-card::before, .scoring-card::before, .results-card::before {
     content: "";
     position: absolute;
@@ -736,6 +765,8 @@ select option { color: var(--ink); background: var(--control); }
 .result-list .top-rank { background: #163543; border-color: #397b87; }
 
 .finale {
+    --burst-x: 48%;
+    --burst-y: 37%;
     border-color: #d5ae67;
     background:
         radial-gradient(ellipse at 50% 3%, #7e533d 0, transparent 45%),
@@ -743,14 +774,69 @@ select option { color: var(--ink); background: var(--control); }
         radial-gradient(ellipse at 96% 80%, #362447, transparent 48%),
         #101829;
 }
+.finale-art {
+    position: absolute;
+    z-index: -2;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+.finale-art img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: var(--burst-x) var(--burst-y);
+    transform-origin: var(--burst-x) var(--burst-y);
+    opacity: .88;
+    scale: 1.025;
+    animation: supernova-expand 1.55s cubic-bezier(.19,.72,.22,1) both;
+}
+.finale-art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 41% 29% at 50% 53%, #070b1bd9 4%, #0a14265e 67%, transparent),
+        linear-gradient(0deg, #080d23b5 4%, #080d2350 37%, transparent 72%);
+}
+@keyframes supernova-expand {
+    from { opacity: .2; scale: .84; }
+    44% { opacity: 1; scale: 1.08; }
+    to { opacity: .88; scale: 1.025; }
+}
+.cosmic-orbits {
+    position: absolute;
+    z-index: 1;
+    top: var(--burst-y);
+    left: var(--burst-x);
+    width: clamp(275px, 97vmin, 840px);
+    height: auto;
+    overflow: visible;
+    translate: -50% -50%;
+    filter: drop-shadow(0 0 5px #81e8ff9c);
+    opacity: .85;
+}
+.cosmic-orbits g { transform-box: view-box; transform-origin: center; }
+.orbit-outer { animation: orbit-spin 24s linear infinite; }
+.orbit-inner { animation: orbit-spin 17s linear infinite reverse; }
+@keyframes orbit-spin { to { rotate: 1turn; } }
+.cosmic-shockwave { opacity: 0; animation: cosmic-shockwave 1.36s cubic-bezier(.16,.73,.25,1) both; }
+.cosmic-shockwave-late { animation-delay: .28s; }
+@keyframes cosmic-shockwave {
+    from { opacity: 0; scale: .08; }
+    22% { opacity: 1; }
+    to { opacity: 0; scale: 1.5; }
+}
 .finale::before, .finale::after {
     content: "";
     pointer-events: none;
     position: absolute;
     z-index: -1;
     inset: auto;
-    top: 37%;
-    left: 50%;
+    top: var(--burst-y);
+    left: var(--burst-x);
     aspect-ratio: 1;
     border-radius: 50%;
     translate: -50% -50%;
@@ -759,7 +845,7 @@ select option { color: var(--ink); background: var(--control); }
     width: max(370px, 112vmin);
     background: repeating-conic-gradient(from 11deg, #a6c8f56b 0deg 1.5deg, #ffbf731a 1.5deg 5deg, transparent 5deg 25.714deg);
     mask-image: radial-gradient(circle, transparent 35%, #000 46%, transparent 68%);
-    opacity: .48;
+    opacity: .31;
     animation: victory-turn 51s linear infinite reverse, victory-halo 6s ease-in-out infinite alternate;
 }
 .finale::after {
@@ -767,16 +853,16 @@ select option { color: var(--ink); background: var(--control); }
     background: repeating-conic-gradient(from 16deg, #ffe9b085 0deg 2deg, #ffd1753b 2deg 6deg, transparent 7deg 20deg);
     mask-image: radial-gradient(circle, transparent 17%, #000 29%, transparent 68%);
     scale: 1.38;
-    opacity: .59;
+    opacity: .38;
     animation: victory-rays 2s cubic-bezier(.2,.68,.2,1) both, victory-turn 32s linear infinite;
 }
 @keyframes victory-rays {
     from { scale: .33; opacity: .23; }
-    35% { opacity: .95; }
-    to { scale: 1.38; opacity: .59; }
+    35% { opacity: .72; }
+    to { scale: 1.38; opacity: .38; }
 }
 @keyframes victory-turn { from { rotate: -14deg; } to { rotate: 346deg; } }
-@keyframes victory-halo { from { opacity: .30; scale: .94; } to { opacity: .64; scale: 1.09; } }
+@keyframes victory-halo { from { opacity: .22; scale: .94; } to { opacity: .46; scale: 1.09; } }
 .champion-trophy {
     position: relative;
     display: grid;
@@ -793,15 +879,18 @@ select option { color: var(--ink); background: var(--control); }
 }
 @keyframes trophy-in { from { opacity: 0; transform: translateY(12px) scale(.48) rotate(-12deg); } to { opacity: 1; transform: none; } }
 .winner-callout, .finale h2 { color: var(--gold); }
-.finale h2 { text-shadow: 0 2px 32px #ffe1a5a3, 0 0 70px #d1527469; }
+.winner-callout { border-radius: 3px; background: #0d1328e8; box-shadow: 0 0 0 4px #0d1328e8; }
+.finale h2 { text-shadow: 0 2px 6px #10071c, 0 0 11px #150b21c9, 0 0 42px #ffb7798f; }
 .champion h2 { animation: winner-in .78s cubic-bezier(.14,.78,.31,1) both; }
 @keyframes winner-in {
     from { opacity: 0; transform: translateY(12px) scale(.83); }
     to { opacity: 1; transform: none; }
 }
-.champion-lead { margin: 0; font-size: 1.2rem; font-weight: 760; }
+.champion-lead { margin: 0; font-size: 1.2rem; font-weight: 760; text-shadow: 0 2px 6px #0a0921; }
 .finale .primary { background: var(--gold); color: var(--control); }
-.finale .top-rank { background: #302b32; border-color: #856f47; }
+.finale .result-list li { background: #0f172af2; }
+.finale .result-list .top-rank { background: #2a2237f5; border-color: #a48350; }
+.finale .outline { background: #0c1525df; }
 
 .confetti { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 10; }
 .confetti i {
@@ -918,7 +1007,7 @@ dialog p { margin-top: 7px; color: var(--muted); }
     .hero {
         min-height: clamp(153px, 23dvh, 225px);
         padding: clamp(13px, 2.4dvh, 24px) clamp(15px, 4.4vw, 51px);
-        background-position: center, center, 62% 43%;
+        --cover-position: 62% 43%;
     }
     .hero-text { width: 100%; }
     .hero h1 { display: flex; flex-wrap: wrap; gap: 0 .18em; font-size: clamp(1.8rem, 6vw, 3.95rem); }

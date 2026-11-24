@@ -8,6 +8,7 @@
     const form = byId('setup-form');
     const game = byId('game');
     const stage = byId('stage');
+    const finaleArtwork = byId('finale-artwork');
     const confetti = byId('confetti');
     const scores = byId('scores');
     const progress = byId('round-progress');
@@ -238,6 +239,9 @@
         renderScores();
         window.scrollTo(0, 0);
         beginRound();
+        const finaleImage = new Image();
+        finaleImage.fetchPriority = 'low';
+        finaleImage.src = finaleArtwork.content.querySelector('img').src;
     }
 
     async function beginRound() {
@@ -617,6 +621,7 @@
             : `完成 ${rounds.length} 張圖片・${total} 題`;
         const card = element('div', 'stage-card results-card finale enter');
         card.append(
+            finaleArtwork.content.cloneNode(true),
             element('h2', '', '排行榜'),
             resultList(rankPlayers(), false),
             actions(button('揭曉冠軍', renderChampion))
@@ -693,6 +698,7 @@
         const trophy = element('div', 'champion-trophy', '🏆');
         trophy.setAttribute('aria-hidden', 'true');
         card.append(
+            finaleArtwork.content.cloneNode(true),
             trophy,
             element('p', 'winner-callout', title),
             element('h2', '', headline),
