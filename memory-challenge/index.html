@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#080d16">
     <title>限時記憶大挑戰</title>
-    <link rel="stylesheet" href="styles.css?v=4">
-    <script defer src="bank.js"></script>
+    <link rel="stylesheet" href="styles.css?v=5">
+    <script defer src="bank.js?v=5"></script>
     <script defer src="sound.js?v=4"></script>
-    <script defer src="game.js?v=4"></script>
+    <script defer src="game.js?v=5"></script>
 </head>
 <body data-phase="setup">
     <header class="topbar">
@@ -28,7 +28,7 @@
             <div class="hero">
                 <div class="hero-text">
                     <h1 id="game-title"><span>限時記憶</span><span>大挑戰</span></h1>
-                    <p>看圖 10 秒。翻牌後，憑記憶回答畫面裡的細節。</p>
+                    <p>看圖 10 秒，憑記憶回答畫面裡的細節。</p>
                 </div>
                 <div class="hero-art" aria-hidden="true">
                     <div class="art-card art-photo"><i></i></div>
@@ -41,7 +41,8 @@
                     <section class="setup-panel" aria-labelledby="settings-title">
                         <div class="panel-heading">
                             <h2 id="settings-title">出題設定</h2>
-                            <p id="pool-count" class="help" aria-live="polite"></p>
+                            <label class="mode-toggle"><input id="multiple-choice" type="checkbox">四選一模式</label>
+                            <p id="pool-count" class="help pool-count" aria-live="polite"></p>
                         </div>
                         <div class="controls-grid">
                             <div class="field">
@@ -83,7 +84,7 @@
                     <section class="setup-panel" aria-labelledby="players-title">
                         <div class="panel-heading">
                             <h2 id="players-title">玩家與隊伍</h2>
-                            <p class="help">玩家口頭作答，主持人負責計分。</p>
+                            <p id="scoring-help" class="help">玩家口頭作答，主持人計分。</p>
                         </div>
                         <div class="player-settings">
                             <div class="field player-count-field">

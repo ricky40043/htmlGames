@@ -15,6 +15,8 @@
     const roundsField = byId('rounds');
     const roundsMenu = byId('rounds-menu');
     const questionsField = byId('questions');
+    const multipleChoice = byId('multiple-choice');
+    const scoringHelp = byId('scoring-help');
     const themeField = byId('theme');
     const styleField = byId('style');
     const playerCount = byId('player-count');
@@ -123,6 +125,12 @@
         playerNames.replaceChildren(...fields);
     }
 
+    function updateScoringHelp() {
+        scoringHelp.textContent = multipleChoice.checked
+            ? (playerCount.valueAsNumber === 1 ? '立即判定，自動計分。' : '立即判定，主持人計分。')
+            : '口頭作答，主持人計分。';
+    }
+
     function shuffle(items) {
         const shuffled = items.slice();
         for (let i = shuffled.length - 1; i > 0; i -= 1) {
@@ -179,7 +187,9 @@
         const pills = session.players.map((player, index) => {
             const added = awarded.has(index);
             const pill = element('div', added ? 'score-pill awarded' : 'score-pill');
-            pill.append(element('span', '', player.name), element('strong', '', `${player.score} 分`));
+            const name = element('span', '', player.name);
+            name.title = player.name;
+            pill.append(name, element('strong', '', `${player.score} 分`));
             if (added) pill.append(element('em', '', '+1'));
             return pill;
         });
@@ -207,6 +217,7 @@
         unlockSound();
         const questionCount = questionsField.valueAsNumber;
         session = {
+            multipleChoice: multipleChoice.checked,
             players: playerDrafts.slice(0, playerCount.valueAsNumber).map((name, index) => ({
                 name: name.trim() || `玩家 ${index + 1}`,
                 score: 0
@@ -291,7 +302,9 @@
         const value = element('span', 'timer-value', '10 秒');
         track.append(fill);
         timer.append(element('span', 'timer-label', '觀察時間'), track, value);
-        observation.append(frame, timer);
+        const space = element('div', 'scene-space');
+        space.append(frame);
+        observation.append(space, timer);
         showCard(observation, null);
 
         let previous = 10;
@@ -354,6 +367,10 @@
         return currentRound().questions[session.question];
     }
 
+    function questionPrompt([question, , choice]) {
+        return session.multipleChoice && choice.prompt ? choice.prompt : question;
+    }
+
     function questionLabel() {
         return `第 ${session.question + 1}／${currentRound().questionLimit} 題`;
     }
@@ -361,12 +378,31 @@
     function renderQuestion(message = '') {
         setPhase('question', questionLabel());
         const card = element('div', message ? 'stage-card question-card question-shift' : 'stage-card question-card enter');
-        const heading = element('h2', '', currentQuestion()[0]);
-        const skip = button('跳過本題', skipQuestion, 'outline');
+        const question = currentQuestion();
+        const heading = element('h2', '', questionPrompt(question));
+        const skip = button('跳過這一題', skipQuestion, 'outline skip-action');
         const replace = button('換一題', replaceQuestion, 'outline');
         replace.disabled = session.question + 1 >= currentRound().questions.length;
-        const reveal = button('公布答案', renderScoring);
-        card.append(heading, actions(skip, replace, reveal));
+        card.append(heading);
+
+        if (session.multipleChoice) {
+            card.classList.add('multiple-card');
+            const choices = element('div', 'quiz-options');
+            choices.setAttribute('role', 'group');
+            choices.setAttribute('aria-label', '選擇答案');
+            shuffle(question[2].options).forEach((option, index) => {
+                const control = button('', () => renderScoring(option), 'quiz-option');
+                const letter = element('span', 'quiz-letter', 'ABCD'[index]);
+                letter.setAttribute('aria-hidden', 'true');
+                control.append(letter, element('span', 'quiz-text', option));
+                choices.append(control);
+            });
+            card.append(choices, actions(skip, replace));
+        } else {
+            const reveal = button('公布答案', () => renderScoring());
+            card.append(actions(skip, replace, reveal));
+        }
+
         const hint = message || (replace.disabled ? '這張圖已沒有其他題目可換。' : '');
         if (hint) card.append(element('p', 'question-hint', hint));
         showCard(card, heading);
@@ -385,7 +421,8 @@
     }
 
     function skipQuestion() {
-        if (phase !== 'question') return;
+        if (phase !== 'question' && phase !== 'scoring') return;
+        session.selections.clear();
         playSound('move');
         announce('已跳過本題');
         advanceQuestion('已跳過上一題。');
@@ -413,47 +450,72 @@
         return session.round === session.rounds.length - 1 ? '公布排行榜' : '下一張圖片';
     }
 
-    function renderScoring() {
+    function renderScoring(selected = null) {
         if (phase !== 'question') return;
         unlockSound();
         playSound('reveal');
         setPhase('scoring', `${questionLabel()}・計分`);
         session.selections.clear();
 
-        const [question, answer] = currentQuestion();
+        const question = currentQuestion();
+        const answeredChoice = selected !== null;
+        const answer = answeredChoice ? question[2].options[0] : question[1];
+        const correct = answeredChoice && selected === answer;
+        const autoScore = answeredChoice && session.players.length === 1;
+        if (autoScore && correct) session.selections.add(0);
+
         const card = element('div', 'stage-card scoring-card');
         const answerCard = element('div', 'answer-flip');
         const answerHeading = element('h2', '', answer);
         answerCard.append(element('p', '', '標準答案'), answerHeading);
+        card.append(element('p', 'question-scoring', questionPrompt(question)));
 
+        if (answeredChoice) {
+            const result = element(
+                'p',
+                correct ? 'choice-verdict correct' : 'choice-verdict incorrect',
+                correct ? '✓ 答對了' : '✕ 答錯了'
+            );
+            if (!correct) result.append(element('span', 'selected-option', `已選 ${selected}`));
+            card.append(result);
+            announce(correct ? '答對了' : `答錯了，正確答案是${answer}`);
+        }
+        card.append(answerCard);
+
+        const skip = button('跳過這一題', skipQuestion, 'outline skip-action');
+        const next = button(nextLabel(), commitScores);
+        if (!autoScore) {
+            const prompt = element('p', 'score-prompt', '選擇答對者，每人加 1 分');
+            prompt.id = 'score-prompt';
+            card.append(prompt, scoringChoices(next));
+        }
+        card.append(actions(skip, next));
+        showCard(card, answerHeading);
+    }
+
+    function scoringChoices(next) {
         const choices = element('div', 'score-choices');
         choices.setAttribute('role', 'group');
         choices.setAttribute('aria-labelledby', 'score-prompt');
-        const prompt = element('p', 'score-prompt', '選擇答對者，每人加 1 分');
-        prompt.id = 'score-prompt';
-        const skip = button('本題無人答對', commitScores);
-        const next = button(`確認加分，${nextLabel()}`, commitScores);
-        next.hidden = true;
 
         session.players.forEach((player, index) => {
+            const scoreText = `${player.score} 分`;
             const choice = button('', () => {
                 const selected = !session.selections.has(index);
                 if (selected) session.selections.add(index);
                 else session.selections.delete(index);
                 choice.setAttribute('aria-pressed', String(selected));
-                indicator.textContent = selected ? '✓ +1' : '+1';
-                skip.hidden = session.selections.size > 0;
-                next.hidden = !skip.hidden;
+                indicator.textContent = selected ? `${scoreText} +1` : scoreText;
+                next.textContent = session.selections.size ? `確認加分，${nextLabel()}` : nextLabel();
             }, 'score-choice');
             choice.setAttribute('aria-pressed', 'false');
-            const indicator = element('span', '', '+1');
+            const indicator = element('span', '', scoreText);
             indicator.setAttribute('aria-hidden', 'true');
             choice.append(element('span', '', player.name), indicator);
             choices.append(choice);
         });
 
-        card.append(element('p', 'question-scoring', question), answerCard, prompt, choices, actions(skip, next));
-        showCard(card, answerHeading);
+        return choices;
     }
 
     function commitScores() {
@@ -495,9 +557,11 @@
             const visible = !top || reveal;
             const row = element('li', top ? 'top-rank' : '');
             row.style.setProperty('--rank-delay', `${index * 48}ms`);
+            const name = element('strong', 'result-name', visible ? player.name : '待揭曉');
+            if (visible) name.title = player.name;
             row.append(
                 element('span', 'rank', `第 ${player.rank} 名`),
-                element('strong', 'result-name', visible ? player.name : '待揭曉'),
+                name,
                 element('span', 'result-score', visible ? `${player.score} 分` : '—')
             );
             list.append(row);
@@ -546,6 +610,7 @@
         const winners = ranked.filter((player) => player.rank === 1);
         const title = winners.length > 1 ? '並列冠軍' : '本局冠軍';
         const names = winners.map((player) => player.name).join('、');
+        const headline = names.length > 35 ? `${winners.length} 位並列第一` : names;
         const card = element('div', 'stage-card results-card champion enter');
         const home = element('a', 'outline', '回遊戲大集合');
         home.href = '../index.html';
@@ -555,7 +620,7 @@
             makeConfetti(),
             trophy,
             element('p', 'winner-callout', title),
-            element('h2', '', names),
+            element('h2', '', headline),
             element('p', 'champion-lead', `${winners[0].score} 分`),
             resultList(ranked, true),
             actions(button('再玩一局', returnToSetup), home)
@@ -632,7 +697,11 @@
     form.addEventListener('submit', startSession);
     connectNumberMenu(roundsField, roundsMenu);
     connectNumberMenu(questionsField, byId('questions-menu'));
-    connectNumberMenu(playerCount, playerCountMenu, renderPlayerFields);
+    connectNumberMenu(playerCount, playerCountMenu, () => {
+        renderPlayerFields();
+        updateScoringHelp();
+    });
+    multipleChoice.addEventListener('change', updateScoringHelp);
     themeField.addEventListener('change', updatePool);
     styleField.addEventListener('change', updatePool);
     updatePool();
