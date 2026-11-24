@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#080d16">
     <title>限時記憶大挑戰</title>
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=6">
     <script defer src="bank.js?v=5"></script>
     <script defer src="sound.js?v=4"></script>
-    <script defer src="game.js?v=5"></script>
+    <script defer src="game.js?v=6"></script>
 </head>
 <body data-phase="setup">
     <header class="topbar">
@@ -115,7 +115,10 @@
         <section id="game" class="game shell" aria-label="挑戰進行中" hidden>
             <div class="stage-heading">
                 <p id="round-progress" class="round-progress"></p>
-                <p id="phase-label" class="phase-label"></p>
+                <div class="stage-status">
+                    <p id="phase-label" class="phase-label"></p>
+                    <button id="skip-picture" class="outline compact skip-picture" type="button" hidden>跳過這張圖 <span aria-hidden="true">⏭</span></button>
+                </div>
             </div>
             <div id="stage" class="stage"></div>
             <section id="scores" class="scores" aria-label="目前分數" hidden></section>

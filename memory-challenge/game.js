@@ -11,6 +11,7 @@
     const scores = byId('scores');
     const progress = byId('round-progress');
     const phaseLabel = byId('phase-label');
+    const skipPicture = byId('skip-picture');
     const status = byId('live-status');
     const roundsField = byId('rounds');
     const roundsMenu = byId('rounds-menu');
@@ -170,8 +171,10 @@
         const playing = next !== 'setup';
         setup.hidden = playing;
         game.hidden = !playing;
-        endGame.hidden = !playing || next === 'rankings' || next === 'champion';
-        scores.hidden = !playing || next === 'rankings' || next === 'champion';
+        const roundActive = playing && next !== 'rankings' && next !== 'champion';
+        endGame.hidden = !roundActive;
+        scores.hidden = !roundActive;
+        skipPicture.hidden = !roundActive;
     }
 
     function showCard(card, focus = card.querySelector('h2')) {
@@ -240,6 +243,7 @@
         stopTimers();
         const current = session;
         const round = current.rounds[current.round];
+        const isLoadingRound = () => session === current && currentRound() === round && phase === 'loading';
         current.question = 0;
         const theme = bank.themes[round.theme];
         const style = round.style === 'photo' ? '寫實真人風' : '卡通風';
@@ -260,7 +264,7 @@
         try {
             await picture.decode();
         } catch {
-            if (session !== current) return;
+            if (!isLoadingRound()) return;
             const errorCard = element('div', 'stage-card loading enter');
             errorCard.append(
                 element('h2', '', '圖片載入失敗'),
@@ -271,9 +275,9 @@
             return;
         }
 
-        if (session !== current) return;
+        if (!isLoadingRound()) return;
         animation = requestAnimationFrame(() => {
-            if (session !== current) return;
+            if (!isLoadingRound()) return;
             observe(picture, theme, style);
             const upcoming = current.rounds[current.round + 1];
             if (upcoming) new Image().src = upcoming.image;
@@ -412,12 +416,30 @@
         if (session.question + 1 < currentRound().questionLimit) {
             session.question += 1;
             renderQuestion(message);
-        } else if (session.round + 1 < session.rounds.length) {
+        } else {
+            advanceRound();
+        }
+    }
+
+    function advanceRound() {
+        if (session.round + 1 < session.rounds.length) {
             session.round += 1;
             beginRound();
         } else {
+            stopTimers();
             renderRankings();
         }
+    }
+
+    function skipRound() {
+        if (skipPicture.hidden) return;
+        currentRound().skippedAfter = session.question + Number(phase === 'awarding');
+        session.selections.clear();
+        renderScores();
+        sound?.stop();
+        playSound('move');
+        announce('已跳過這張圖');
+        advanceRound();
     }
 
     function skipQuestion() {
@@ -571,8 +593,12 @@
 
     function renderRankings() {
         setPhase('rankings', '成績結算');
-        const total = session.rounds.reduce((sum, round) => sum + round.questionLimit, 0);
-        progress.textContent = `完成 ${session.rounds.length} 張圖片・${total} 題`;
+        const { rounds } = session;
+        const skipped = rounds.filter((round) => round.skippedAfter !== undefined).length;
+        const total = rounds.reduce((sum, round) => sum + (round.skippedAfter ?? round.questionLimit), 0);
+        progress.textContent = skipped
+            ? `完成 ${rounds.length - skipped} 張・跳過 ${skipped} 張・${total} 題`
+            : `完成 ${rounds.length} 張圖片・${total} 題`;
         const card = element('div', 'stage-card results-card enter');
         card.append(
             element('h2', '', '排行榜'),
@@ -673,6 +699,7 @@
         fullscreen.textContent = document.fullscreenElement ? '離開全螢幕' : '全螢幕';
     });
 
+    skipPicture.addEventListener('click', skipRound);
     endGame.addEventListener('click', () => {
         endDialog.returnValue = '';
         endDialog.showModal();
