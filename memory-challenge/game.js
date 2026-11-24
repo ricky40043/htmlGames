@@ -244,6 +244,7 @@
 
     async function beginRound() {
         stopTimers();
+        clearConfetti();
         const current = session;
         const round = current.rounds[current.round];
         const isLoadingRound = () => session === current && currentRound() === round && phase === 'loading';
@@ -302,13 +303,14 @@
         frame.append(card, scan);
 
         const timer = element('div', 'timer-row');
-        timer.setAttribute('role', 'timer');
         const track = element('div', 'track');
         track.setAttribute('aria-hidden', 'true');
         const fill = element('div', 'timer-fill');
         const value = element('span', 'timer-value', '10 秒');
+        value.setAttribute('role', 'timer');
+        const answerNow = button('立即答題', () => finishObservation(true), 'primary compact answer-now');
         track.append(fill);
-        timer.append(element('span', 'timer-label', '觀察時間'), track, value);
+        timer.append(element('span', 'timer-label', '觀察時間'), track, value, answerNow);
         const space = element('div', 'scene-space');
         space.append(frame);
         observation.append(space, timer);
@@ -337,6 +339,7 @@
             picture.setAttribute('aria-hidden', 'true');
             card.classList.add('flipping');
             frame.classList.add('sealed');
+            answerNow.disabled = true;
         };
 
         announce('觀察圖片，計時 10 秒');
@@ -355,10 +358,22 @@
             animation = requestAnimationFrame(advanceTimer);
             return;
         }
+        finishObservation();
+    }
 
-        clearTimeout(timeout);
+    function finishObservation(immediately = false) {
+        if (phase !== 'observe') return;
+        const cover = showCovered;
+        stopTimers();
+        if (immediately) {
+            sound?.stop();
+            playSound('cover');
+            renderQuestion();
+            announce('開始答題');
+            return;
+        }
         setPhase('cover', '時間到');
-        showCovered();
+        cover();
         announce('時間到');
         playSound('cover');
         timeout = window.setTimeout(renderQuestion, fullEffects() ? 920 : 100);
@@ -488,6 +503,7 @@
         if (autoScore && correct) session.selections.add(0);
 
         const card = element('div', 'stage-card scoring-card');
+        if (answeredChoice) card.dataset.verdict = correct ? 'correct' : 'incorrect';
         const answerCard = element('div', 'answer-flip');
         const answerHeading = element('h2', '', answer);
         answerCard.append(element('p', '', '標準答案'), answerHeading);
@@ -620,8 +636,8 @@
         clearConfetti();
         if (!fullEffects()) return;
 
-        const colors = ['#76fff0', '#68a6ff', '#91ffaa', '#ffe384', '#f894cb', '#bea2ff', '#fff8df'];
-        const waves = final ? [96, 80, 80] : [56];
+        const colors = ['#76fff0', '#78aaff', '#a3ffca', '#ffd76c', '#ff9bcb', '#c1a5ff', '#fff8df'];
+        const waves = final ? [96, 80, 80] : [72];
         const pieces = document.createDocumentFragment();
         for (const [wave, count] of waves.entries()) {
             for (let i = 0; i < count; i += 1) {
@@ -629,8 +645,8 @@
                 const piece = element('i');
                 piece.style.setProperty('--color', colors[i % colors.length]);
                 piece.style.setProperty('--origin', direction > 0 ? '0%' : '100%');
-                piece.style.setProperty('--size', `${5 + Math.random() * 6}px`);
-                piece.style.setProperty('--duration', `${(final ? 1.86 : 1.04) + Math.random() * .55}s`);
+                piece.style.setProperty('--size', `${5 + Math.random() * 8}px`);
+                piece.style.setProperty('--duration', `${(final ? 2.15 : 1.1) + Math.random() * .58}s`);
                 piece.style.setProperty('--delay', `${wave * .48 + Math.random() * .12}s`);
                 piece.style.setProperty('--rise', `-${(final ? 49 : 36) + Math.random() * 47}dvh`);
                 piece.style.setProperty('--drift', `${direction * (17 + Math.random() * 68)}vw`);
@@ -638,8 +654,25 @@
                 pieces.append(piece);
             }
         }
+        const bursts = final
+            ? [[14, 34, 0], [83, 28, .06], [29, 17, .48], [71, 20, .54], [17, 63, .96], [87, 60, 1.02]]
+            : [[18, 37, 0], [82, 37, .09]];
+        bursts.forEach(([x, y, delay], index) => {
+            const burst = element('span', 'firework');
+            burst.style.setProperty('--x', `${x}%`);
+            burst.style.setProperty('--y', `${y}%`);
+            burst.style.setProperty('--delay', `${delay}s`);
+            burst.style.setProperty('--spark-color', colors[(index * 3) % colors.length]);
+            for (let i = 0; i < 12; i += 1) {
+                const ray = element('b');
+                ray.style.setProperty('--angle', `${i * 30 + index * 7}deg`);
+                burst.append(ray);
+            }
+            pieces.append(burst);
+        });
+        confetti.classList.toggle('confetti-finale', final);
         confetti.append(pieces);
-        confettiTimeout = window.setTimeout(clearConfetti, final ? 3600 : 1800);
+        confettiTimeout = window.setTimeout(clearConfetti, final ? 4000 : 1900);
     }
 
     function celebrateFinal() {
