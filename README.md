@@ -99,6 +99,7 @@ npm run dev
 
 ## 軟體工程學習模組
 
+- **第 2 冊第 8 章** [分散式 Email 服務](software-learning/distributed-email/index.html)，包含同步架構動畫、可續播的中文旁白、5 個小實驗、3 回合章末模擬與 12 題章末測驗。
 - **System Design 書本模式**：依 Alex Xu / ByteByteGo Volume 1 的 16 Chapter 結構逐章製作，目前 Chapter 1–16 已全部完成。
 - 每個 System Design Chapter 拆成多個小節，每小節有教材頁與 3–5 題練習，最後再進行 30 題章末考。
 - 章末考分為基礎、應用、進階三個層級；題目與選項每次重新洗牌。

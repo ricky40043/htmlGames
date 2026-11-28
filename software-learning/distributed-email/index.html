@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="用同步旁白、架構動畫與實驗，練習設計分散式 Email 服務。">
+    <title>分散式 Email 服務｜系統設計互動課程</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="course-data.js"></script>
+    <script defer src="audio-timing.js"></script>
+    <script defer src="player.js"></script>
+    <script defer src="practice.js"></script>
+    <script defer src="simulation.js"></script>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="../system-design.html"><span class="brand-icon" aria-hidden="true">⌘</span> 系統設計課程</a>
+            <nav class="top-links" aria-label="頁內導覽">
+                <a href="#player">課程</a>
+                <a href="#simulation">章末模擬</a>
+                <a href="#quiz">章末測驗</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="shell">
+        <div class="intro">
+            <div>
+                <p class="eyebrow">第 2 冊第 8 章</p>
+                <h1>分散式 Email 服務</h1>
+                <p class="lede">追一封信從寄件到收件，拆解佇列、搜尋和跨區故障切換。</p>
+            </div>
+            <p id="overview" class="overview"></p>
+        </div>
+
+        <div class="course-layout">
+            <aside class="lesson-panel">
+                <div class="lesson-panel-header">
+                    <h2>課程目錄</h2>
+                    <span id="completion"></span>
+                </div>
+                <nav aria-label="課程小節"><ol id="lessons"></ol></nav>
+            </aside>
+
+            <div class="course-content">
+                <section class="player" id="player" aria-labelledby="lesson-title">
+                    <div class="stage-header">
+                        <div>
+                            <p id="lesson-count" class="eyebrow"></p>
+                            <h2 id="lesson-title"></h2>
+                            <p id="lesson-summary"></p>
+                        </div>
+                        <span class="diagram-key"><span aria-hidden="true"></span> 旁白焦點</span>
+                    </div>
+                    <div class="diagram" id="diagram" aria-label="本小節的架構圖">
+                        <canvas id="connections" aria-hidden="true"></canvas>
+                        <div class="node-grid" id="nodes"></div>
+                    </div>
+                    <div class="caption-area">
+                        <p id="caption" class="caption"></p>
+                        <div id="cue-steps" class="cue-steps" role="group" aria-label="跳到講解片段"></div>
+                    </div>
+                    <div class="controls">
+                        <div class="seek-row">
+                            <label class="sr-only" for="position">旁白播放位置</label>
+                            <input id="position" type="range" min="0" max="1" value="0" step="0.01">
+                            <output id="time" for="position">0:00 / 0:00</output>
+                        </div>
+                        <div class="controls-row">
+                            <div class="transport">
+                                <button id="previous-cue" aria-label="上一個講解片段" title="上一個講解片段">⏮</button>
+                                <button id="play" class="primary"><span aria-hidden="true">▶</span> 播放旁白</button>
+                                <button id="next-cue" aria-label="下一個講解片段" title="下一個講解片段">⏭</button>
+                            </div>
+                            <div class="options">
+                                <label class="sr-only" for="speed">播放速度</label>
+                                <select id="speed">
+                                    <option value="0.75">0.75 ×</option>
+                                    <option value="1" selected>1 ×</option>
+                                    <option value="1.25">1.25 ×</option>
+                                    <option value="1.5">1.5 ×</option>
+                                    <option value="2">2 ×</option>
+                                </select>
+                                <button id="mute" type="button" aria-pressed="false">靜音</button>
+                            </div>
+                        </div>
+                        <p id="player-status" role="status" hidden></p>
+                        <audio id="narration" preload="auto"></audio>
+                    </div>
+                </section>
+
+                <section class="panel takeaway" aria-labelledby="takeaway-title">
+                    <h2 id="takeaway-title">本節重點</h2>
+                    <p id="takeaway"></p>
+                    <details id="transcript">
+                        <summary>完整講稿</summary>
+                        <ol id="transcript-lines"></ol>
+                    </details>
+                    <div class="section-nav">
+                        <button id="previous-lesson">上一小節</button>
+                        <button id="next-lesson">下一小節</button>
+                        <a id="next-simulation" class="section-link" href="#simulation" hidden>前往章末模擬</a>
+                    </div>
+                </section>
+
+                <section class="panel" id="lab" aria-labelledby="lab-title">
+                    <h2 id="lab-title">模擬實驗</h2>
+                    <div id="lab-tabs" role="group" aria-label="實驗主題"></div>
+                    <div id="lab-content"></div>
+                    <a class="section-link" href="#simulation">進入章末模擬</a>
+                </section>
+
+                <section class="panel simulation" id="simulation" aria-labelledby="simulation-title">
+                    <h2 id="simulation-title">章末模擬｜郵件服務值班</h2>
+                    <p>先清掉寄件塞車，再確認收件與搜尋，最後處理主區故障。調整設定並觀察每回合結果。</p>
+                    <div id="simulation-content"></div>
+                </section>
+
+                <section class="panel" id="quiz" aria-labelledby="quiz-title">
+                    <h2 id="quiz-title">章末測驗</h2>
+                    <div id="quiz-content"></div>
+                </section>
+
+                <footer class="source-links">
+                    <p>依第 2 冊第 8 章整理。延伸閱讀</p>
+                    <a href="https://github.com/alex-xu-system/bytebytego/blob/main/system_design_links_vol2.md#chapter-8-distributed-email-service">作者的章節參考資料</a>
+                    <a href="https://www.rfc-editor.org/rfc/rfc5321.html">SMTP 與 MX</a>
+                    <a href="https://www.rfc-editor.org/rfc/rfc9989.html">DMARC</a>
+                </footer>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

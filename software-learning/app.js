@@ -39,7 +39,7 @@ function chapterTag(meta) {
 
 function isCustomChapterPassed(meta, progress) {
   if (progress.chapters?.[meta.id]?.exam?.passed) return true;
-  if (meta.customHref) {
+  if (meta.id === 'sd-book-18') {
     try {
       const hw = JSON.parse(localStorage.getItem('hotelWorld.v1') || '{}');
       if (Object.keys(hw.results || {}).length >= 12) return true;
@@ -55,20 +55,22 @@ function bookStats() {
   return { total: chapters.length, passed, percent: chapters.length ? Math.round(passed / chapters.length * 100) : 0 };
 }
 
-function chapterStats(meta) {
+function chapterStats(meta, progress = loadBookProgress()) {
   const chapter = chapterData(meta.id);
-  const progress = loadBookProgress();
   const state = progress.chapters?.[meta.id];
   if (!chapter && meta.customHref) {
     let hwMonths = 0;
-    try {
-      const hw = JSON.parse(localStorage.getItem('hotelWorld.v1') || '{}');
-      hwMonths = Object.keys(hw.results || {}).length;
-    } catch {}
+    if (meta.id === 'sd-book-18') {
+      try {
+        const hw = JSON.parse(localStorage.getItem('hotelWorld.v1') || '{}');
+        hwMonths = Object.keys(hw.results || {}).length;
+      } catch {}
+    }
     return {
       ready: true,
       custom: true,
       hwMonths,
+      completedLessons: state?.completedLessons?.length || 0,
       examPassed: isCustomChapterPassed(meta, progress),
       bestScore: state?.exam?.bestScore || 0,
       attempts: state?.exam?.attempts || 0,
@@ -89,6 +91,12 @@ function chapterStats(meta) {
   };
 }
 
+function customChapterStatus(meta, stats) {
+  if (stats.hwMonths) return `🏨 營運挑戰 ${stats.hwMonths}/12 月`;
+  if (stats.completedLessons && meta.customLessonCount) return `📖 ${stats.completedLessons}/${meta.customLessonCount} 小節完成`;
+  return '🎬 互動動畫課程';
+}
+
 function renderBookCourseCard() {
   const stats = bookStats();
   const ready = getBookCatalog().filter(meta => chapterData(meta.id) || meta.customHref);
@@ -98,7 +106,7 @@ function renderBookCourseCard() {
     const status = s.examPassed
       ? `✅ 已通過${s.bestScore ? ` · 最高 ${s.bestScore} 分` : ''}`
       : s.custom
-        ? (s.hwMonths ? `🏨 營運挑戰 ${s.hwMonths}/12 月` : '🎬 互動動畫課程')
+        ? customChapterStatus(meta, s)
         : s.completed
           ? `📖 ${s.completed}/${s.total} 小節完成`
           : '可開始';
@@ -167,9 +175,7 @@ function renderBookProgressSection() {
     let status = '尚未製作';
     if (isCustomChapterPassed(meta, progress)) status = '✅ 通過';
     else if (meta.customHref) {
-      let hwMonths = 0;
-      try { hwMonths = Object.keys(JSON.parse(localStorage.getItem('hotelWorld.v1') || '{}').results || {}).length; } catch {}
-      status = hwMonths ? `🏨 營運挑戰 ${hwMonths}/12 月` : '🎬 互動動畫課程';
+      status = customChapterStatus(meta, chapterStats(meta, progress));
     } else if (data) {
       status = Object.keys(state?.sections || {}).length ? '📖 學習中' : '未開始';
     }

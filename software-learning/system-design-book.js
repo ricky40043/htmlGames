@@ -128,7 +128,7 @@
       5: '一致性雜湊', 6: '鍵值儲存', 7: '唯一 ID', 8: '短網址',
       9: '網路爬蟲', 10: '通知系統', 11: '動態訊息', 12: '聊天系統',
       13: '搜尋自動補全', 14: '影片平台', 15: '雲端檔案同步', 16: '持續學習',
-      17: '地圖與導航', 18: '飯店預訂系統'
+      17: '地圖與導航', 18: '飯店預訂系統', 19: '分散式 Email 服務'
     };
     if (labels[chapter?.order]) return labels[chapter.order];
     const title = String(chapter?.title || '').trim();
@@ -686,13 +686,15 @@
   function customChapterProgress(meta) {
     const state = chapterState(meta.id);
     let hwMonths = 0;
-    try {
-      const hw = JSON.parse(localStorage.getItem('hotelWorld.v1') || '{}');
-      hwMonths = Object.keys(hw.results || {}).length;
-    } catch {}
+    if (meta.id === 'sd-book-18') {
+      try {
+        const hw = JSON.parse(localStorage.getItem('hotelWorld.v1') || '{}');
+        hwMonths = Object.keys(hw.results || {}).length;
+      } catch {}
+    }
     const passed = !!state.exam?.passed || hwMonths >= 12;
     const completed = state.completed === true || passed;
-    return { state, hwMonths, passed, completed };
+    return { state, hwMonths, passed, completed, completedLessons: state.completedLessons?.length || 0 };
   }
 
   function renderCatalog() {
@@ -711,7 +713,8 @@
         cls = 'ready';
       } else if (meta.customHref) {
         const cp = customChapterProgress(meta);
-        status = cp.passed ? '✅ 已通過' : cp.completed ? '☑ 本章已完成' : cp.hwMonths ? `🏨 營運挑戰 ${cp.hwMonths}/12 月` : '🎬 互動動畫課程';
+        status = cp.passed ? '✅ 已通過' : cp.completed ? '☑ 本章已完成' : cp.hwMonths ? `🏨 營運挑戰 ${cp.hwMonths}/12 月`
+          : cp.completedLessons ? `📖 ${cp.completedLessons}/${meta.customLessonCount} 小節完成` : '🎬 互動動畫課程';
         detail = meta.customDetail || '互動動畫課程';
         cls = 'ready';
       }
@@ -735,6 +738,10 @@
       return;
     }
 
+    if (!chapter && meta.customHref) {
+      location.replace(meta.customHref);
+      return;
+    }
     if (!chapter) {
       const prev = catalog().find(c => c.order === meta.order - 1);
       const nextReady = catalog().find(c => c.order === meta.order + 1 && chapterData(c.id));
