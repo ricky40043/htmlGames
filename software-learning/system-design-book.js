@@ -694,7 +694,7 @@
     }
     const passed = !!state.exam?.passed || hwMonths >= 12;
     const completed = state.completed === true || passed;
-    return { state, hwMonths, passed, completed, completedLessons: state.completedLessons?.length || 0 };
+    return { state, hwMonths, passed, completed, completedLessons: state.fullCompletedChapters?.length || 0 };
   }
 
   function renderCatalog() {

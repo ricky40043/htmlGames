@@ -1,0 +1,114 @@
+:root { --accent:var(--cy); --text:var(--tx); --muted:var(--tx2); --panel-2:#172431; --on-accent:#061616; }
+[hidden] { display:none !important }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap }
+:focus-visible { outline:2px solid var(--cy); outline-offset:3px }
+a { color:var(--cy) }
+.back { text-decoration:none; white-space:nowrap }
+select { background:var(--panel); color:var(--tx); border:1px solid var(--line2); border-radius:6px; font:inherit; font-size:13px; padding:5px 8px }
+.course-tag { font-size:13px; letter-spacing:2px; color:var(--cy); font-weight:600 }
+#intro { overflow:auto; padding:18px }
+#intro .card { max-height:calc(100dvh - 36px); overflow:auto }
+#introDur { margin:4px 0 9px }
+.intro-voice { display:flex; justify-content:center; align-items:center; gap:9px; margin:9px 0 13px }
+.transport, .course-options { display:flex; align-items:center; gap:7px }
+#time { min-width:95px }
+#timeline button.seg { min-width:3px; padding:0; border:0 }
+#timeline .lm { z-index:1 }
+#caption { min-height:72px }
+#caption .sentence { display:inline-block; max-width:100%; line-height:1.42 }
+#notes .nl { display:block; width:100%; text-align:left; background:transparent; border-right:0; border-top:0; border-bottom:0; font:inherit }
+#notes .nl.cur { font-weight:680 }
+#notes .kp li+li { margin-top:5px }
+#notes .notes-resources { display:flex; flex-wrap:wrap; gap:5px }
+#notes .notes-resources a { font-size:13px; white-space:nowrap }
+#main { position:relative }
+#stage .email-focus { border:1px solid var(--line2); border-radius:10px; background:#101d29; padding:12px 17px; min-height:60px }
+#stage .email-focus .caption-clause { color:var(--tx); font-size:22px; margin-top:3px; font-weight:650 }
+#stage .email-focus .caption-clause mark { color:var(--cy); background:#17364b; border-radius:4px }
+#stage .email-focus .focus-heading { color:var(--cy); font-size:15px; letter-spacing:.08em }
+#stage .email-detail { padding:13px 15px; border:1px solid var(--line2); border-radius:9px; background:#0c141e; font-size:17px; line-height:1.65; white-space:pre-line }
+#stage .email-detail b { color:var(--cy); font-size:14px; display:block }
+#stage .email-workshop-button { font:700 21px var(--sans); background:var(--cy2); color:var(--tx); border:1px solid var(--cy); border-radius:7px; padding:9px 18px; min-height:48px }
+#stage .email-workshop-note { color:var(--am); margin-left:13px; font-size:16px }
+#stage .diagram-node.dimmed { opacity:.46 }
+#stage .diagram-node .bt { overflow-wrap:anywhere }
+#stage .email-packet { transform:none; opacity:1 }
+#stage .email-packet::before { content:none }
+#stage .ov path.current-flow { opacity:1 }
+#stage[data-paused="true"] .fx, #stage[data-paused="true"] .focusring { animation-play-state:paused }
+#scriptModal, #workshop { border:1px solid var(--line2); border-radius:12px; background:var(--panel); color:var(--tx); padding:0 }
+#scriptModal:not([open]) { display:none }
+#scriptModal[open] { display:flex; inset:0; width:min(920px, 92vw); height:min(90vh, 900px); background:var(--panel) }
+#scriptModal .inner { margin:0; width:100%; height:100%; max-height:none; border:0 }
+#scriptModal::backdrop, #workshop::backdrop { background:#000a }
+#scriptModal a { color:var(--cy) }
+#scriptModal .sp { flex:1 }
+#workshop { width:min(885px,96vw); max-height:90dvh; overflow:auto }
+.workshop-header { display:flex; justify-content:space-between; align-items:center; gap:12px; background:#152634; position:sticky; top:0; z-index:1; padding:12px 16px; border-bottom:1px solid var(--line2) }
+#workshopBody { padding:15px 17px 22px; font-size:16px; line-height:1.6 }
+#workshopBody h2,#workshopBody h3 { margin:0 0 7px }
+#workshopBody p { margin:6px 0 }
+#workshopBody button { background:#172431; color:var(--tx); border:1px solid var(--line2); padding:6px 10px; border-radius:6px; min-height:38px }
+#workshopBody button.primary,#workshopBody button[aria-pressed="true"] { border-color:var(--cy); background:var(--cy2) }
+#workshopBody button:disabled { opacity:.5; cursor:default }
+#workshopBody fieldset { border:0; padding:0; margin:10px 0 }
+#workshopBody legend { font-size:18px; font-weight:650; margin-bottom:8px }
+#lab-tabs, .lab-route, .quiz-actions, .simulation-rounds { display:flex; flex-wrap:wrap; gap:7px; margin:8px 0 }
+.lab-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr)); gap:10px; margin:12px 0 }
+.lab-fields label { display:grid; align-content:start; gap:5px; color:var(--tx2) }
+.lab-fields input { width:100%; min-height:34px; border:1px solid var(--line2); border-radius:6px; padding:4px 8px; color:var(--tx); background:var(--bg) }
+.lab-readout,.quiz-feedback { background:#0c1520; border:1px solid var(--line2); border-radius:7px; padding:8px 11px; margin:9px 0 }
+.lab-route span,.simulation-rounds li { background:#172431; border:1px solid var(--line2); border-radius:6px; padding:3px 8px }
+.lab-route b,.lab-readout strong,.simulation-metrics dd { color:var(--cy) }
+.quiz-answers { display:grid; gap:6px }
+.quiz-answers label { display:flex; align-items:baseline; gap:8px; padding:5px 8px; border:1px solid var(--line2); border-radius:6px }
+.quiz-answers label.correct { border-color:var(--gr) }
+.quiz-answers label.incorrect { border-color:var(--rd) }
+.simulation-rounds { list-style:none; padding:0 }
+.simulation-rounds li[aria-current="step"] { border-color:var(--cy); color:var(--cy) }
+.simulation-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:9px; margin:0 }
+.simulation-metrics dd { margin:0; font-weight:700 }
+@media (max-width:900px) {
+    #topbar { gap:7px; flex-wrap:wrap }
+    #topbar .brand { font-size:14px; flex:1 }
+    #topbar .brand b, #topbar .sp { display:none }
+    #chapSel { max-width:100%; flex:1 }
+    #notes { width:min(86%,380px) }
+    #controls { flex-wrap:wrap; gap:5px; padding:6px 8px }
+    #timeline { order:-1; min-width:80%; width:100%; flex-basis:100%; height:19px }
+    #caption { min-height:63px; padding:5px 10px }
+    #time { min-width:0; font-size:11px }
+    .course-options { margin-left:auto; flex-wrap:wrap }
+    #voiceSel { max-width:150px }
+}
+@media (max-width:440px) {
+    .course-options { flex-basis:100%; justify-content:center }
+    #controls { justify-content:center }
+    .transport,.course-options { gap:4px }
+    #intro .card { padding:16px }
+}
+@media (prefers-reduced-motion:reduce) {
+    #stage .el,#stage .focusring,#stage .tcard { transition:none; animation:none }
+    #stage .tcard { display:none }
+}
+.world-rounds,.world-diagram { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:0; list-style:none; margin:10px 0 }
+.world-rounds li { min-width:34px; border:1px solid var(--line2); color:var(--tx2); background:#152431; text-align:center; border-radius:5px; padding:3px 5px; font:600 13px var(--mono) }
+.world-rounds li[aria-current="step"] { color:var(--cy); border-color:var(--cy) }
+.world-diagram span { background:#162b3c; border:1px solid #315a76; border-radius:7px; padding:4px 8px }
+.world-diagram b { color:var(--cy) }
+.world-results h4 { margin:13px 0 5px }
+.world-trace { width:100%; border-collapse:collapse; text-align:left }
+.world-trace th,.world-trace td { padding:5px 9px; border:1px solid var(--line2) }
+.world-trace thead { background:#162a3b }
+#intro ol .dim { white-space:nowrap }
+.world-workbench { display:grid; grid-template-columns:minmax(0, 1.12fr) minmax(0, .88fr); gap:9px; margin:10px 0 }
+.world-map,.world-console { min-width:0; border:1px solid var(--line2); border-radius:9px; background:#101c27; padding:9px }
+.world-tabs { display:flex; flex-wrap:wrap; gap:6px }
+.world-clock { display:block; width:100%; accent-color:var(--cy); margin-top:11px }
+.world-meter { color:var(--tx2); font:13px var(--mono); margin-top:4px }
+.world-diagram span.is-active { color:var(--cy); border-color:var(--cy); box-shadow:0 0 12px #22d3ee42 }
+.world-diagram span.is-past { border-color:var(--gr) }
+.world-incident { padding:10px 0; color:var(--tx2) }
+.world-console .lab-fields { grid-template-columns:minmax(0,1fr) }
+.world-trace tbody button { min-height:29px !important; font-size:13px; white-space:nowrap }
+@media (max-width:700px) { .world-workbench { grid-template-columns:minmax(0,1fr) } }

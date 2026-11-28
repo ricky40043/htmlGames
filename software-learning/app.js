@@ -70,7 +70,7 @@ function chapterStats(meta, progress = loadBookProgress()) {
       ready: true,
       custom: true,
       hwMonths,
-      completedLessons: state?.completedLessons?.length || 0,
+      completedLessons: state?.fullCompletedChapters?.length || 0,
       examPassed: isCustomChapterPassed(meta, progress),
       bestScore: state?.exam?.bestScore || 0,
       attempts: state?.exam?.attempts || 0,
