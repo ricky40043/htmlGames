@@ -7,7 +7,8 @@
     <title>分散式 Email 服務｜互動動畫課程</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="course-shell.css">
-    <link rel="stylesheet" href="full-course.css">
+    <link rel="stylesheet" href="full-course.css?v=practice-20261129">
+    <link rel="stylesheet" href="scene-practice.css?v=practice-20261129">
     <script defer src="stage.js"></script>
     <script defer src="lessons/00.js"></script>
     <script defer src="lessons/10.js"></script>
@@ -16,11 +17,14 @@
     <script defer src="lessons/40.js"></script>
     <script defer src="lessons/50.js"></script>
     <script defer src="visuals.js"></script>
+    <script defer src="stage-scenes.js?v=scenes-20261129a"></script>
     <script defer src="full-timing.js?v=voices-20261129c"></script>
-    <script defer src="practice.js?v=full-20261129b"></script>
+    <script defer src="star-timing.js?v=stars-20261129"></script>
+    <script defer src="practice.js?v=practice-20261129"></script>
+    <script defer src="scene-practice.js?v=practice-20261129"></script>
     <script defer src="simulation.js?v=full-20261129b"></script>
-    <script defer src="course-speech.js?v=voices-20261129c"></script>
-    <script defer src="full-player.js?v=voices-20261129c"></script>
+    <script defer src="course-speech.js?v=stars-20261129"></script>
+    <script defer src="full-player.js?v=scenes-20261129a"></script>
 </head>
 <body>
     <div id="app">
@@ -29,6 +33,7 @@
             <div class="brand">✉ 第 2 冊第 8 章｜分散式 Email 服務 <b>互動動畫課程</b></div>
             <label class="sr-only" for="chapSel">跳到章節</label><select id="chapSel"></select>
             <div class="sp"></div>
+            <button class="tbtn" type="button" id="bScenePractice" aria-haspopup="dialog">本節練習</button>
             <button class="tbtn on" id="bNotes" aria-pressed="true">📝 說明紀錄</button>
             <button class="tbtn" id="bScript">📄 完整講稿</button>
         </div>
@@ -53,7 +58,7 @@
                     <option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option>
                 </select>
                 <button class="tbtn on" id="bTTS" aria-pressed="true">🔊 旁白</button>
-                <label class="sr-only" for="voiceSel">旁白語音</label><select id="voiceSel" title="旁白語音"></select>
+                <label class="sr-only" for="voiceSel">旁白語音</label><select id="voiceSel" title="選擇旁白，★ 為課程內建自然語音"></select>
                 <button class="cbtn" id="bFull" aria-label="全螢幕" title="全螢幕">⛶</button>
             </div>
         </div>
@@ -73,7 +78,7 @@
             <button class="s" id="goResume" hidden>繼續上次進度</button>
             <a class="tbtn back" href="../system-design.html">← 回章節目錄</a>
         </div>
-        <div class="hint">空白鍵暫停或續播，← → 切換步驟。可點時間軸、章節選單或右側說明紀錄跳轉。遇到互動實驗會暫停，操作完回到課程即可接續。</div>
+        <div class="hint">按「本節練習」就能動手做。空白鍵暫停或續播，← → 切換步驟。可點時間軸、章節選單或右側說明紀錄跳轉。</div>
     </div></div>
     <dialog id="scriptModal">
         <div class="inner">
@@ -86,7 +91,7 @@
             <div class="mb" id="scriptBody"></div>
         </div>
     </dialog>
-    <dialog id="workshop">
+    <dialog id="workshop" aria-labelledby="workshopTitle">
         <div class="workshop-header">
             <b id="workshopTitle"></b>
             <button id="workshopClose" class="tbtn">✕ 回課程</button>

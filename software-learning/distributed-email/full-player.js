@@ -44,7 +44,9 @@ function saveEmailProgress(update) {
     const completedChapters = new Set((progressState.fullCompletedChapters || [])
         .filter(id => emailChapters.some(chapter => chapter.id === id)));
     const defaultVoice = 'hsiaochen';
-    const hasVoice = key => Object.hasOwn(recordings, key) || browserVoices.has(key);
+    const availableStars = new Map(Object.entries(emailStarRecordings).filter(([key]) =>
+        key === 'star-hsiaochen' || emailChapters.every(chapter => emailStarTiming[chapter.id]?.[key]?.media)));
+    const hasVoice = key => Object.hasOwn(recordings, key) || availableStars.has(key) || browserVoices.has(key);
     let voice = hasVoice(saved.voice) ? saved.voice : defaultVoice;
     let pendingVoice = typeof saved.voice === 'string' && saved.voice.startsWith('browser:') &&
         !hasVoice(saved.voice) ? saved.voice : null;
@@ -52,6 +54,7 @@ function saveEmailProgress(update) {
     let fraction = 0;
     let lastSaved = 0;
     let previousScene;
+    let previousIndex = -1;
     let currentPath;
     let wordClips = [];
     let oldWord = -1;
@@ -71,7 +74,7 @@ function saveEmailProgress(update) {
             const entry = { ...item, chapter, start: flat.length, number: scenes.length };
             scenes.push(entry);
             item.steps.forEach(([focus, say], withinScene) => {
-                flat.push({ chapter, chapterIndex, entry, focus: focus.split('|'), say, offset: offset++,
+                flat.push({ chapter, chapterIndex, entry, withinScene, focus: focus.split('|'), say, offset: offset++,
                     lab: withinScene === item.steps.length - 1 ? item.exercise : null });
             });
         });
@@ -80,6 +83,8 @@ function saveEmailProgress(update) {
 
     const timingFor = (chapter, selectedVoice = voice) => {
         const times = emailFullTiming[chapter.id];
+        if (selectedVoice === 'star-hsiaochen') return times.hsiaochen;
+        if (availableStars.has(selectedVoice)) return emailStarTiming[chapter.id][selectedVoice];
         return times[selectedVoice] || times[defaultVoice];
     };
     const browserVoice = () => audio.muted ? null : browserVoices.get(voice)?.voice;
@@ -208,9 +213,53 @@ function saveEmailProgress(update) {
         oldWord = -1;
         oldClause = -1;
     }
+    function customSceneFor(entry) {
+        return window.EMAIL_CUSTOM_SCENES?.[entry?.id] || null;
+    }
+    function renderCustomStep(step) {
+        const entry = step.entry;
+        const custom = customSceneFor(entry);
+        const stage = S.st;
+        const k = step.withinScene;
+        const sameSceneForward = previousScene === entry && index === previousIndex + 1;
+        const callStep = fn => { if (!fn) return; try { fn(S); } catch (e) { console.error('custom scene error', entry.id, e); } };
+        const initBase = () => {
+            S.header(esc(entry.chapter.no + '　' + entry.chapter.title), esc(entry.title));
+            S.text('source_pages', 42, 79, (/^\d/.test(entry.pages) ? '教材頁碼 ' : '實戰範圍｜') + esc(entry.pages), { size: 15, color: COL.gy });
+            if (entry.exercise) {
+                const launch = S.el('ui_exercise', 72, 651, 1136, 50,
+                    '<button class="email-workshop-button">開啟操作台｜' + esc(exercises[entry.exercise]) +
+                    '</button><span class="email-workshop-note">🧪 旁白播完會暫停，操作後再繼續</span>');
+                launch.querySelector('button').addEventListener('click', () => openWorkshop(entry.exercise));
+            }
+        };
+        if (sameSceneForward) {
+            S.flush();
+            callStep(custom.steps[k]);
+        } else {
+            S.clear(true);
+            if (k > 0) {
+                stage.classList.add('instant');
+                S.instant = true;
+                initBase();
+                for (let j = 0; j < k; j++) callStep(custom.steps[j]);
+                void stage.offsetWidth;
+                S.flush();
+                S.instant = false;
+                void stage.offsetWidth;
+                stage.classList.remove('instant');
+                callStep(custom.steps[k]);
+            } else {
+                initBase();
+                callStep(custom.steps[0]);
+            }
+        }
+        currentPath = null;
+    }
     function focusAt(word, allClips) {
         const step = current();
         const entry = step.entry;
+        if (customSceneFor(entry)) return;
         const lastClause = allClips.at(-1).clause;
         const cue = Math.min(step.focus.length - 1, Math.floor(word.clause * step.focus.length / (lastClause + 1)));
         const active = step.focus[cue];
@@ -223,7 +272,8 @@ function saveEmailProgress(update) {
         });
         const links = entry.renderedLinks;
         currentPath = links.get(before + '>' + active) || links.get(active + '>' + after) ||
-            [...links.entries()].find(([id]) => id.endsWith('>' + active))?.[1];
+            [...links.entries()].find(([id]) => id.endsWith('>' + active))?.[1] ||
+            [...links.entries()].find(([id]) => id.startsWith(active + '>'))?.[1];
         for (const path of links.values()) {
             const highlighted = path === currentPath;
             path.setAttribute('stroke', highlighted ? COL.cy : COL.gy);
@@ -259,17 +309,20 @@ function saveEmailProgress(update) {
             const clip = current();
             $('caption').innerHTML = (clip.lab ? '<span class="lbl">互動實驗</span>' : '') +
                 '<span class="sentence">' + sentence + '</span>';
-            S.$('focus').querySelector('.caption-clause').innerHTML = sentence;
+            const focusEl = S.$('focus');
+            if (focusEl) focusEl.querySelector('.caption-clause').innerHTML = sentence;
         }
         const packet = S.$('packet');
-        packet.hidden = !currentPath || matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (!packet.hidden) {
-            const first = wordClips.find(item => item.clause === word.clause).position;
-            const end = wordClips.find(item => item.clause > word.clause)?.position ?? 1;
-            const unit = Math.min(1, Math.max(0, (position - first) / (end - first || 1)));
-            const point = currentPath.getPointAtLength(currentPath.getTotalLength() * unit);
-            packet.style.left = point.x + 'px';
-            packet.style.top = point.y + 'px';
+        if (packet) {
+            packet.hidden = !currentPath || matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (!packet.hidden) {
+                const first = wordClips.find(item => item.clause === word.clause).position;
+                const end = wordClips.find(item => item.clause > word.clause)?.position ?? 1;
+                const unit = Math.min(1, Math.max(0, (position - first) / (end - first || 1)));
+                const point = currentPath.getPointAtLength(currentPath.getTotalLength() * unit);
+                packet.style.left = point.x + 'px';
+                packet.style.top = point.y + 'px';
+            }
         }
         $('caption').style.setProperty('--narration-progress', (fraction * 100) + '%');
         markTime();
@@ -306,11 +359,18 @@ function saveEmailProgress(update) {
         index = next;
         fraction = progress;
         const step = current();
-        if (previousScene !== step.entry) renderDiagram(step.entry);
+        if (customSceneFor(step.entry)) {
+            renderCustomStep(step);
+            if (previousScene !== step.entry) updatePracticeButton(step.entry);
+        } else if (previousScene !== step.entry) {
+            renderDiagram(step.entry);
+            updatePracticeButton(step.entry);
+        }
         buildClips();
         renderProgress();
         updateNotes(step.entry);
         previousScene = step.entry;
+        previousIndex = index;
         $('chapSel').value = step.chapterIndex;
         $('bPrev').disabled = index === 0;
         $('bNext').disabled = index === flat.length - 1;
@@ -590,13 +650,22 @@ function saveEmailProgress(update) {
         for (const id of ['voiceSel', 'introVoice']) {
             const prerecorded = document.createElement('optgroup');
             prerecorded.label = '預錄旁白';
-            for (const [key, label] of Object.entries(recordings)) prerecorded.append(new Option(label, key));
+            prerecorded.append(new Option(recordings.hsiaochen, 'hsiaochen'));
+            const stars = document.createElement('optgroup');
+            stars.label = '課程內建自然語音';
+            const starNames = new Set(availableStars.values());
+            for (const [key, label] of availableStars) stars.append(new Option(label, key));
+            const alternate = document.createElement('optgroup');
+            alternate.label = '其他預錄旁白';
+            for (const key of ['meijia', 'reed']) alternate.append(new Option(recordings[key], key));
             const system = document.createElement('optgroup');
             system.label = '瀏覽器中文語音';
-            for (const [key, item] of browserVoices) system.append(new Option(item.label, key));
+            for (const [key, item] of browserVoices) {
+                if (!starNames.has(item.label) || key === voice || key === pendingVoice) system.append(new Option(item.label, key));
+            }
             if (!hasVoice(voice)) system.append(new Option('目前語音暫不可用', voice));
             const select = $(id);
-            select.replaceChildren(prerecorded);
+            select.replaceChildren(prerecorded, stars, alternate);
             if (system.childElementCount) select.append(system);
             select.value = voice;
         }
@@ -622,7 +691,9 @@ function saveEmailProgress(update) {
 
     function openWorkshop(mode) {
         pause();
-        $('workshopTitle').textContent = (mode === 'world' ? '🏁 ' : '🧪 ') + exercises[mode];
+        const entry = current().entry;
+        $('workshopTitle').textContent = mode === 'scene' ? '本節練習｜' + entry.title :
+            (mode === 'world' ? '🏁 ' : '🧪 ') + exercises[mode];
         const body = $('workshopBody');
         body.replaceChildren();
         if (!$('workshop').open) $('workshop').showModal();
@@ -631,8 +702,16 @@ function saveEmailProgress(update) {
             $('workshop').close();
             if (entry) selectStep(entry.start);
         };
-        if (mode === 'world') mountEmailWorld(body, review);
+        if (mode === 'scene') mountEmailScenePractice(body, entry, () => updatePracticeButton(entry));
+        else if (mode === 'world') mountEmailWorld(body, review);
         else mountEmailPractice(body, mode, review);
+    }
+    function updatePracticeButton(entry) {
+        const button = $('bScenePractice');
+        const complete = isEmailScenePracticeComplete(entry.id);
+        button.textContent = complete ? '✓ 本節練習' : '本節練習';
+        button.dataset.complete = String(complete);
+        button.title = (complete ? '重做練習｜' : '開始練習｜') + entry.title;
     }
     function showScript() {
         if (!$('scriptBody').children.length) {
@@ -661,10 +740,9 @@ function saveEmailProgress(update) {
             updateVoice(event.target.value);
         });
     });
-    const minutes = Object.fromEntries(Object.keys(recordings).map(key =>
-        [key, Math.round(emailChapters.reduce((n, chapter) => n + timingFor(chapter, key).duration, 0) / 60)]));
-    $('introDur').textContent = '1× 旁白約 ' + Math.min(...Object.values(minutes)) + '–' + Math.max(...Object.values(minutes)) +
-        ' 分鐘。另有 5 個小實驗、期末實戰沙盒、20 題期末考與 12 回合值班模擬。';
+    const defaultMinutes = Math.round(emailChapters.reduce((n, chapter) => n + timingFor(chapter, defaultVoice).duration, 0) / 60);
+    $('introDur').textContent = '曉臻旁白約 ' + defaultMinutes + ' 分鐘。' + scenes.length +
+        ' 個小節各有動手練習，另有 5 個實驗、實戰沙盒、20 題期末考與 12 回合值班模擬。';
     for (const [i, chapter] of emailChapters.entries()) {
         $('chapSel').add(new Option(chapter.no + '　' + chapter.title, i));
         const item = document.createElement('li');
@@ -729,6 +807,7 @@ function saveEmailProgress(update) {
         operation?.catch(() => {});
     };
     $('bScript').onclick = showScript;
+    $('bScenePractice').onclick = () => openWorkshop('scene');
     $('scriptClose').onclick = () => $('scriptModal').close();
     $('scriptCopy').onclick = async event => {
         const button = event.currentTarget;

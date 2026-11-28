@@ -59,7 +59,7 @@ function mountEmailPractice(container, mode, review) {
             id: 'queue', title: '寄件佇列積壓',
             prompt: '用一分鐘的簡化模型，試著把佇列消化完。設成外站降速時，加 Worker 會受到哪些限制？',
             fields: [
-                ['receive-delivery', '每秒進佇列', 130, 0, 10000],
+                ['incoming', '每秒進佇列', 130, 0, 10000],
                 ['workers', '投遞 Worker', 4, 1, 100],
                 ['limit', '外站可接收', [['500', '正常：每秒 500 封'], ['70', '降速：每秒 70 封']]]
             ],

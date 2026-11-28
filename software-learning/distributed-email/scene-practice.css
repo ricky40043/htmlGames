@@ -1,0 +1,23 @@
+.scene-practice .scene-scenario { max-width:70ch; color:var(--tx2) }
+.scene-assign { display:grid; gap:8px }
+.scene-assignment-row { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(9rem,1fr); align-items:center; gap:5px 12px; border:1px solid var(--line2); border-radius:8px; padding:9px 11px; background:#10202c }
+.scene-assignment-row label { overflow-wrap:anywhere }
+.scene-assignment-row select,.scene-assignment-row input { width:100%; min-width:0; font:inherit; color:var(--tx); border:1px solid var(--line2); background:var(--bg); border-radius:6px; padding:7px }
+.scene-assignment-row [aria-invalid=true] { border-color:var(--rd) }
+.scene-row-feedback { grid-column:1 / -1; color:var(--tx2); line-height:1.45 }
+.scene-tools,.scene-actions { display:flex; flex-wrap:wrap; gap:7px; margin:7px 0 12px }
+.scene-tools button { text-align:left }
+.scene-route { margin:0 0 12px; padding-left:2.3em; border:1px solid var(--line2); border-radius:8px; background:#10202c }
+.scene-route li { padding:6px 9px 6px 0 }
+.scene-route li::marker { color:var(--cy); font-weight:700 }
+.scene-route .scene-empty { list-style:none; margin-left:-1.4em; color:var(--tx2) }
+.scene-route button { margin-left:9px }
+.scene-log-title { font-size:15px; color:var(--tx2) }
+.scene-result { margin:9px 0; padding:9px 12px; border:1px solid var(--line2); border-left:4px solid var(--am); background:#101e29; border-radius:6px }
+.scene-result[data-result=pass] { border-left-color:var(--gr) }
+.scene-result ol { margin:6px 0; padding-left:1.5em }
+.scene-history { color:var(--gr); font-size:14px }
+@media (max-width:570px) {
+    .scene-assignment-row { grid-template-columns:minmax(0,1fr) }
+    .scene-tools button { width:100% }
+}
