@@ -11,8 +11,13 @@ const run = promisify(execFile);
 const root = fileURLToPath(new URL('.', import.meta.url));
 const cache = join(root, 'full-timing.js');
 const version = 'full-v3';
-const voices = { meijia: 'Meijia', reed: 'Reed (中文（台灣）)' };
-const selected = new Set(process.argv.slice(2));
+const voices = { meijia: 'Meijia', reed: 'Reed (中文（台灣）)', hsiaochen: 'zh-TW-HsiaoChenNeural' };
+const args = process.argv.slice(2);
+const selected = new Set(args.filter(arg => !arg.startsWith('--')));
+// The optional --hsiaochen recording uses the same edge-tts engine as the hotel course.
+const selectedVoices = args.includes('--hsiaochen') ? ['hsiaochen'] : ['meijia', 'reed'];
+const edgeTts = process.env.EMAIL_EDGE_TTS_BIN || 'edge-tts';
+const edgeRate = process.env.EMAIL_EDGE_TTS_RATE || '-5%';
 const files = (await readdir(join(root, 'lessons'))).filter(name => name.endsWith('.js')).sort();
 const source = (await Promise.all(files.map(name => readFile(join(root, 'lessons', name), 'utf8')))).join('\n');
 const chapters = runInNewContext(source + '\nemailChapters;');
@@ -37,11 +42,22 @@ async function record(voice, key, steps) {
     const jobs = new Array(steps.length);
     let next = 0;
     await Promise.all(Array.from({ length: Math.min(6, steps.length) }, async (_, worker) => {
-        const aiff = join(temporary, rootName + '-' + worker + '.aiff');
+        const online = voice === 'hsiaochen';
+        const clip = join(temporary, rootName + '-' + worker + (online ? '.mp3' : '.aiff'));
         while (next < steps.length) {
             const index = next++;
-            await run('say', ['-v', voices[voice], '-r', '165', '-o', aiff, pronounce(steps[index])], { timeout: 90000 });
-            const { stdout } = await run('ffmpeg', ['-v', 'error', '-i', aiff, '-ar', '24000', '-ac', '1',
+            const text = pronounce(steps[index]);
+            if (online) {
+                const args = ['--voice', voices[voice], '--rate=' + edgeRate, '--text', text, '--write-media', clip];
+                try {
+                    await run(edgeTts, args, { timeout: 45000 });
+                } catch {
+                    await run(edgeTts, args, { timeout: 45000 });
+                }
+            } else {
+                await run('say', ['-v', voices[voice], '-r', '165', '-o', clip, text], { timeout: 90000 });
+            }
+            const { stdout } = await run('ffmpeg', ['-v', 'error', '-i', clip, '-ar', '24000', '-ac', '1',
                 '-f', 's16le', 'pipe:1'], { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 });
             if (stdout.length < 16000) throw new Error('Voice asset too short: ' + rootName + ' cue ' + index);
             jobs[index] = stdout;
@@ -70,9 +86,10 @@ try {
     for (const chapter of chapters) {
         if (selected.size && !selected.has(chapter.id)) continue;
         const steps = chapter.scenes.flatMap(item => item.steps.map(([, text]) => text));
-        const hash = createHash('sha256').update(version + '\n' + steps.join('\n')).digest('hex').slice(0, 16);
         const chapterTiming = timing[chapter.id] ||= {};
-        for (const voice of Object.keys(voices)) {
+        for (const voice of selectedVoices) {
+            const profile = voice === 'hsiaochen' ? version + ':' + edgeRate : version;
+            const hash = createHash('sha256').update(profile + '\n' + steps.join('\n')).digest('hex').slice(0, 16);
             const previous = chapterTiming[voice];
             const alreadyRecorded = previous?.hash === hash && await stat(join(root, 'audio', previous.media))
                 .then(file => file.size > 10000, () => false);

@@ -21,6 +21,17 @@ const emailFullTiming = {
             ],
             "duration": 64.6279,
             "hash": "5eab75f8a4ef6b11"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-orientation.mp3",
+            "starts": [
+                0,
+                17.236,
+                33.2,
+                52.644
+            ],
+            "duration": 71.152,
+            "hash": "3e2a50040fed56aa"
         }
     },
     "scope": {
@@ -67,6 +78,28 @@ const emailFullTiming = {
             ],
             "duration": 259.0362,
             "hash": "a5e00c7c629d3064"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-scope.mp3",
+            "starts": [
+                0,
+                18.772,
+                38.24,
+                57.012,
+                75.16,
+                93.908,
+                112.416,
+                131.572,
+                149.672,
+                167.196,
+                184.36,
+                206.108,
+                225.456,
+                244.444,
+                264.2
+            ],
+            "duration": 282.636,
+            "hash": "62bad33c5fc97af0"
         }
     },
     "protocols": {
@@ -133,6 +166,38 @@ const emailFullTiming = {
             ],
             "duration": 432.7189,
             "hash": "b1ae277f393c8cde"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-protocols.mp3",
+            "starts": [
+                0,
+                19.468,
+                37.424,
+                55.38,
+                73.312,
+                91.556,
+                111.408,
+                132.772,
+                150.032,
+                168.924,
+                188.44,
+                207.236,
+                226.728,
+                242.668,
+                260.6,
+                278.796,
+                295.984,
+                312.716,
+                330.936,
+                347.524,
+                365.504,
+                383.412,
+                404.104,
+                422.924,
+                440.448
+            ],
+            "duration": 460.66,
+            "hash": "c501482152c57b5b"
         }
     },
     "api": {
@@ -177,6 +242,27 @@ const emailFullTiming = {
             ],
             "duration": 234.7287,
             "hash": "3aa309705403fc46"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-api.mp3",
+            "starts": [
+                0,
+                21.34,
+                39.488,
+                56.364,
+                73.552,
+                92.684,
+                112.128,
+                128.284,
+                148.16,
+                163.74,
+                182.536,
+                200.804,
+                218.52,
+                235.684
+            ],
+            "duration": 252.512,
+            "hash": "5569ee2e2f2e377d"
         }
     },
     "architecture": {
@@ -213,6 +299,23 @@ const emailFullTiming = {
             ],
             "duration": 168.6443,
             "hash": "ca52bd218ab33c7d"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-architecture.mp3",
+            "starts": [
+                0,
+                18.196,
+                35.6,
+                54.588,
+                72.4,
+                89.732,
+                107.784,
+                122.98,
+                140.936,
+                159.228
+            ],
+            "duration": 178.672,
+            "hash": "4a10f4aeca6d24da"
         }
     },
     "mailflow": {
@@ -269,6 +372,33 @@ const emailFullTiming = {
             ],
             "duration": 348.5582,
             "hash": "6bdb6eedf1573295"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-mailflow.mp3",
+            "starts": [
+                0,
+                17.14,
+                36.368,
+                53.916,
+                71.848,
+                90.836,
+                111.264,
+                130.444,
+                149.792,
+                167.388,
+                184.624,
+                203.996,
+                222,
+                238.42,
+                257.408,
+                278.652,
+                297.232,
+                316.124,
+                334.416,
+                353.596
+            ],
+            "duration": 371.888,
+            "hash": "c257dc3e8721587e"
         }
     },
     "storage": {
@@ -355,6 +485,48 @@ const emailFullTiming = {
             ],
             "duration": 586.9271,
             "hash": "52bf63c015f9c65d"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-storage.mp3",
+            "starts": [
+                0,
+                17.764,
+                37.688,
+                55.092,
+                73.576,
+                91.604,
+                111.096,
+                128.524,
+                148.664,
+                168.924,
+                185.296,
+                202.316,
+                218.016,
+                237.1,
+                253.856,
+                272.076,
+                290.656,
+                310.076,
+                326.88,
+                343.156,
+                360.944,
+                377.94,
+                395.488,
+                413.132,
+                430.584,
+                450.82,
+                469.064,
+                487.164,
+                504.904,
+                523.628,
+                539.16,
+                556.684,
+                574.76,
+                592.476,
+                610.144
+            ],
+            "duration": 628.988,
+            "hash": "a35979ef0219a0ea"
         }
     },
     "deliverability": {
@@ -401,6 +573,28 @@ const emailFullTiming = {
             ],
             "duration": 251.3377,
             "hash": "a0f482c5d17109d9"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-deliverability.mp3",
+            "starts": [
+                0,
+                18.436,
+                36.368,
+                53.604,
+                73.624,
+                94.124,
+                111.744,
+                127.78,
+                143.936,
+                161.028,
+                177.136,
+                196.364,
+                215.568,
+                233.812,
+                255.704
+            ],
+            "duration": 273.9,
+            "hash": "4d165c08c81197b2"
         }
     },
     "search": {
@@ -465,6 +659,37 @@ const emailFullTiming = {
             ],
             "duration": 414.794,
             "hash": "0945a445c20abc37"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-search.mp3",
+            "starts": [
+                0,
+                18.196,
+                36.992,
+                55.788,
+                75.472,
+                95.348,
+                114.384,
+                132.244,
+                151.112,
+                170.604,
+                190.792,
+                209.828,
+                228.624,
+                248.476,
+                266.984,
+                286.284,
+                305.848,
+                322.292,
+                339.648,
+                357.556,
+                377.36,
+                395.484,
+                414.784,
+                431.636
+            ],
+            "duration": 449.016,
+            "hash": "83250252528da1fd"
         }
     },
     "summary": {
@@ -525,6 +750,35 @@ const emailFullTiming = {
             ],
             "duration": 366.4792,
             "hash": "6c1a01797bacae78"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-summary.mp3",
+            "starts": [
+                0,
+                21.316,
+                41.528,
+                60.66,
+                77.344,
+                94.34,
+                114,
+                131.5,
+                150.752,
+                167.652,
+                185.536,
+                206.18,
+                225.792,
+                243.676,
+                262.232,
+                276.876,
+                294.784,
+                312.284,
+                332.928,
+                350.428,
+                369.68,
+                389.988
+            ],
+            "duration": 405.568,
+            "hash": "fb3927eb465fe30d"
         }
     },
     "practice": {
@@ -553,6 +807,19 @@ const emailFullTiming = {
             ],
             "duration": 91.5536,
             "hash": "40490273cdd98b3c"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-practice.mp3",
+            "starts": [
+                0,
+                16.444,
+                35.336,
+                52.764,
+                70.6,
+                88.196
+            ],
+            "duration": 102.48,
+            "hash": "ce4bae42eb495e56"
         }
     },
     "world": {
@@ -577,6 +844,17 @@ const emailFullTiming = {
             ],
             "duration": 61.6622,
             "hash": "202c2b2386d8de53"
+        },
+        "hsiaochen": {
+            "media": "full-v3-hsiaochen-world.mp3",
+            "starts": [
+                0,
+                17.452,
+                35.48,
+                51.78
+            ],
+            "duration": 68.632,
+            "hash": "1546e3d5295ecc26"
         }
     }
 };

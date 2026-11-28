@@ -21,7 +21,15 @@ function saveEmailProgress(update) {
 (() => {
     const $ = id => document.getElementById(id);
     const audio = $('narrator');
-    const voices = { meijia: '預錄女聲｜美佳（台灣）', reed: '預錄男聲｜Reed（台灣）' };
+    const recordings = {
+        hsiaochen: '🎙 預錄神經語音（曉臻）',
+        meijia: '預錄女聲｜美佳（台灣）',
+        reed: '預錄男聲｜Reed（台灣）'
+    };
+    const engine = window.speechSynthesis;
+    const speech = createEmailSpeech(engine);
+    const discoverVoices = () => typeof SpeechSynthesisUtterance === 'function' ? listEmailSpeechVoices(engine) : new Map();
+    let browserVoices = discoverVoices();
     const exercises = {
         capacity: '容量與保留期', routing: '跨網域投遞', queue: '寄件佇列',
         search: '搜尋索引追趕', failover: '跨區故障切換', quiz: '期末考',
@@ -35,7 +43,11 @@ function saveEmailProgress(update) {
     const saved = progressState.fullPlayback || {};
     const completedChapters = new Set((progressState.fullCompletedChapters || [])
         .filter(id => emailChapters.some(chapter => chapter.id === id)));
-    let voice = voices[saved.voice] ? saved.voice : 'meijia';
+    const defaultVoice = 'hsiaochen';
+    const hasVoice = key => Object.hasOwn(recordings, key) || browserVoices.has(key);
+    let voice = hasVoice(saved.voice) ? saved.voice : defaultVoice;
+    let pendingVoice = typeof saved.voice === 'string' && saved.voice.startsWith('browser:') &&
+        !hasVoice(saved.voice) ? saved.voice : null;
     let index = 0;
     let fraction = 0;
     let lastSaved = 0;
@@ -66,7 +78,11 @@ function saveEmailProgress(update) {
         chapter.end = flat.length;
     });
 
-    const timingFor = (chapter, selectedVoice = voice) => emailFullTiming[chapter.id][selectedVoice];
+    const timingFor = (chapter, selectedVoice = voice) => {
+        const times = emailFullTiming[chapter.id];
+        return times[selectedVoice] || times[defaultVoice];
+    };
+    const browserVoice = () => audio.muted ? null : browserVoices.get(voice)?.voice;
     const current = () => flat[index];
     function stepBounds(step) {
         const t = timingFor(step.chapter);
@@ -180,7 +196,10 @@ function saveEmailProgress(update) {
             const segments = segmenter ? [...segmenter.segment(match[0])] : [...match[0].matchAll(/\p{L}|\p{N}|./gu)]
                 .map(m => ({ segment: m[0], index: m.index, isWordLike: /[\p{L}\p{N}]/u.test(m[0]) }));
             for (const item of segments) {
-                if (item.isWordLike) wordClips.push({ weight, clause, words: match[0], start: item.index, end: item.index + item.segment.length });
+                if (item.isWordLike) wordClips.push({
+                    weight, clause, words: match[0], start: item.index, end: item.index + item.segment.length,
+                    index: match.index + item.index
+                });
                 const letters = /^[a-z0-9]+$/i.test(item.segment);
                 weight += item.isWordLike ? [...item.segment].length * (letters ? .73 : 1) : /\S/u.test(item.segment) ? .82 : 0;
             }
@@ -308,14 +327,53 @@ function saveEmailProgress(update) {
         button.setAttribute('aria-label', showingPlay ? '暫停' : '播放');
         $('stage').dataset.paused = String(!showingPlay);
     }
+    function saveSpeechPosition() {
+        const checkpoint = speech.position(true);
+        if (checkpoint !== null) {
+            fraction = checkpoint;
+            renderProgress();
+        }
+    }
     function pause() {
+        saveSpeechPosition();
         wantsPlay = false;
+        speech.stop();
         audio.pause();
         transport();
         save();
     }
+    function speakStep(systemVoice) {
+        const at = index;
+        const [from, to] = stepBounds(current());
+        speech.speak({
+            text: current().say,
+            words: wordClips,
+            progress: fraction,
+            voice: systemVoice,
+            rate: Number($('speed').value),
+            seconds: to - from,
+            finish() {
+                if (!wantsPlay || at !== index) return;
+                fraction = 1;
+                moveAtEnd();
+            },
+            report(checkpoint) {
+                if (!wantsPlay || at !== index) return;
+                if (checkpoint !== null) fraction = checkpoint;
+                pause();
+                $('caption').textContent = '瀏覽器語音暫時無法播放，可以再試一次或改選預錄語音。';
+            }
+        });
+        startAnimation();
+    }
     function requestPlayback() {
-        if (!wantsPlay || pendingSeek !== null || audio.readyState < 1) return;
+        if (!wantsPlay) return;
+        const systemVoice = browserVoice();
+        if (systemVoice) {
+            if (speech.position() === null) speakStep(systemVoice);
+            return;
+        }
+        if (pendingSeek !== null || audio.readyState < 1) return;
         const track = activeTrack;
         audio.play().catch(error => {
             if (!wantsPlay || track !== activeTrack || error.name === 'AbortError') return;
@@ -325,7 +383,7 @@ function saveEmailProgress(update) {
         });
     }
     function applySeek() {
-        if (pendingSeek === null || audio.readyState < 1) return;
+        if (browserVoice() || pendingSeek === null || audio.readyState < 1) return;
         const target = pendingSeek;
         pendingSeek = null;
         if (Math.abs(audio.currentTime - target) > .005) audio.currentTime = target;
@@ -333,7 +391,8 @@ function saveEmailProgress(update) {
     }
     function selectStep(next, progress = 0, autoplay = false) {
         if (!flat[next]) return;
-        if (activeTrack !== timingFor(flat[next].chapter).media) audio.pause();
+        speech.stop();
+        if (browserVoice() || activeTrack !== timingFor(flat[next].chapter).media) audio.pause();
         labFinished = false;
         wantsPlay = autoplay;
         const destination = timingFor(flat[next].chapter);
@@ -341,6 +400,13 @@ function saveEmailProgress(update) {
         showStep(next, progress);
         if (autoplay && chapterChanged && next === current().chapter.start)
             S.titleCard(current().chapter.no, current().chapter.title);
+        if (browserVoice()) {
+            pendingSeek = null;
+            requestPlayback();
+            transport();
+            save();
+            return;
+        }
         pendingSeek = positionOf(current(), progress);
         if (activeTrack === destination.media) {
             applySeek();
@@ -390,7 +456,7 @@ function saveEmailProgress(update) {
             if (current().lab) S.$('ui_exercise')?.querySelector('button').focus({ preventScroll: true });
             return;
         }
-        if (flat[index + 1].chapter === current().chapter && !audio.ended) {
+        if (!browserVoice() && flat[index + 1].chapter === current().chapter && !audio.ended) {
             showStep(index + 1, 0);
             save();
         } else {
@@ -398,7 +464,16 @@ function saveEmailProgress(update) {
         }
     }
     function syncClock() {
-        if (pendingSeek !== null || audio.seeking || !wantsPlay || audio.paused && !audio.ended) return;
+        if (!wantsPlay) return;
+        if (browserVoice()) {
+            const spoken = speech.position();
+            if (spoken === null) return;
+            fraction = Math.max(fraction, spoken);
+            renderProgress();
+            if (performance.now() - lastSaved > 2500) save();
+            return;
+        }
+        if (pendingSeek !== null || audio.seeking || audio.paused && !audio.ended) return;
         const [start, end] = stepBounds(current());
         fraction = Math.max(0, Math.min(1, (audio.currentTime - start) / Math.max(end - start, .01)));
         renderProgress();
@@ -408,7 +483,7 @@ function saveEmailProgress(update) {
     function tick() {
         animation = 0;
         syncClock();
-        if (wantsPlay && !audio.paused && !animation) animation = requestAnimationFrame(tick);
+        if (wantsPlay && (browserVoice() || !audio.paused) && !animation) animation = requestAnimationFrame(tick);
     }
     function startAnimation() {
         if (!animation) animation = requestAnimationFrame(tick);
@@ -423,7 +498,7 @@ function saveEmailProgress(update) {
             selectStep(index === flat.length - 1 ? index : index + 1, 0, true);
             return;
         }
-        if (audio.error) {
+        if (audio.error && !browserVoice()) {
             activeTrack = '';
             selectStep(index, fraction, true);
             return;
@@ -492,17 +567,40 @@ function saveEmailProgress(update) {
         S.st.style.transform = 'scale(' + k + ')';
     }
     function updateVoice(next) {
-        if (!voices[next] || next === voice) return;
+        if (!hasVoice(next) || next === voice) return;
+        pendingVoice = null;
         const playing = wantsPlay;
-        syncClock();
+        if (browserVoice()) saveSpeechPosition();
+        else syncClock();
         const restoreLab = labFinished;
         voice = next;
         $('voiceSel').value = voice;
         $('introVoice').value = voice;
         buildTimeline();
+        if (!$('intro').hidden) return;
         selectStep(index, fraction, playing && !restoreLab);
         labFinished = restoreLab;
         save();
+    }
+    function refreshVoiceMenus() {
+        const discovered = discoverVoices();
+        const active = browserVoices.get(voice);
+        if (active && !discovered.has(voice)) discovered.set(voice, active);
+        browserVoices = discovered;
+        for (const id of ['voiceSel', 'introVoice']) {
+            const prerecorded = document.createElement('optgroup');
+            prerecorded.label = '預錄旁白';
+            for (const [key, label] of Object.entries(recordings)) prerecorded.append(new Option(label, key));
+            const system = document.createElement('optgroup');
+            system.label = '瀏覽器中文語音';
+            for (const [key, item] of browserVoices) system.append(new Option(item.label, key));
+            if (!hasVoice(voice)) system.append(new Option('目前語音暫不可用', voice));
+            const select = $(id);
+            select.replaceChildren(prerecorded);
+            if (system.childElementCount) select.append(system);
+            select.value = voice;
+        }
+        if (pendingVoice && browserVoices.has(pendingVoice) && !$('intro').hidden) updateVoice(pendingVoice);
     }
     function setMuted(muted) {
         audio.muted = muted;
@@ -555,12 +653,15 @@ function saveEmailProgress(update) {
     }
     new ResizeObserver(fit).observe($('viewport'));
     document.addEventListener('fullscreenchange', fit);
+    refreshVoiceMenus();
+    engine?.addEventListener('voiceschanged', refreshVoiceMenus);
     ['voiceSel', 'introVoice'].forEach(id => {
-        for (const [value, label] of Object.entries(voices)) $(id).add(new Option(label, value));
-        $(id).value = voice;
-        $(id).addEventListener('change', event => updateVoice(event.target.value));
+        $(id).addEventListener('change', event => {
+            pendingVoice = null;
+            updateVoice(event.target.value);
+        });
     });
-    const minutes = Object.fromEntries(Object.keys(voices).map(key =>
+    const minutes = Object.fromEntries(Object.keys(recordings).map(key =>
         [key, Math.round(emailChapters.reduce((n, chapter) => n + timingFor(chapter, key).duration, 0) / 60)]));
     $('introDur').textContent = '1× 旁白約 ' + Math.min(...Object.values(minutes)) + '–' + Math.max(...Object.values(minutes)) +
         ' 分鐘。另有 5 個小實驗、期末實戰沙盒、20 題期末考與 12 回合值班模擬。';
@@ -568,7 +669,7 @@ function saveEmailProgress(update) {
         $('chapSel').add(new Option(chapter.no + '　' + chapter.title, i));
         const item = document.createElement('li');
         item.innerHTML = '<b>' + esc(chapter.title) + '</b>　<span class="dim">' +
-            Math.max(1, Math.round(timingFor(chapter, 'meijia').duration / 60)) + ' 分</span>';
+            Math.max(1, Math.round(timingFor(chapter, defaultVoice).duration / 60)) + ' 分</span>';
         $('introList').append(item);
     }
 
@@ -577,7 +678,7 @@ function saveEmailProgress(update) {
     audio.addEventListener('pause', transport);
     audio.addEventListener('ended', syncClock);
     audio.addEventListener('error', () => {
-        if (!audio.getAttribute('src')) return;
+        if (browserVoice() || !audio.getAttribute('src')) return;
         wantsPlay = false;
         transport();
         $('caption').textContent = '音檔無法載入。可以切換另一種旁白，或從說明紀錄逐步查看。';
@@ -596,8 +697,26 @@ function saveEmailProgress(update) {
         selectStep(index > entry.start ? entry.start : scenes[entry.number - 1]?.start, 0, wantsPlay);
     };
     $('bNextS').onclick = () => selectStep(scenes[current().entry.number + 1]?.start, 0, wantsPlay);
-    $('speed').onchange = event => { audio.playbackRate = Number(event.target.value); };
-    $('bTTS').onclick = () => setMuted(!audio.muted);
+    $('speed').onchange = event => {
+        audio.playbackRate = Number(event.target.value);
+        if (browserVoice() && wantsPlay) {
+            saveSpeechPosition();
+            speakStep(browserVoice());
+        }
+    };
+    $('bTTS').onclick = () => {
+        const previouslySpeaking = Boolean(browserVoice());
+        const playing = wantsPlay;
+        const finished = labFinished;
+        if (previouslySpeaking) saveSpeechPosition();
+        else syncClock();
+        setMuted(!audio.muted);
+        if (previouslySpeaking !== Boolean(browserVoice())) {
+            selectStep(index, fraction, playing && !finished);
+            labFinished = finished;
+            save();
+        }
+    };
     $('bNotes').onclick = () => {
         const open = !$('notes').classList.toggle('hide');
         $('bNotes').classList.toggle('on', open);
