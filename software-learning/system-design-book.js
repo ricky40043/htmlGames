@@ -128,7 +128,7 @@
       5: '一致性雜湊', 6: '鍵值儲存', 7: '唯一 ID', 8: '短網址',
       9: '網路爬蟲', 10: '通知系統', 11: '動態訊息', 12: '聊天系統',
       13: '搜尋自動補全', 14: '影片平台', 15: '雲端檔案同步', 16: '持續學習',
-      17: '地圖與導航'
+      17: '地圖與導航', 18: '飯店預訂系統'
     };
     if (labels[chapter?.order]) return labels[chapter.order];
     const title = String(chapter?.title || '').trim();
@@ -200,6 +200,7 @@
   }
 
   function chapterEdgeHref(meta, edge = 'first') {
+    if (meta?.customHref) return meta.customHref;
     const data = chapterData(meta?.id);
     const sections = data?.sections || [];
     const section = edge === 'last' ? sections[sections.length - 1] : sections[0];
@@ -682,6 +683,18 @@
     };
   }
 
+  function customChapterProgress(meta) {
+    const state = chapterState(meta.id);
+    let hwMonths = 0;
+    try {
+      const hw = JSON.parse(localStorage.getItem('hotelWorld.v1') || '{}');
+      hwMonths = Object.keys(hw.results || {}).length;
+    } catch {}
+    const passed = !!state.exam?.passed || hwMonths >= 12;
+    const completed = state.completed === true || passed;
+    return { state, hwMonths, passed, completed };
+  }
+
   function renderCatalog() {
     const root = document.querySelector('#bookChapterList');
     if (!root) return;
@@ -690,15 +703,21 @@
       let status = '尚未製作';
       let detail = '依需求一次深入完成一章';
       let cls = 'planned';
+      const href = meta.customHref || `system-design-chapter.html?chapter=${encodeURIComponent(meta.id)}`;
       if (data) {
         const p = chapterProgress(data);
         status = p.state.exam?.passed ? '✅ 已通過' : p.chapterCompleted ? '☑ 本章已完成' : p.completed ? `📖 ${p.completed}/${p.total} 小節` : '可開始';
         detail = `${data.sections.length} 小節 · ${data.sections.reduce((n, s) => n + s.quiz.length, 0)} 題小節練習 · ${data.finalExam.length} 題章末考`;
         cls = 'ready';
+      } else if (meta.customHref) {
+        const cp = customChapterProgress(meta);
+        status = cp.passed ? '✅ 已通過' : cp.completed ? '☑ 本章已完成' : cp.hwMonths ? `🏨 營運挑戰 ${cp.hwMonths}/12 月` : '🎬 互動動畫課程';
+        detail = meta.customDetail || '互動動畫課程';
+        cls = 'ready';
       }
       const simBadge = meta.simulator ? `<a class="book-sim-badge" href="${esc(meta.simulator)}">🎮 模擬關卡</a>` : '';
       return `<div class="book-chapter-row">
-        <a class="book-chapter-card ${cls}" href="system-design-chapter.html?chapter=${encodeURIComponent(meta.id)}"><div class="chapter-number">${chapterTag(meta)}</div><div><h2>${esc(meta.title)}</h2><p>${esc(detail)}</p></div><span>${esc(status)}</span></a>
+        <a class="book-chapter-card ${cls}" href="${esc(href)}"><div class="chapter-number">${chapterTag(meta)}</div><div><h2>${esc(meta.title)}</h2><p>${esc(detail)}</p></div><span>${esc(status)}</span></a>
         ${simBadge}
       </div>`;
     }).join('');
@@ -762,8 +781,8 @@
     const sectionIdx = chapter.sections.findIndex(s => s.id === section.id);
     const previousSection = sectionIdx > 0 ? chapter.sections[sectionIdx - 1] : null;
     const nextSection = sectionIdx < chapter.sections.length - 1 ? chapter.sections[sectionIdx + 1] : null;
-    const previousChapter = catalog().find(c => c.order === chapter.order - 1 && chapterData(c.id));
-    const nextChapter = catalog().find(c => c.order === chapter.order + 1 && chapterData(c.id));
+    const previousChapter = catalog().find(c => c.order === chapter.order - 1 && (chapterData(c.id) || c.customHref));
+    const nextChapter = catalog().find(c => c.order === chapter.order + 1 && (chapterData(c.id) || c.customHref));
     const prev = pageIdx > 0 ? section.pages[pageIdx - 1] : null;
     const next = pageIdx < section.pages.length - 1 ? section.pages[pageIdx + 1] : null;
     const previousTarget = prev
@@ -877,10 +896,11 @@
       const result = document.querySelector('#bookExamResult');
       result.hidden = false;
       const nextMeta = catalog().find(c => c.order === chapter.order + 1);
+      const nextHref = nextMeta ? (nextMeta.customHref || `system-design-chapter.html?chapter=${nextMeta.id}`) : 'system-design.html';
       const currentMeta = chapterMeta(chapter.id);
       const simCta = score >= PASS_SCORE && currentMeta?.simulator ? `<a class="button" href="${esc(currentMeta.simulator)}">🎮 挑戰本章模擬關卡</a>` : '';
       const statHtml = groups.map(d => `<div><small>${DIFF_LABEL[d]}</small><strong>${stats[d].correct}/${stats[d].total} · ${stats[d].total ? Math.round(stats[d].correct / stats[d].total * 100) : 0}%</strong></div>`).join('');
-      result.innerHTML = `<div class="book-result-score">${score} 分</div><p>${score >= PASS_SCORE ? `✅ ${chapterTag(chapter)}通過` : `尚未通過${chapterTag(chapter)}；先依錯題連結回教材複習。`}</p><div class="difficulty-result-grid">${statHtml}</div><p>答對 ${correct}/${questions.length} · 章末考 ${saved.attempts} 次 · 最高 ${saved.bestScore} 分</p><div class="result-actions">${simCta}<a class="button secondary" href="system-design-chapter.html?chapter=${chapter.id}">回到${chapterTag(chapter)}</a>${nextMeta ? `<a class="button" href="system-design-chapter.html?chapter=${nextMeta.id}">進入下一章</a>` : `<a class="button" href="system-design.html">完成全書</a>`}<button class="button secondary" type="button" onclick="location.reload()">重新抽題再考</button></div>`;
+      result.innerHTML = `<div class="book-result-score">${score} 分</div><p>${score >= PASS_SCORE ? `✅ ${chapterTag(chapter)}通過` : `尚未通過${chapterTag(chapter)}；先依錯題連結回教材複習。`}</p><div class="difficulty-result-grid">${statHtml}</div><p>答對 ${correct}/${questions.length} · 章末考 ${saved.attempts} 次 · 最高 ${saved.bestScore} 分</p><div class="result-actions">${simCta}<a class="button secondary" href="system-design-chapter.html?chapter=${chapter.id}">回到${chapterTag(chapter)}</a>${nextMeta ? `<a class="button" href="${esc(nextHref)}">進入下一章</a>` : `<a class="button" href="system-design.html">完成全書</a>`}<button class="button secondary" type="button" onclick="location.reload()">重新抽題再考</button></div>`;
       document.querySelector('#bookExamSubmit').disabled = true;
       result.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };

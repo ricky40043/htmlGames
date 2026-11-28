@@ -20,6 +20,7 @@ window.SYSTEM_DESIGN_BOOK = {
     { id: 'sd-book-15', order: 15, title: '設計 Google Drive', status: 'ready', dataFiles: ['system-design-book-ch15-part1.js','system-design-book-ch15-part2.js','system-design-book-ch15-final.js'], simulator: 'system-design-simulator.html?chapter=sd-book-15' },
     { id: 'sd-book-16', order: 16, title: '持續學習：System Design Interview Playbook', status: 'ready', dataFiles: ['system-design-book-ch16-part1.js','system-design-book-ch16-part2.js','system-design-book-ch16-final.js'] },
     // order 只用來排序與前後章導覽；這一章來自第 2 冊，畫面上依它自己的冊別編號顯示為「第 2 冊第 3 章」。
-    { id: 'sd-book-17', order: 17, volume: 2, chapterNo: 3, title: '設計 Google 地圖', status: 'ready', dataFiles: ['system-design-book-ch17-part1.js','system-design-book-ch17-part2.js','system-design-book-ch17-final.js'], simulator: 'system-design-simulator.html?chapter=sd-book-17' }
+    { id: 'sd-book-17', order: 17, volume: 2, chapterNo: 3, title: '設計 Google 地圖', status: 'ready', dataFiles: ['system-design-book-ch17-part1.js','system-design-book-ch17-part2.js','system-design-book-ch17-final.js'], simulator: 'system-design-simulator.html?chapter=sd-book-17' },
+    { id: 'sd-book-18', order: 18, volume: 2, chapterNo: 7, title: '飯店預訂系統', status: 'ready', customHref: 'hotel-reservation/index.html', simulator: 'hotel-reservation/index.html#world', customDetail: '11 章互動動畫課程（含中文語音旁白） · 10 個互動實驗 · 20 題期末考 · 12 個月營運模擬挑戰' }
   ]
 };

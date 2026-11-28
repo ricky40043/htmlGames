@@ -32,16 +32,49 @@ function algorithmStats(course) {
   return { total, passed, percent: total ? Math.round(passed / total * 100) : 0 };
 }
 
+function chapterTag(meta) {
+  if (meta?.volume && meta?.chapterNo) return `第 ${meta.volume} 冊第 ${meta.chapterNo} 章`;
+  return `Chapter ${meta?.order}`;
+}
+
+function isCustomChapterPassed(meta, progress) {
+  if (progress.chapters?.[meta.id]?.exam?.passed) return true;
+  if (meta.customHref) {
+    try {
+      const hw = JSON.parse(localStorage.getItem('hotelWorld.v1') || '{}');
+      if (Object.keys(hw.results || {}).length >= 12) return true;
+    } catch {}
+  }
+  return false;
+}
+
 function bookStats() {
   const chapters = getBookCatalog();
   const progress = loadBookProgress();
-  const passed = chapters.filter(chapter => progress.chapters?.[chapter.id]?.exam?.passed).length;
+  const passed = chapters.filter(chapter => isCustomChapterPassed(chapter, progress)).length;
   return { total: chapters.length, passed, percent: chapters.length ? Math.round(passed / chapters.length * 100) : 0 };
 }
 
 function chapterStats(meta) {
   const chapter = chapterData(meta.id);
-  const state = loadBookProgress().chapters?.[meta.id];
+  const progress = loadBookProgress();
+  const state = progress.chapters?.[meta.id];
+  if (!chapter && meta.customHref) {
+    let hwMonths = 0;
+    try {
+      const hw = JSON.parse(localStorage.getItem('hotelWorld.v1') || '{}');
+      hwMonths = Object.keys(hw.results || {}).length;
+    } catch {}
+    return {
+      ready: true,
+      custom: true,
+      hwMonths,
+      examPassed: isCustomChapterPassed(meta, progress),
+      bestScore: state?.exam?.bestScore || 0,
+      attempts: state?.exam?.attempts || 0,
+      customDetail: meta.customDetail || '互動動畫課程'
+    };
+  }
   if (!chapter) return { ready:false, total:0, completed:0, examPassed:false, bestScore:0, attempts:0 };
   return {
     ready: true,
@@ -58,19 +91,25 @@ function chapterStats(meta) {
 
 function renderBookCourseCard() {
   const stats = bookStats();
-  const ready = getBookCatalog().filter(meta => chapterData(meta.id));
+  const ready = getBookCatalog().filter(meta => chapterData(meta.id) || meta.customHref);
   const rows = ready.map(meta => {
     const s = chapterStats(meta);
+    const href = meta.customHref || `system-design-chapter.html?chapter=${meta.id}`;
     const status = s.examPassed
-      ? `✅ 已通過 · 最高 ${s.bestScore} 分`
-      : s.completed
-        ? `📖 ${s.completed}/${s.total} 小節完成`
-        : '可開始';
+      ? `✅ 已通過${s.bestScore ? ` · 最高 ${s.bestScore} 分` : ''}`
+      : s.custom
+        ? (s.hwMonths ? `🏨 營運挑戰 ${s.hwMonths}/12 月` : '🎬 互動動畫課程')
+        : s.completed
+          ? `📖 ${s.completed}/${s.total} 小節完成`
+          : '可開始';
+    const metaText = s.custom
+      ? `${escapeHtml(s.customDetail)} · ${status}`
+      : `${s.total} 小節 · ${s.pages} 教材頁 · ${s.sectionQuestions} 題小節練習 · ${s.finalQuestions} 題章末考 · ${status}`;
     return `
-      <a class="lesson-row" href="system-design-chapter.html?chapter=${meta.id}">
+      <a class="lesson-row" href="${escapeHtml(href)}">
         <div>
-          <div class="lesson-title">Chapter ${meta.order}｜${escapeHtml(meta.title)}</div>
-          <div class="lesson-meta">${s.total} 小節 · ${s.pages} 教材頁 · ${s.sectionQuestions} 題小節練習 · ${s.finalQuestions} 題章末考 · ${status}</div>
+          <div class="lesson-title">${escapeHtml(chapterTag(meta))}｜${escapeHtml(meta.title)}</div>
+          <div class="lesson-meta">${metaText}</div>
         </div><span class="row-arrow">›</span>
       </a>`;
   }).join('');
@@ -81,14 +120,14 @@ function renderBookCourseCard() {
         <div class="course-icon">🏗️</div>
         <div class="course-heading">
           <h2>系統設計｜Alex Xu 書本模式</h2>
-          <p>依 Volume 1 的 16 個 Chapter 逐章深入研究。每章拆多個小節、小節 3–5 題，最後 30 題章末考。</p>
+          <p>依 Volume 1 的 16 個 Chapter 與 Volume 2 實戰章節逐章深入研究。包含小節教材、互動動畫與模擬挑戰。</p>
         </div>
         <div class="course-score">${stats.passed}/${stats.total}</div>
       </div>
       <div class="progress-track"><div class="progress-fill" style="width:${stats.percent}%"></div></div>
       <div class="lesson-list">
         ${rows}
-        <a class="lesson-row" href="system-design.html"><div><div class="lesson-title">查看完整 16 Chapter 路線</div><div class="lesson-meta">目前已完成 Chapter 1–${ready.length}</div></div><span class="row-arrow">›</span></a>
+        <a class="lesson-row" href="system-design.html"><div><div class="lesson-title">查看完整系統設計路線</div><div class="lesson-meta">第 1 冊 16 章全數完成 · 第 2 冊已完成第 3、7 章</div></div><span class="row-arrow">›</span></a>
       </div>
     </section>`;
 }
@@ -124,8 +163,17 @@ function renderBookProgressSection() {
   const rows = catalog.map(meta => {
     const data = chapterData(meta.id);
     const state = progress.chapters?.[meta.id];
-    const status = state?.exam?.passed ? '✅ 通過' : data ? (Object.keys(state?.sections || {}).length ? '📖 學習中' : '未開始') : '尚未製作';
-    return `<tr><td>Chapter ${meta.order}｜${escapeHtml(meta.title)}</td><td>${status}</td><td>${state?.exam?.attempts || 0}</td><td>${state?.exam?.bestScore || 0} 分</td><td><a href="system-design-chapter.html?chapter=${meta.id}">${data ? '前往' : '查看'}</a></td></tr>`;
+    const href = meta.customHref || `system-design-chapter.html?chapter=${meta.id}`;
+    let status = '尚未製作';
+    if (isCustomChapterPassed(meta, progress)) status = '✅ 通過';
+    else if (meta.customHref) {
+      let hwMonths = 0;
+      try { hwMonths = Object.keys(JSON.parse(localStorage.getItem('hotelWorld.v1') || '{}').results || {}).length; } catch {}
+      status = hwMonths ? `🏨 營運挑戰 ${hwMonths}/12 月` : '🎬 互動動畫課程';
+    } else if (data) {
+      status = Object.keys(state?.sections || {}).length ? '📖 學習中' : '未開始';
+    }
+    return `<tr><td>${escapeHtml(chapterTag(meta))}｜${escapeHtml(meta.title)}</td><td>${status}</td><td>${state?.exam?.attempts || 0}</td><td>${state?.exam?.bestScore || 0} 分</td><td><a href="${escapeHtml(href)}">${data || meta.customHref ? '前往' : '查看'}</a></td></tr>`;
   }).join('');
 
   const sectionTables = catalog.filter(meta => chapterData(meta.id)).map(meta => {
@@ -135,10 +183,10 @@ function renderBookProgressSection() {
       const s = state?.sections?.[section.id];
       return `<tr><td>${section.order}. ${escapeHtml(section.title)}</td><td>${s?.completed ? '✅ 完成' : '—'}</td><td>${s?.attempts || 0}</td><td>${s?.bestScore || 0} 分</td><td><a href="system-design-chapter.html?chapter=${meta.id}&section=${section.id}">前往</a></td></tr>`;
     }).join('');
-    return `<section class="progress-section"><div class="progress-title"><h2>Chapter ${meta.order}｜小節進度</h2><span>${chapter.sections.length} 小節 · 每節 3–5 題</span></div><div class="table-wrap"><table><thead><tr><th>小節</th><th>狀態</th><th>練習次數</th><th>最高分</th><th></th></tr></thead><tbody>${sectionRows}</tbody></table></div></section>`;
+    return `<section class="progress-section"><div class="progress-title"><h2>${escapeHtml(chapterTag(meta))}｜小節進度</h2><span>${chapter.sections.length} 小節 · 每節 3–5 題</span></div><div class="table-wrap"><table><thead><tr><th>小節</th><th>狀態</th><th>練習次數</th><th>最高分</th><th></th></tr></thead><tbody>${sectionRows}</tbody></table></div></section>`;
   }).join('');
 
-  return `<section class="progress-section"><div class="progress-title"><h2>🏗️ 系統設計｜16 Chapter</h2><span>以章末 30 題測驗作為 Chapter 通過標準</span></div><div class="table-wrap"><table><thead><tr><th>章節</th><th>狀態</th><th>章末考次數</th><th>最高分</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></section>${sectionTables}`;
+  return `<section class="progress-section"><div class="progress-title"><h2>🏗️ 系統設計｜第 1 冊 & 第 2 冊</h2><span>以章末測驗或營運挑戰作為 Chapter 通過標準</span></div><div class="table-wrap"><table><thead><tr><th>章節</th><th>狀態</th><th>章末考次數</th><th>最高分</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></section>${sectionTables}`;
 }
 
 function renderAlgorithmProgressSection(course) {
